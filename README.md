@@ -1,20 +1,20 @@
-# Flo Desktop - Self-Hosted POS for Restaurants & Retail
+# FloCafe - Free Open-Source POS for Cafes & Restaurants
 
 <p align="center">
   <img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License">
-  <img src="https://img.shields.io/github/stars/FreeOpenSourcePOS/FloDesktop" alt="Stars">
-  <img src="https://img.shields.io/github/contributors/FreeOpenSourcePOS/FloDesktop" alt="Contributors">
+  <img src="https://img.shields.io/github/stars/FreeOpenSourcePOS/FloCafe" alt="Stars">
+  <img src="https://img.shields.io/github/contributors/FreeOpenSourcePOS/FloCafe" alt="Contributors">
 </p>
 
-Flo Desktop is a **free, open-source, offline-first Point of Sale (POS) system** designed for restaurants, cafes, salons, and retail shops. Runs on your own computer with no internet required - perfect for small businesses in India and Southeast Asia.
+FloCafe is a **free, open-source, offline-first Point of Sale (POS) system** built specifically for cafes, restaurants, cloud kitchens, and food businesses. Runs entirely on your own computer with no internet required - perfect for small food businesses in India and Southeast Asia.
 
-## 🌟 Why Flo Desktop?
+## 🌟 Why FloCafe?
 
 - **💰 Completely Free** - No subscriptions, no licenses, no hidden costs
 - **📴 Works Offline** - Full functionality without internet connection
 - **🔒 Your Data, Your Server** - Self-hosted on your own machine
 - **🍽️ Restaurant Ready** - Table management, KDS, thermal printing
-- **🛒 Retail Ready** - Product catalog, inventory, billing
+- **☕ Cafe Ready** - Fast counter billing, takeaway, delivery orders
 - **🖥️ Cross-Platform** - Windows, macOS, Linux
 
 ## 📦 Downloads
@@ -39,12 +39,13 @@ Flo Desktop is a **free, open-source, offline-first Point of Sale (POS) system**
 - [x] Billing with multiple payment methods (Cash, UPI, Card)
 - [x] GST-compliant invoice generation
 
-### Restaurant Features
+### Restaurant & Cafe Features
 - [x] Kitchen Display System (KDS)
 - [x] Kitchen Order Tickets (KOT) printing
 - [x] Table tracking and management
 - [x] Multi-station kitchen support
 - [x] Real-time order updates
+- [x] Counter/quick-service billing for cafes
 
 ### Thermal Printing
 - [x] ESC/POS thermal receipt printing
@@ -55,8 +56,8 @@ Flo Desktop is a **free, open-source, offline-first Point of Sale (POS) system**
 - [x] Configurable character widths (58mm/80mm paper)
 
 ### Business Management
-- [x] Product catalog with categories
-- [x] Addon groups for modifiers
+- [x] Menu catalog with categories
+- [x] Addon groups for modifiers (extras, variants, toppings)
 - [x] Staff management with roles
 - [x] Customer database
 - [x] Low stock alerts
@@ -91,7 +92,7 @@ Flo Desktop is a **free, open-source, offline-first Point of Sale (POS) system**
 
 ### 1. Download & Install
 
-Download the appropriate installer from the [Releases](https://github.com/FreeOpenSourcePOS/FloDesktop/releases) page.
+Download the appropriate installer from the [Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases) page.
 
 ### 2. First Launch
 
@@ -119,8 +120,8 @@ Default credentials:
 
 ```bash
 # Clone the repository
-git clone https://github.com/FreeOpenSourcePOS/FloDesktop.git
-cd FloDesktop
+git clone https://github.com/FreeOpenSourcePOS/FloCafe.git
+cd FloCafe
 
 # Install dependencies
 npm install
@@ -151,7 +152,7 @@ PORT=3088
 ## 🏗️ Architecture
 
 ```
-FloDesktop/
+FloCafe/
 ├── main/                    # Electron main process
 │   ├── db.ts              # SQLite database setup
 │   ├── routes/            # API routes
@@ -168,10 +169,10 @@ FloDesktop/
 
 ### Database
 
-Flo Desktop uses **SQLite** for local storage:
+FloCafe uses **SQLite** for local storage:
 - `business` - Business profile
-- `products` - Product catalog
-- `categories` - Product categories
+- `products` - Menu/product catalog
+- `categories` - Menu categories
 - `tables` - Restaurant tables
 - `orders` - Order records
 - `bills` - Billing/payments
@@ -190,7 +191,7 @@ Flo Desktop uses **SQLite** for local storage:
 Contributions are welcome!
 
 1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_NAME/FloDesktop.git`
+2. **Clone** your fork: `git clone https://github.com/YOUR_NAME/FloCafe.git`
 3. **Create** a branch: `git checkout -b feature/amazing-feature`
 4. **Commit** your changes: `git commit -m 'Add amazing feature'`
 5. **Push** to the branch: `git push origin feature/amazing-feature`
@@ -227,12 +228,12 @@ Built with ❤️ using:
 
 ## 📞 Support
 
-- **GitHub Issues:** https://github.com/FreeOpenSourcePOS/FloDesktop/issues
+- **GitHub Issues:** https://github.com/FreeOpenSourcePOS/FloCafe/issues
 - **Community:** [Discord](https://discord.gg/flopos) | [Telegram](https://t.me/flopos)
 
 ---
 
 <p align="center">
-  <strong>Bringing professional POS software to every small business!</strong><br>
+  <strong>Bringing professional POS software to every cafe and restaurant!</strong><br>
   ⭐ Star us on GitHub | 🐛 Report bugs | 💡 Suggest features | 📢 Share with others
 </p>
