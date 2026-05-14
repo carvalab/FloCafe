@@ -3,6 +3,10 @@ import * as fs from 'fs';
 import { execSync, exec } from 'child_process';
 import { getDatabase } from '../db';
 
+const isMasBuild =
+  process.env.MAS_BUILD === '1' ||
+  (process as NodeJS.Process & { mas?: boolean }).mas === true;
+
 let defaultPrinter: any = null;
 
 export interface PrinterInfo {
@@ -14,10 +18,32 @@ export interface PrinterInfo {
   driver?: string;
   status: 'idle' | 'printing' | 'offline';
   isDefault: boolean;
+  ipAddress?: string;
+  port?: number;
+  paperWidth?: string;
+}
+
+function guessPaperWidth(name: string, model: string): string {
+  const s = (name + ' ' + model).toLowerCase();
+  if (s.includes('58')) return '58mm';
+  return '80mm';
+}
+
+function parseDeviceUri(uri: string): { ip?: string; port?: number } {
+  const m = uri.match(/(?:socket|ipp|ipps|http|https|lpd):\/\/([^:\/\s]+)(?::(\d+))?/i);
+  if (!m) return {};
+  const host = m[1];
+  const port = m[2] ? parseInt(m[2], 10) : undefined;
+  const isIp = /^\d+\.\d+\.\d+\.\d+$/.test(host);
+  return { ip: isIp ? host : host, port };
 }
 
 export async function detectConnectedPrinters(): Promise<PrinterInfo[]> {
   const printers: PrinterInfo[] = [];
+
+  if (isMasBuild) {
+    return printers;
+  }
 
   if (process.platform === 'darwin') {
     return await detectMacOSPrinters();
@@ -54,16 +80,21 @@ async function detectMacOSPrinters(): Promise<PrinterInfo[]> {
 
           const makeModel = await getMacOSPrinterDetails(name);
           const isDefault = await isMacOSDefaultPrinter(name);
+          const status = await getMacOSPrinterStatus(name);
+          const isNetwork = /^(socket|ipp|ipps|http|https|lpd):\/\//i.test(uri);
+          const { ip, port } = isNetwork ? parseDeviceUri(uri) : {};
 
           printers.push({
             name,
             make: makeModel.make,
             model: makeModel.model,
-            connectionType: uri.includes('usb://') ? 'usb' :
-                          uri.includes('socket://') || uri.includes('ipp://') ? 'network' : 'usb',
+            connectionType: isNetwork ? 'network' : 'usb',
             deviceUri: uri,
-            status: 'idle',
-            isDefault
+            status,
+            isDefault,
+            ipAddress: ip,
+            port: port || (isNetwork ? 9100 : undefined),
+            paperWidth: guessPaperWidth(name, makeModel.model),
           });
         }
       }
@@ -73,6 +104,17 @@ async function detectMacOSPrinters(): Promise<PrinterInfo[]> {
   }
 
   return printers;
+}
+
+async function getMacOSPrinterStatus(name: string): Promise<'idle' | 'printing' | 'offline'> {
+  try {
+    const out = execSync(`lpstat -p "${name}" 2>/dev/null`, { encoding: 'utf8' }).toLowerCase();
+    if (out.includes('disabled')) return 'offline';
+    if (out.includes('printing') || out.includes('now printing')) return 'printing';
+    return 'idle';
+  } catch {
+    return 'offline';
+  }
 }
 
 async function getMacOSPrinterDetails(name: string): Promise<{ make: string; model: string }> {
@@ -180,7 +222,8 @@ function detectWindowsPrinters(): PrinterInfo[] {
           deviceUri: name,
           driver,
           status: status === 'ok' || status === 'idle' ? 'idle' : 'offline',
-          isDefault
+          isDefault,
+          paperWidth: guessPaperWidth(name, makeModel.model),
         });
       }
     }
@@ -241,15 +284,20 @@ function detectLinuxPrinters(): PrinterInfo[] {
       if (match) {
         const name = match[1];
         const uri = match[2].trim();
+        const isNetwork = /^(socket|ipp|ipps|http|https|lpd):\/\//i.test(uri);
+        const { ip, port } = isNetwork ? parseDeviceUri(uri) : {};
 
         printers.push({
           name,
           make: 'Generic',
           model: 'Thermal Printer',
-          connectionType: uri.includes('/dev/usb') ? 'usb' : 'network',
+          connectionType: isNetwork ? 'network' : 'usb',
           deviceUri: uri,
           status: 'idle',
-          isDefault: false
+          isDefault: false,
+          ipAddress: ip,
+          port: port || (isNetwork ? 9100 : undefined),
+          paperWidth: guessPaperWidth(name, 'Thermal Printer'),
         });
       }
     }
@@ -274,29 +322,29 @@ export async function initPrinter(): Promise<void> {
   }
 }
 
-export async function printReceipt(order: any, bill: any, business?: any, template?: string): Promise<boolean> {
+export async function printReceipt(order: any, bill: any, business?: any, template?: string, useUnicode: boolean = false): Promise<boolean> {
   try {
-    console.log('[Printer] printReceipt called, template:', template);
+    console.log('[Printer] printReceipt called, template:', template, 'useUnicode:', useUnicode);
     const printer = getPrinterConfig();
     if (!printer) {
       console.log('[Printer] No printer configured');
       return false;
     }
     console.log('[Printer] Using printer:', printer.name, printer.connection_type);
-    
+
     const paperWidth = printer.paper_width || '80mm';
     const cols = paperWidth === '58mm' ? 42 : 48;
-    
+
     let data: Buffer;
     try {
-      data = formatReceipt(order, bill, business, template, cols);
+      data = formatReceipt(order, bill, business, template, cols, useUnicode);
       console.log('[Printer] Receipt data length:', data.length, 'bytes');
       console.log('[Printer] First 100 bytes:', Array.from(data.slice(0, 100)).map(b => b.toString(16)).join(' '));
     } catch (err) {
       console.error('[Printer] formatReceipt failed:', err);
       throw err;
     }
-    
+
     return await dispatchPrint(printer, data);
   } catch (error: any) {
     console.error('[Printer] Print error:', error);
@@ -304,20 +352,20 @@ export async function printReceipt(order: any, bill: any, business?: any, templa
   }
 }
 
-export async function printKOT(order: any, items: any[], stationName: string): Promise<boolean> {
+export async function printKOT(order: any, items: any[], stationName: string, useUnicode: boolean = false): Promise<boolean> {
   try {
-    console.log('[Printer] printKOT called, items count:', items?.length || 0);
+    console.log('[Printer] printKOT called, items count:', items?.length || 0, 'useUnicode:', useUnicode);
     const printer = getPrinterConfig();
     if (!printer) {
       console.log('[Printer] No printer configured');
       return false;
     }
     console.log('[Printer] Using printer:', printer.name, printer.connection_type);
-    
+
     const paperWidth = printer.paper_width || '80mm';
     const cols = paperWidth === '58mm' ? 42 : 48;
-    
-    const data = formatKOT(order, items, stationName, cols);
+
+    const data = formatKOT(order, items, stationName, cols, useUnicode);
     console.log('[Printer] KOT data length:', data.length, 'bytes');
     return await dispatchPrint(printer, data);
   } catch (error: any) {
@@ -331,6 +379,10 @@ async function dispatchPrint(printer: any, data: Buffer): Promise<boolean> {
     case 'network':
       return await printViaNetwork(printer.ip_address, printer.port || 9100, data);
     case 'usb':
+      if (isMasBuild) {
+        console.log('[Printer] USB printers are not supported in the App Store build. Use a network printer.');
+        return false;
+      }
       return await printViaUSB(data, printer.name);
     case 'webusb':
       console.log('[Printer] WebUSB printer — not supported in Electron');
@@ -347,22 +399,22 @@ function getPrinterConfig(): any {
   return db.prepare('SELECT * FROM printers WHERE is_default = 1').get();
 }
 
-export function formatReceipt(order: any, bill: any, business?: any, template?: string, cols: number = 48): Buffer {
+export function formatReceipt(order: any, bill: any, business?: any, template?: string, cols: number = 48, useUnicode: boolean = false): Buffer {
   console.log('[Printer] formatReceipt - template:', template);
   console.log('[Printer] formatReceipt - order:', order?.order_number, 'bill:', bill?.bill_number);
   console.log('[Printer] formatReceipt - items count:', order?.items?.length || 0, 'cols:', cols);
-  
+
   const tpl = template || 'compact';
   const biz = business || { name: 'Store', address: '', phone: '', gstin: '' };
 
   try {
     switch (tpl) {
       case 'classic':
-        return formatClassicReceipt(order, bill, biz, cols);
+        return formatClassicReceipt(order, bill, biz, cols, useUnicode);
       case 'detailed':
-        return formatDetailedReceipt(order, bill, biz, cols);
+        return formatDetailedReceipt(order, bill, biz, cols, useUnicode);
       default:
-        return formatCompactReceipt(order, bill, biz, cols);
+        return formatCompactReceipt(order, bill, biz, cols, useUnicode);
     }
   } catch (err) {
     console.error('[Printer] formatReceipt error:', err);
@@ -370,7 +422,7 @@ export function formatReceipt(order: any, bill: any, business?: any, template?: 
   }
 }
 
-function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48): Buffer {
+function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
 
@@ -432,10 +484,10 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   lines.push('{CENTER}Thank you!{/CENTER}');
   lines.push('{CUT}');
 
-  return buildEscPos(lines);
+  return buildEscPos(lines, useUnicode);
 }
 
-function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48): Buffer {
+function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
 
@@ -497,10 +549,10 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   lines.push('{CENTER}Thank you!{/CENTER}');
   lines.push('{CUT}');
 
-  return buildEscPos(lines);
+  return buildEscPos(lines, useUnicode);
 }
 
-function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 48): Buffer {
+function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
   
@@ -582,7 +634,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   lines.push('{CENTER}Thank you for your business!{/CENTER}');
   lines.push('{CUT}');
 
-  return buildEscPos(lines);
+  return buildEscPos(lines, useUnicode);
 }
 
 // Item row layout: [ name (nameLen) ][ qty (4) ][ tax (5) ][ amount right-aligned (amtLen) ]
@@ -653,7 +705,7 @@ function truncate(text: string, length: number): string {
   return text.length > length ? text.substring(0, length - 2) + '..' : text;
 }
 
-export function formatKOT(order: any, items: any[], stationName: string, cols: number = 48): Buffer {
+export function formatKOT(order: any, items: any[], stationName: string, cols: number = 48, useUnicode: boolean = false): Buffer {
   const lines: string[] = [];
   const bar = '='.repeat(cols);
 
@@ -680,7 +732,7 @@ export function formatKOT(order: any, items: any[], stationName: string, cols: n
   lines.push(bar);
   lines.push('{CUT}');
 
-  return buildEscPos(lines);
+  return buildEscPos(lines, useUnicode);
 }
 
 export function buildTestPage(paperWidth: string = '80mm'): Buffer {
@@ -705,7 +757,22 @@ export function buildTestPage(paperWidth: string = '80mm'): Buffer {
   return buildEscPos(lines);
 }
 
-export function buildEscPos(lines: string[]): Buffer {
+const CURRENCY_ASCII_MAP: Record<string, string> = {
+  '₹': 'Rs', '₨': 'Rs', '€': 'EUR', '£': 'GBP', '¥': 'Yen',
+  '₩': 'KRW', '₺': 'TRY', '₫': 'VND', '₪': 'NIS', '₽': 'RUB',
+  '฿': 'THB', '₱': 'PHP', '₴': 'UAH', '₦': 'NGN', '₵': 'GHS',
+  '₡': 'CRC', '₲': 'PYG',
+};
+
+function normalizeCurrencyToAscii(text: string): string {
+  let out = text;
+  for (const [sym, ascii] of Object.entries(CURRENCY_ASCII_MAP)) {
+    if (out.includes(sym)) out = out.split(sym).join(ascii);
+  }
+  return out;
+}
+
+export function buildEscPos(lines: string[], useUnicode: boolean = false): Buffer {
   const buf: number[] = [];
 
   const resetAllStyles = () => {
@@ -715,6 +782,7 @@ export function buildEscPos(lines: string[]): Buffer {
   };
 
   for (let line of lines) {
+    if (!useUnicode) line = normalizeCurrencyToAscii(line);
     if (line.includes('{INIT}')) {
       buf.push(0x1B, 0x40);
       resetAllStyles();

@@ -5,6 +5,24 @@ import { notifyKdsUpdate } from '../services/kds';
 
 const router = Router();
 
+function syncCustomerTagCounts(db: any, customerId: string, items: { product_id: string; quantity: number }[]) {
+  const row = db.prepare('SELECT tag_counts FROM customers WHERE id = ?').get(customerId) as any;
+  if (!row) return;
+  let counts: Record<string, number> = {};
+  try { counts = row.tag_counts ? JSON.parse(row.tag_counts) : {}; } catch { counts = {}; }
+  for (const item of items) {
+    const product = db.prepare('SELECT tags FROM products WHERE id = ?').get(item.product_id) as any;
+    if (!product?.tags) continue;
+    let tags: string[] = [];
+    try { tags = JSON.parse(product.tags); } catch { continue; }
+    for (const tag of tags) {
+      if (tag && typeof tag === 'string') counts[tag] = (counts[tag] || 0) + (item.quantity || 1);
+    }
+  }
+  db.prepare('UPDATE customers SET tag_counts = ?, updated_at = ? WHERE id = ?')
+    .run(JSON.stringify(counts), now(), customerId);
+}
+
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -187,6 +205,15 @@ router.post('/', (req: Request, res: Response) => {
     });
 
     notifyKdsUpdate();
+
+    if (customer_id) {
+      try {
+        syncCustomerTagCounts(db, customer_id, items);
+      } catch (err) {
+        console.error('[Orders] Tag sync failed:', err);
+      }
+    }
+
     res.status(201).json({ order: Object.assign({}, order, { items: orderItems }) });
   } catch (error: any) {
     console.error('[Orders] Create error:', error);

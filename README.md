@@ -180,11 +180,6 @@ FloCafe uses **SQLite** for local storage:
 - `staff` - Employee records
 - `customers` - Customer database
 
-## 🌐 Related Projects
-
-| Project | Description | Tech |
-|---------|-------------|------|
-| **[FloPOS](https://github.com/FreeOpenSourcePOS/FloPOS)** | Full-featured cloud POS with multi-tenancy | Laravel + Next.js (SaaS) |
 
 ## 🤝 Contributing
 

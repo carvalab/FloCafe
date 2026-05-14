@@ -1,6 +1,14 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 
+function parseCustomer(c: any): any {
+  if (!c) return c;
+  return {
+    ...c,
+    tag_counts: c.tag_counts ? (() => { try { return JSON.parse(c.tag_counts); } catch { return null; } })() : null,
+  };
+}
+
 const router = Router();
 
 function getWalletBalance(customerId: string | number): number {
@@ -70,7 +78,7 @@ router.get('/search', (req: Request, res: Response) => {
       ORDER BY name LIMIT 20
     `).all(searchTerm, searchTerm, searchTerm);
 
-    res.json({ customers });
+    res.json({ customers: customers.map(parseCustomer) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -79,10 +87,11 @@ router.get('/search', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
-    if (!customer) {
+    const customerRaw = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+    if (!customerRaw) {
       return res.status(404).json({ error: 'Customer not found' });
     }
+    const customer = parseCustomer(customerRaw);
 
     const walletBalance = getWalletBalance(req.params.id);
     const loyaltyHistory = db.prepare(`

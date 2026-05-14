@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, getDbPath, createBackup } from '../db';
+import Database from 'better-sqlite3';
+import { getDatabase, getDbPath, createBackup, SCHEMA_VERSION } from '../db';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -9,9 +10,8 @@ router.get('/export', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     
-    // Get all table names
     const tables = db.prepare(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_flo_meta'
     `).all() as { name: string }[];
 
     const exportData: Record<string, any[]> = {};
@@ -29,7 +29,7 @@ router.get('/export', (req: Request, res: Response) => {
       version: 1,
       app: 'FloDesktop',
       exported_at: new Date().toISOString(),
-      schema_version: (db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as { value: string } | undefined)?.value || 'unknown',
+      schema_version: String(SCHEMA_VERSION),
       data: exportData,
     });
   } catch (error: any) {
@@ -48,8 +48,8 @@ router.post('/import', async (req: Request, res: Response) => {
 
     const db = getDatabase();
     const importData = data.data as Record<string, any[]>;
+    const importSchemaVersion = parseInt(data.schema_version || '0', 10);
 
-    // Validate required tables exist
     const requiredTables = ['settings', 'categories', 'products', 'users'];
     const importedTables = Object.keys(importData);
     
@@ -60,68 +60,59 @@ router.post('/import', async (req: Request, res: Response) => {
       });
     }
 
-    // Create backup before import
-    const backupPath = await createBackup();
+    const { path: backupPath } = await createBackup();
+    const hasVersionMismatch = importSchemaVersion !== SCHEMA_VERSION;
 
-    if (overwrite) {
-      // Clear existing data and import fresh
-      db.exec('BEGIN TRANSACTION');
-      
-      try {
-        for (const tableName of importedTables) {
+    if (hasVersionMismatch) {
+      console.log(`[DB Import] Version mismatch: import v${importSchemaVersion} vs current v${SCHEMA_VERSION}. Using data-only merge.`);
+    }
+
+    db.exec('BEGIN IMMEDIATE');
+    
+    try {
+      for (const tableName of importedTables) {
+        const rows = importData[tableName];
+        if (!rows || !Array.isArray(rows) || rows.length === 0) continue;
+
+        const currentCols = getTableColumns(db, tableName);
+        const importCols = Object.keys(rows[0]);
+        const commonCols = hasVersionMismatch 
+          ? importCols.filter(c => currentCols.includes(c))
+          : importCols;
+
+        if (commonCols.length === 0) continue;
+
+        if (overwrite || hasVersionMismatch) {
           db.exec(`DELETE FROM ${tableName}`);
-          const rows = importData[tableName];
-          if (rows && Array.isArray(rows) && rows.length > 0) {
-            const columns = Object.keys(rows[0]);
-            const placeholders = columns.map(() => '?').join(', ');
-            const insertStmt = db.prepare(
-              `INSERT INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`
-            );
-            for (const row of rows) {
-              insertStmt.run(...columns.map(col => row[col]));
-            }
-          }
+        }
+
+        const colList = commonCols.join(', ');
+        const placeholders = commonCols.map(() => '?').join(', ');
+        const insertStmt = db.prepare(
+          `INSERT INTO ${tableName} (${colList}) VALUES (${placeholders})`
+        );
+        
+        for (const row of rows) {
+          insertStmt.run(...commonCols.map(col => row[col]));
         }
         
-        db.exec('COMMIT');
-        res.json({ 
-          success: true, 
-          message: 'Database imported successfully',
-          backup: backupPath 
-        });
-      } catch (err: any) {
-        db.exec('ROLLBACK');
-        throw err;
+        console.log(`[DB Import] ${tableName}: ${rows.length} rows (${commonCols.length} columns)`);
       }
-    } else {
-      // Merge mode - add new records, skip existing
-      db.exec('BEGIN TRANSACTION');
       
-      try {
-        for (const tableName of importedTables) {
-          const rows = importData[tableName];
-          if (rows && Array.isArray(rows)) {
-            const columns = Object.keys(rows[0]);
-            const placeholders = columns.map(() => '?').join(', ');
-            const insertStmt = db.prepare(
-              `INSERT OR IGNORE INTO ${tableName} (${columns.join(', ')}) VALUES (${placeholders})`
-            );
-            for (const row of rows) {
-              insertStmt.run(...columns.map(col => row[col]));
-            }
-          }
-        }
-        
-        db.exec('COMMIT');
-        res.json({ 
-          success: true, 
-          message: 'Data merged successfully',
-          backup: backupPath 
-        });
-      } catch (err: any) {
-        db.exec('ROLLBACK');
-        throw err;
-      }
+      db.exec('COMMIT');
+      res.json({ 
+        success: true, 
+        message: hasVersionMismatch 
+          ? 'Data imported with schema compatibility (some fields may be missing)'
+          : 'Database imported successfully',
+        backup: backupPath,
+        schemaVersionMismatch: hasVersionMismatch,
+        importedSchemaVersion: importSchemaVersion,
+        currentSchemaVersion: SCHEMA_VERSION
+      });
+    } catch (err: any) {
+      db.exec('ROLLBACK');
+      throw err;
     }
   } catch (error: any) {
     console.error('[DB Import] Error:', error);
@@ -129,13 +120,23 @@ router.post('/import', async (req: Request, res: Response) => {
   }
 });
 
+function getTableColumns(db: Database.Database, tableName: string): string[] {
+  try {
+    const columns = db.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];
+    return columns.map(col => col.name);
+  } catch {
+    return [];
+  }
+}
+
 router.get('/backup', async (req: Request, res: Response) => {
   try {
-    const backupPath = await createBackup();
+    const { path: backupPath, schemaVersion } = await createBackup();
     res.json({ 
       success: true, 
       path: backupPath,
-      filename: path.basename(backupPath)
+      filename: path.basename(backupPath),
+      schemaVersion
     });
   } catch (error: any) {
     console.error('[DB Backup] Error:', error);
@@ -160,7 +161,7 @@ router.get('/tables', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const tables = db.prepare(`
-      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%'
+      SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_flo_meta'
       ORDER BY name
     `).all() as { name: string }[];
 

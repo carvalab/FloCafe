@@ -5,7 +5,7 @@ import * as fs from 'fs';
 import * as bcrypt from 'bcryptjs';
 
 // Bump this whenever the schema changes incompatibly
-export const SCHEMA_VERSION = 8;
+export const SCHEMA_VERSION = 9;
 
 let db: Database.Database;
 
@@ -375,6 +375,17 @@ function runIncrementalMigrations(fromVersion: number): void {
     }
   }
 
+  // Migration from version 8 to 9
+  if (fromVersion < 9) {
+    console.log('[DB] Running migration to v9...');
+    try {
+      db.exec(`ALTER TABLE customers ADD COLUMN tag_counts TEXT DEFAULT NULL`);
+      console.log('[DB] Added tag_counts column to customers');
+    } catch (e: any) {
+      if (!e.message?.includes('duplicate column')) throw e;
+    }
+  }
+
   // Update schema version
   insert('schema_version', String(SCHEMA_VERSION));
   console.log('[DB] Incremental migration complete');
@@ -384,7 +395,7 @@ function createSchema(): void {
   db.exec(`
     -- ── Master data tables ──────────────────────────────────────────────
 
-    CREATE TABLE categories (
+    CREATE TABLE IF NOT EXISTS categories (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
@@ -400,7 +411,7 @@ function createSchema(): void {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE products (
+    CREATE TABLE IF NOT EXISTS products (
       id TEXT PRIMARY KEY,
       category_id TEXT,
       name TEXT NOT NULL,
@@ -425,7 +436,7 @@ function createSchema(): void {
       FOREIGN KEY (category_id) REFERENCES categories(id)
     );
 
-    CREATE TABLE addon_groups (
+    CREATE TABLE IF NOT EXISTS addon_groups (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
@@ -438,7 +449,7 @@ function createSchema(): void {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE addons (
+    CREATE TABLE IF NOT EXISTS addons (
       id TEXT PRIMARY KEY,
       addon_group_id TEXT NOT NULL,
       name TEXT NOT NULL,
@@ -450,13 +461,13 @@ function createSchema(): void {
       FOREIGN KEY (addon_group_id) REFERENCES addon_groups(id)
     );
 
-    CREATE TABLE addon_group_product (
+    CREATE TABLE IF NOT EXISTS addon_group_product (
       product_id TEXT NOT NULL,
       addon_group_id TEXT NOT NULL,
       PRIMARY KEY (product_id, addon_group_id)
     );
 
-    CREATE TABLE kitchen_stations (
+    CREATE TABLE IF NOT EXISTS kitchen_stations (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       description TEXT,
@@ -470,7 +481,7 @@ function createSchema(): void {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE tables (
+    CREATE TABLE IF NOT EXISTS tables (
       id TEXT PRIMARY KEY,
       number TEXT NOT NULL UNIQUE,
       capacity INTEGER DEFAULT 4,
@@ -484,7 +495,7 @@ function createSchema(): void {
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE customers (
+    CREATE TABLE IF NOT EXISTS customers (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT,
@@ -502,7 +513,7 @@ function createSchema(): void {
     -- Roles: owner, manager, cashier, waiter, chef
     -- KDS is operated by the chef role.
 
-    CREATE TABLE users (
+    CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       email TEXT UNIQUE,
@@ -518,7 +529,7 @@ function createSchema(): void {
 
     -- ── Transactional tables ─────────────────────────────────────────────
 
-    CREATE TABLE orders (
+    CREATE TABLE IF NOT EXISTS orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_number TEXT UNIQUE NOT NULL,
       table_id TEXT,
@@ -550,7 +561,7 @@ function createSchema(): void {
       FOREIGN KEY (user_id) REFERENCES users(id)
     );
 
-    CREATE TABLE order_items (
+    CREATE TABLE IF NOT EXISTS order_items (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       order_id INTEGER NOT NULL,
       product_id TEXT NOT NULL,
@@ -574,7 +585,7 @@ function createSchema(): void {
       FOREIGN KEY (order_id) REFERENCES orders(id)
     );
 
-    CREATE TABLE bills (
+    CREATE TABLE IF NOT EXISTS bills (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       bill_number TEXT UNIQUE NOT NULL,
       order_id INTEGER NOT NULL,
@@ -601,7 +612,7 @@ function createSchema(): void {
       FOREIGN KEY (order_id) REFERENCES orders(id)
     );
 
-    CREATE TABLE loyalty_ledger (
+    CREATE TABLE IF NOT EXISTS loyalty_ledger (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       customer_id TEXT NOT NULL,
       bill_id INTEGER,
@@ -615,13 +626,13 @@ function createSchema(): void {
 
     -- ── Config tables ────────────────────────────────────────────────────
 
-    CREATE TABLE settings (
+    CREATE TABLE IF NOT EXISTS settings (
       key TEXT PRIMARY KEY,
       value TEXT,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE kds_pairing_tokens (
+    CREATE TABLE IF NOT EXISTS kds_pairing_tokens (
       id TEXT PRIMARY KEY,
       token TEXT UNIQUE NOT NULL,
       station_id TEXT,
@@ -629,7 +640,7 @@ function createSchema(): void {
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
 
-    CREATE TABLE printers (
+    CREATE TABLE IF NOT EXISTS printers (
       id TEXT PRIMARY KEY,
       name TEXT NOT NULL,
       connection_type TEXT NOT NULL CHECK (connection_type IN ('network', 'usb', 'webusb')),
@@ -644,13 +655,13 @@ function createSchema(): void {
 
     -- ── Indexes ──────────────────────────────────────────────────────────
 
-    CREATE INDEX idx_products_category ON products(category_id);
-    CREATE INDEX idx_products_active   ON products(is_active);
-    CREATE INDEX idx_orders_status     ON orders(status);
-    CREATE INDEX idx_orders_created    ON orders(created_at);
-    CREATE INDEX idx_orders_user       ON orders(user_id);
-    CREATE INDEX idx_order_items_order ON order_items(order_id);
-    CREATE INDEX idx_bills_order       ON bills(order_id);
+    CREATE INDEX IF NOT EXISTS idx_products_category ON products(category_id);
+    CREATE INDEX IF NOT EXISTS idx_products_active   ON products(is_active);
+    CREATE INDEX IF NOT EXISTS idx_orders_status     ON orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_created    ON orders(created_at);
+    CREATE INDEX IF NOT EXISTS idx_orders_user       ON orders(user_id);
+    CREATE INDEX IF NOT EXISTS idx_order_items_order ON order_items(order_id);
+    CREATE INDEX IF NOT EXISTS idx_bills_order       ON bills(order_id);
   `);
 }
 

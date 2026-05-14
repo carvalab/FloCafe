@@ -8,3 +8,13 @@ release/
 .env.local
 .DS_Store
 .claude/
+
+# Apple signing assets — NEVER commit
+xcode/
+build/flo.provisionprofile
+*.cer
+*.p12
+*.p8
+*.certSigningRequest
+*.provisionprofile
+*.mobileprovision

@@ -10,6 +10,11 @@ import { registerIpcHandlers } from './ipc';
 import log from 'electron-log/main';
 import { autoUpdater } from 'electron-updater';
 
+// Mac App Store builds must not ship a third-party auto-updater. Set at build
+// time via `MAS_BUILD=1` (see build:mas script). The store handles updates.
+const isMasBuild =
+  process.env.MAS_BUILD === '1' ||
+  (process as NodeJS.Process & { mas?: boolean }).mas === true;
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -102,6 +107,11 @@ function setupAutoUpdater(): void {
 }
 
 function checkForUpdates(): void {
+  if (isMasBuild) {
+    log.debug('[Update] MAS build — updates handled by the App Store');
+    mainWindow?.webContents.send('update-status', { status: 'mas' });
+    return;
+  }
   if (!isDev) {
     autoUpdater.checkForUpdates().catch((err) => {
       console.error('[Update] Check failed:', err);
@@ -305,7 +315,9 @@ function createMenu(): void {
       label: 'Help',
       submenu: [
         { label: 'About Flo', click: () => showAbout() },
-        { label: 'Check for Updates', click: () => checkForUpdates() },
+        ...(isMasBuild
+          ? []
+          : [{ label: 'Check for Updates', click: () => checkForUpdates() }]),
       ],
     },
   ];
@@ -397,9 +409,10 @@ async function initialize(): Promise<void> {
     createWindow();
     createTray();
     createMenu();
-    setupAutoUpdater();
-
-    setTimeout(() => checkForUpdates(), 5000);
+    if (!isMasBuild) {
+      setupAutoUpdater();
+      setTimeout(() => checkForUpdates(), 5000);
+    }
 
     console.log('[Flo] Ready!');
   } catch (error) {

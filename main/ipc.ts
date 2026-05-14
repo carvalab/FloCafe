@@ -1,6 +1,6 @@
 import { ipcMain, dialog, app, BrowserWindow, shell } from 'electron';
 import * as path from 'path';
-import { getDatabase, createBackup, restoreBackup, now, getDbPath } from './db';
+import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, now, getDbPath, SCHEMA_VERSION, getSchemaVersionFromBackup } from './db';
 import { getLocalIP } from './server';
 
 export function registerIpcHandlers(): void {
@@ -9,10 +9,9 @@ export function registerIpcHandlers(): void {
     try {
       console.log('[IPC] backup-database: Starting...');
       
-      // Ask user where to save
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const result = await dialog.showSaveDialog({
-        defaultPath: `flo-backup-${timestamp}.db`,
+        defaultPath: path.join(app.getPath('downloads'), `flo-backup-${timestamp}.db`),
         filters: [{ name: 'SQLite Database', extensions: ['db'] }],
       });
 
@@ -20,13 +19,15 @@ export function registerIpcHandlers(): void {
         return { success: false, error: 'Cancelled' };
       }
 
-      // Copy to user-selected location
-      const fs = require('fs');
-      const dbPath = getDbPath();
-      fs.copyFileSync(dbPath, result.filePath);
+      const { path: backupPath, schemaVersion } = await createBackup(result.filePath);
       
-      console.log('[IPC] backup-database: Complete:', result.filePath);
-      return { success: true, path: result.filePath };
+      console.log('[IPC] backup-database: Complete:', backupPath);
+      return { 
+        success: true, 
+        path: backupPath,
+        schemaVersion,
+        message: `Backup saved (Schema v${schemaVersion})`
+      };
     } catch (error: any) {
       console.error('[IPC] backup-database: Error:', error);
       return { success: false, error: error.message };
@@ -44,9 +45,58 @@ export function registerIpcHandlers(): void {
         return { success: false, error: 'Cancelled' };
       }
 
-      restoreBackup(result.filePaths[0]);
-      return { success: true };
+      const backupPath = result.filePaths[0];
+      const backupVersion = getSchemaVersionFromBackup(backupPath);
+      
+      if (backupVersion === 0) {
+        return { 
+          success: false, 
+          error: 'Invalid backup file: missing schema version metadata. This backup may have been created with an older version of FloDesktop.'
+        };
+      }
+      
+      const versionMismatch = backupVersion !== SCHEMA_VERSION;
+      
+      if (versionMismatch) {
+        const confirmResult = await dialog.showMessageBox({
+          type: 'warning',
+          buttons: ['Restore Anyway', 'Cancel'],
+          defaultId: 1,
+          title: 'Schema Version Mismatch',
+          message: `Backup was created with Schema v${backupVersion}`,
+          detail: `Current database uses Schema v${SCHEMA_VERSION}.\n\nRestoring will import data only (common fields) to preserve new database structure.\n\nDo you want to continue?`
+        });
+        
+        if (confirmResult.response !== 0) {
+          return { success: false, error: 'Cancelled' };
+        }
+        
+        const restoreResult = restoreBackup(backupPath, false);
+        return {
+          success: restoreResult.success,
+          mode: restoreResult.mode,
+          backupVersion,
+          currentVersion: SCHEMA_VERSION,
+          tablesRestored: restoreResult.tablesRestored,
+          message: restoreResult.success 
+            ? `Restored ${restoreResult.tablesRestored} tables (data-only mode due to version mismatch)`
+            : `Restore failed: ${restoreResult.error}`,
+          error: restoreResult.error
+        };
+      }
+      
+      const restoreResult = restoreBackup(backupPath, true);
+      return {
+        success: restoreResult.success,
+        mode: restoreResult.mode,
+        backupVersion,
+        currentVersion: SCHEMA_VERSION,
+        tablesRestored: restoreResult.tablesRestored,
+        message: restoreResult.success ? 'Database restored successfully' : `Restore failed: ${restoreResult.error}`,
+        error: restoreResult.error
+      };
     } catch (error: any) {
+      console.error('[IPC] restore-backup: Error:', error);
       return { success: false, error: error.message };
     }
   });

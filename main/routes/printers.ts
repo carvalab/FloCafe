@@ -195,8 +195,8 @@ router.post('/:id/test', async (req: Request, res: Response) => {
 // POST /api/printers/print-bill — print bill via backend (desktop app)
 router.post('/print-bill', async (req: Request, res: Response) => {
   try {
-    const { billId, orderId } = req.body;
-    console.log('[Print Bill] Request:', { billId, orderId });
+    const { billId, orderId, useUnicode = false } = req.body;
+    console.log('[Print Bill] Request:', { billId, orderId, useUnicode });
     
     if (!billId && !orderId) {
       console.log('[Print Bill] Error: No billId or orderId provided');
@@ -263,7 +263,7 @@ router.post('/print-bill', async (req: Request, res: Response) => {
 
     // Use existing printReceipt function with template support
     console.log('[Print Bill] Calling printReceipt...');
-    const success = await printReceipt(order, bill, business, billTemplate?.value || 'compact');
+    const success = await printReceipt(order, bill, business, billTemplate?.value || 'compact', useUnicode);
     console.log('[Print Bill] Print result:', success);
 
     if (success) {
@@ -281,7 +281,7 @@ router.post('/print-bill', async (req: Request, res: Response) => {
 // POST /api/printers/print-kot — print KOT via backend (desktop app)
 router.post('/print-kot', async (req: Request, res: Response) => {
   try {
-    const { orderId, stationName, items } = req.body;
+    const { orderId, stationName, items, useUnicode = false } = req.body;
     
     if (!orderId) {
       return res.status(400).json({ error: 'orderId is required' });
@@ -314,7 +314,7 @@ router.post('/print-kot', async (req: Request, res: Response) => {
     // Use existing printKOT function
     const kotItems = items || orderItems;
     const station = stationName || 'Kitchen';
-    const success = await printKOT(order, kotItems, station);
+    const success = await printKOT(order, kotItems, station, useUnicode);
 
     if (success) {
       res.json({ success: true });
