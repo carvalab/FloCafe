@@ -63,7 +63,7 @@
   },
   "build": {
     "appId": "com.flo.desktop",
-    "productName": "Flo",
+    "productName": "Flo Cafe",
     "asar": true,
     "asarUnpack": "**/node_modules/better-sqlite3/**/*",
     "directories": {
