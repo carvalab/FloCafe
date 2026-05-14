@@ -66,10 +66,11 @@ export default function PrinterStatus() {
   const {
     status, deviceInfo, lastError,
     connect, disconnect, clearError,
-    printMethod,
+    printMethod, hardwarePrinter,
   } = usePrinterStore();
 
-  const cfg = STATUS_CONFIG[status];
+  const effectiveStatus: PrinterStatus = hardwarePrinter ? 'connected' : status;
+  const cfg = STATUS_CONFIG[effectiveStatus];
   const Icon = cfg.Icon;
 
   const handleConnect = async () => {
@@ -102,8 +103,8 @@ export default function PrinterStatus() {
             size={16}
             className={isConnecting ? 'animate-spin' : undefined}
           />
-          <span className="hidden sm:inline text-xs font-medium">
-            {cfg.label}
+          <span className="hidden sm:inline text-xs font-medium truncate max-w-[140px]">
+            {hardwarePrinter ? hardwarePrinter.name : cfg.label}
           </span>
           <ChevronDown size={12} className="text-gray-400" />
         </Button>
@@ -113,6 +114,22 @@ export default function PrinterStatus() {
         <DropdownMenuLabel className="text-xs text-gray-500">
           Receipt Printer
         </DropdownMenuLabel>
+
+        {hardwarePrinter && (
+          <div className="px-2 py-1.5 text-xs text-gray-500 border-b border-gray-100">
+            <p className="font-medium text-gray-700 truncate flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
+              {hardwarePrinter.name}
+            </p>
+            <p className="capitalize">
+              {hardwarePrinter.connection_type}
+              {hardwarePrinter.connection_type === 'network' && hardwarePrinter.ip_address
+                ? ` · ${hardwarePrinter.ip_address}${hardwarePrinter.port ? ':' + hardwarePrinter.port : ''}`
+                : ''}
+              {hardwarePrinter.paper_width ? ` · ${hardwarePrinter.paper_width}` : ''}
+            </p>
+          </div>
+        )}
 
         {isConnected && deviceInfo && (
           <div className="px-2 py-1.5 text-xs text-gray-500 border-b border-gray-100">

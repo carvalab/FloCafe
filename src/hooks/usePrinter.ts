@@ -13,10 +13,22 @@ import {
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { buildGstBillBytes, type GstBillOptions } from '@/lib/printer/gst-bill-encoder';
 import { buildKotBytes, type KotOptions } from '@/lib/printer/kot-encoder';
+import api from '@/lib/api';
 import type { Bill, Tenant, Order } from '@/lib/types';
 
 type PrintModeType = 'receipt' | 'gst' | 'kot';
 type PaperWidth = 58 | 80;
+
+export interface HardwarePrinter {
+  id: string;
+  name: string;
+  connection_type: 'network' | 'usb' | 'webusb';
+  ip_address?: string | null;
+  port?: number | null;
+  usb_device_path?: string | null;
+  paper_width?: string | null;
+  is_default: number;
+}
 
 interface PrinterState {
   status: PrinterStatus;
@@ -26,6 +38,7 @@ interface PrinterState {
   printMode: PrintModeType;
   paperWidth: PaperWidth;
   printMethod: PrintMode;
+  hardwarePrinter: HardwarePrinter | null;
 
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
@@ -38,6 +51,7 @@ interface PrinterState {
   clearError: () => void;
   downloadLastReceipt: () => void;
   copyLastReceiptHex: () => Promise<void>;
+  refreshHardwarePrinter: () => Promise<void>;
 }
 
 export const usePrinterStore = create<PrinterState>()(
@@ -50,6 +64,18 @@ export const usePrinterStore = create<PrinterState>()(
       printMode: 'receipt',
       paperWidth: 58,
       printMethod: 'escpos',
+      hardwarePrinter: null,
+
+      refreshHardwarePrinter: async () => {
+        try {
+          const res = await api.get('/printers');
+          const list: HardwarePrinter[] = res.data.printers || [];
+          const defaultPrinter = list.find((p) => p.is_default === 1 && p.connection_type !== 'webusb') || null;
+          set({ hardwarePrinter: defaultPrinter });
+        } catch {
+          set({ hardwarePrinter: null });
+        }
+      },
 
       connect: async () => {
         set({ lastError: null });
@@ -72,7 +98,19 @@ export const usePrinterStore = create<PrinterState>()(
             billGstin, billAddress, billPhone, billFooterMessage,
             billShowName, billShowAddress, billShowPhone, billShowGstn,
             webPrintSize,
+            printerUseUnicode,
           } = usePosSettingsStore.getState();
+
+          const hw = get().hardwarePrinter;
+          if (hw && get().printMethod === 'escpos') {
+            try {
+              await api.post('/printers/print-bill', { billId: bill.id, useUnicode: printerUseUnicode });
+              return;
+            } catch (err: unknown) {
+              const e = err as { response?: { data?: { error?: string } }; message?: string };
+              throw new Error(e.response?.data?.error || e.message || 'Print failed');
+            }
+          }
 
           if (get().printMethod === 'browser') {
             // Browser / A4 print path
@@ -99,6 +137,7 @@ export const usePrinterStore = create<PrinterState>()(
             phone: billShowPhone && billPhone ? billPhone : undefined,
             footerNote: billFooterMessage || undefined,
             showTaxBreakdown: billShowGstn,
+            useUnicode: printerUseUnicode,
           };
 
           let bytes: Uint8Array;
@@ -122,7 +161,8 @@ export const usePrinterStore = create<PrinterState>()(
         set({ lastError: null });
         try {
           const { paperWidth } = get();
-          const bytes = buildGstBillBytes(bill, tenant, { ...opts, paperWidth });
+          const { printerUseUnicode } = usePosSettingsStore.getState();
+          const bytes = buildGstBillBytes(bill, tenant, { ...opts, paperWidth, useUnicode: printerUseUnicode });
           set({ lastPrintedBytes: bytes });
           
           if (get().printMethod === 'escpos') {
@@ -139,10 +179,22 @@ export const usePrinterStore = create<PrinterState>()(
       printKot: async (order, opts) => {
         set({ lastError: null });
         try {
+          const { printerUseUnicode } = usePosSettingsStore.getState();
+          const hw = get().hardwarePrinter;
+          if (hw && get().printMethod === 'escpos') {
+            try {
+              await api.post('/printers/print-kot', { orderId: order.id, useUnicode: printerUseUnicode });
+              return;
+            } catch (err: unknown) {
+              const e = err as { response?: { data?: { error?: string } }; message?: string };
+              throw new Error(e.response?.data?.error || e.message || 'KOT print failed');
+            }
+          }
+
           const { paperWidth } = get();
           const bytes = buildKotBytes(order, { ...opts, paperWidth });
           set({ lastPrintedBytes: bytes });
-          
+
           if (get().printMethod === 'escpos') {
             await printerService.print(bytes);
           } else {
@@ -199,6 +251,8 @@ export function usePrinterStatusSync(): void {
       status: printerService.status,
       deviceInfo: printerService.deviceInfo,
     });
+
+    store.refreshHardwarePrinter();
 
     const unsub = printerService.onStatusChange((status, info) => {
       usePrinterStore.setState({

@@ -15,6 +15,7 @@
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
+import { normalizeCurrencyToAscii } from './unicode';
 
 export interface ReceiptOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -31,6 +32,8 @@ export interface ReceiptOptions {
   phone?: string;
   /** Show per-tax-rate breakdown lines */
   showTaxBreakdown?: boolean;
+  /** If false (default), replace ₹/€/£/etc. with ASCII (Rs, EUR, GBP…). */
+  useUnicode?: boolean;
 }
 
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
@@ -91,9 +94,11 @@ export function buildClassicReceiptBytes(
     address,
     phone,
     showTaxBreakdown = false,
+    useUnicode = false,
   } = opts;
   const cols = CHARS[paperWidth];
-  const currency = tenant.currency ?? '';
+  const rawCurrency = tenant.currency ?? '';
+  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -237,9 +242,10 @@ export function buildCompactReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote } = opts;
+  const { paperWidth = 58, footerNote, useUnicode = false } = opts;
   const cols = CHARS[paperWidth];
-  const currency = tenant.currency ?? '';
+  const rawCurrency = tenant.currency ?? '';
+  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -330,9 +336,10 @@ export function buildDetailedReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote, gstin, address, phone } = opts;
+  const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false } = opts;
   const cols = CHARS[paperWidth];
-  const currency = tenant.currency ?? '';
+  const rawCurrency = tenant.currency ?? '';
+  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });

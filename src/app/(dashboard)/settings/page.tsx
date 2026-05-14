@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
-import { usePrinterStore } from '@/hooks/usePrinter';
+import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
 import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import api from '@/lib/api';
@@ -83,7 +83,8 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 export default function SettingsPage() {
   const { currentTenant, user } = useAuthStore();
   const posSettings = usePosSettingsStore();
-  const { printMethod, setPrintMethod } = usePrinterStore();
+  const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
+  usePrinterStatusSync();
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
 
   const [loyaltyDays, setLoyaltyDays] = useState(365);
@@ -146,15 +147,60 @@ export default function SettingsPage() {
     usb_device_path: '/dev/usb/lp0', paper_width: '80mm',
   };
 
+  type DetectedPrinter = {
+    name: string; make: string; model: string;
+    connectionType: 'usb' | 'network' | 'bluetooth';
+    deviceUri: string; status: 'idle' | 'printing' | 'offline';
+    isDefault: boolean; ipAddress?: string; port?: number; paperWidth?: string;
+  };
+
   const [hwPrinters, setHwPrinters] = useState<HwPrinter[]>([]);
   const [printerForm, setPrinterForm] = useState<PrinterForm>(emptyPrinterForm);
   const [showPrinterForm, setShowPrinterForm] = useState(false);
   const [editingPrinterId, setEditingPrinterId] = useState<string | null>(null);
   const [savingPrinter, setSavingPrinter] = useState(false);
   const [testingPrinterId, setTestingPrinterId] = useState<string | null>(null);
+  const [detectedPrinters, setDetectedPrinters] = useState<DetectedPrinter[]>([]);
+  const [detectingPrinters, setDetectingPrinters] = useState(false);
+  const [addingDetectedName, setAddingDetectedName] = useState<string | null>(null);
 
   const fetchPrinters = () => {
     api.get('/printers').then((res) => setHwPrinters(res.data.printers || [])).catch(() => {});
+  };
+
+  const fetchDetectedPrinters = async () => {
+    setDetectingPrinters(true);
+    try {
+      const res = await api.get('/printers/detect');
+      setDetectedPrinters(res.data.printers || []);
+    } catch {
+      setDetectedPrinters([]);
+    } finally {
+      setDetectingPrinters(false);
+    }
+  };
+
+  const quickAddDetected = async (p: DetectedPrinter) => {
+    setAddingDetectedName(p.name);
+    try {
+      const payload: any = {
+        name: p.name,
+        connection_type: p.connectionType === 'network' ? 'network' : 'usb',
+        paper_width: p.paperWidth || '80mm',
+      };
+      if (p.connectionType === 'network') {
+        payload.ip_address = p.ipAddress || '';
+        payload.port = p.port || 9100;
+      }
+      await api.post('/printers', payload);
+      toast.success(`${p.name} added`);
+      fetchPrinters();
+      refreshHardwarePrinter();
+    } catch (err: any) {
+      toast.error(err?.response?.data?.error || 'Failed to add printer');
+    } finally {
+      setAddingDetectedName(null);
+    }
   };
 
   const openAddPrinter = () => {
@@ -194,6 +240,7 @@ export default function SettingsPage() {
         toast.success('Printer added');
       }
       fetchPrinters();
+      refreshHardwarePrinter();
       setShowPrinterForm(false);
     } catch {
       toast.error('Failed to save printer');
@@ -208,6 +255,7 @@ export default function SettingsPage() {
       await api.delete(`/printers/${id}`);
       toast.success('Printer deleted');
       fetchPrinters();
+      refreshHardwarePrinter();
     } catch { toast.error('Failed to delete'); }
   };
 
@@ -216,6 +264,7 @@ export default function SettingsPage() {
       await api.post(`/printers/${id}/set-default`);
       toast.success('Default printer set');
       fetchPrinters();
+      refreshHardwarePrinter();
     } catch { toast.error('Failed'); }
   };
 
@@ -247,6 +296,7 @@ export default function SettingsPage() {
     printMethod: 'escpos' | 'browser';
     autoPrintKot: boolean; autoPrintBill: boolean;
     webPrintSize: PaperSize; whatsappShareEnabled: boolean;
+    printerUseUnicode: boolean;
   };
   const initPrinting = (): PrintingForm => ({
     printerEnabled: posSettings.printerEnabled,
@@ -256,6 +306,7 @@ export default function SettingsPage() {
     autoPrintBill: posSettings.autoPrintBill,
     webPrintSize: posSettings.webPrintSize,
     whatsappShareEnabled: posSettings.whatsappShareEnabled,
+    printerUseUnicode: posSettings.printerUseUnicode,
   });
   const [printingForm, setPrintingForm] = useState<PrintingForm>(initPrinting);
   const [savedPrinting, setSavedPrinting] = useState<PrintingForm>(initPrinting);
@@ -267,6 +318,7 @@ export default function SettingsPage() {
     posSettings.setAutoPrintBill(printingForm.autoPrintBill);
     posSettings.setWebPrintSize(printingForm.webPrintSize);
     posSettings.setWhatsappShareEnabled(printingForm.whatsappShareEnabled);
+    posSettings.setPrinterUseUnicode(printingForm.printerUseUnicode);
     setSavedPrinting(printingForm);
     toast.success('Printing settings saved');
   };
@@ -307,6 +359,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchPrinters();
+    fetchDetectedPrinters();
     fetchKdsInfo();
 
     api.get('/settings/tax').then((res) => {
@@ -771,22 +824,85 @@ export default function SettingsPage() {
                   <h2 className="font-semibold text-gray-900">Hardware Printers</h2>
                 </div>
                 {!showPrinterForm && (
-                  <button onClick={openAddPrinter}
-                    className="flex items-center gap-2 px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
-                    <Plus size={14} /> Add Printer
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button onClick={fetchDetectedPrinters} disabled={detectingPrinters}
+                      title="Refresh list of installed printers"
+                      className="flex items-center gap-2 px-3 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50">
+                      <RefreshCw size={14} className={detectingPrinters ? 'animate-spin' : ''} /> Refresh
+                    </button>
+                    <button onClick={openAddPrinter}
+                      className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">
+                      <Plus size={14} /> Add Manually
+                    </button>
+                  </div>
                 )}
               </div>
 
-              {/* Printer list */}
-              {hwPrinters.length === 0 && !showPrinterForm && (
-                <div className="py-10 text-center text-gray-400">
-                  <Printer size={36} className="mx-auto mb-2 opacity-30" />
-                  <p className="text-sm">No printers configured yet.</p>
-                  <p className="text-xs mt-1">Add an IP, USB, or WebUSB thermal printer.</p>
+              {/* Detected (OS-installed) printers — one-click add */}
+              {!showPrinterForm && (
+                <div className="mb-5">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Installed on this computer</h3>
+                  {detectingPrinters && detectedPrinters.length === 0 ? (
+                    <div className="py-6 text-center text-gray-400 text-sm">Scanning for installed printers…</div>
+                  ) : detectedPrinters.length === 0 ? (
+                    <div className="py-6 text-center text-gray-400 text-sm border border-dashed border-gray-200 rounded-lg">
+                      No installed printers found. Install your printer via system settings, then click Refresh — or use Add Manually for a network printer.
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      {detectedPrinters.map((p) => {
+                        const alreadyAdded = hwPrinters.some((h) => h.name.toLowerCase() === p.name.toLowerCase());
+                        const isAdding = addingDetectedName === p.name;
+                        const dotColor = p.status === 'idle' ? 'bg-green-500' : p.status === 'printing' ? 'bg-yellow-500' : 'bg-gray-300';
+                        const statusLabel = p.status === 'idle' ? 'Online' : p.status === 'printing' ? 'Printing' : 'Offline';
+                        return (
+                          <div key={p.name} className="flex items-center gap-3 rounded-xl border border-gray-200 p-3">
+                            <div className="w-9 h-9 rounded-lg flex items-center justify-center bg-gray-100 shrink-0">
+                              {p.connectionType === 'network' ? <Wifi size={18} className="text-gray-500" /> : <Usb size={18} className="text-gray-500" />}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2">
+                                <span className="font-medium text-gray-900 text-sm truncate">{p.name}</span>
+                                <span className="flex items-center gap-1 text-[11px] text-gray-500">
+                                  <span className={`w-1.5 h-1.5 rounded-full ${dotColor}`} />
+                                  {statusLabel}
+                                </span>
+                              </div>
+                              <p className="text-xs text-gray-500 mt-0.5 truncate">
+                                {p.make !== 'Unknown' ? `${p.make} ${p.model}` : p.model}
+                                {p.connectionType === 'network' && p.ipAddress ? ` · ${p.ipAddress}${p.port ? ':' + p.port : ''}` : ''}
+                                {p.paperWidth ? ` · ${p.paperWidth}` : ''}
+                              </p>
+                            </div>
+                            {alreadyAdded ? (
+                              <span className="text-xs text-gray-400 px-3 py-1.5 flex items-center gap-1">
+                                <CheckCircle2 size={14} className="text-green-500" /> Added
+                              </span>
+                            ) : (
+                              <button onClick={() => quickAddDetected(p)} disabled={isAdding}
+                                className="px-3 py-1.5 text-xs bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium flex items-center gap-1">
+                                <Plus size={13} /> {isAdding ? 'Adding…' : 'Add'}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
 
+              {/* Configured printer list */}
+              {hwPrinters.length === 0 && !showPrinterForm && (
+                <div className="py-6 text-center text-gray-400">
+                  <p className="text-sm">No printers configured yet.</p>
+                  <p className="text-xs mt-1">Click Add on an installed printer above, or use Add Manually.</p>
+                </div>
+              )}
+
+              {hwPrinters.length > 0 && !showPrinterForm && (
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-gray-500 mb-2">Configured printers</h3>
+              )}
               <div className="space-y-3">
                 {hwPrinters.map((p) => (
                   <div key={p.id} className={`flex items-center gap-3 rounded-xl border p-4 ${p.is_default ? 'border-brand bg-brand/5' : 'border-gray-200'}`}>
@@ -1058,6 +1174,15 @@ export default function SettingsPage() {
                     <p className="text-sm text-gray-500">Print bill when payment is completed</p>
                   </div>
                   <Toggle value={printingForm.autoPrintBill} onChange={(v) => setPrintingForm((p) => ({ ...p, autoPrintBill: v }))} />
+                </div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">Printer supports Unicode</p>
+                    <p className="text-sm text-gray-500">
+                      If ON, prints currency symbols (₹, €, £, ¥…) as-is. If OFF, replaces them with ASCII (Rs, EUR, GBP, Yen…) — safer default for most thermal printers.
+                    </p>
+                  </div>
+                  <Toggle value={printingForm.printerUseUnicode} onChange={(v) => setPrintingForm((p) => ({ ...p, printerUseUnicode: v }))} />
                 </div>
                 <div>
                   <p className="font-medium text-gray-900 mb-2">Web Print Size (A4/A5)</p>

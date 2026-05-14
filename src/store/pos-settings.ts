@@ -31,6 +31,8 @@ interface PosSettingsState {
   billShowAddress: boolean;
   billShowPhone: boolean;
   billShowGstn: boolean;
+  // Thermal printer unicode support
+  printerUseUnicode: boolean;
   // Actions
   setShowProductImages: (show: boolean) => void;
   setCustomerMandatory: (mandatory: boolean) => void;
@@ -54,6 +56,7 @@ interface PosSettingsState {
   setBillShowPhone: (v: boolean) => void;
   setBillShowGstn: (v: boolean) => void;
   setBillingType: (v: 'postpaid' | 'prepaid') => void;
+  setPrinterUseUnicode: (v: boolean) => void;
 }
 
 export const usePosSettingsStore = create<PosSettingsState>()(
@@ -84,6 +87,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       billShowPhone: true,
       billShowGstn: false,
       billingType: 'postpaid',
+      printerUseUnicode: false,
       // Actions
       setShowProductImages: (show) => set({ showProductImages: show }),
       setCustomerMandatory: (mandatory) => set({ customerMandatory: mandatory }),
@@ -107,6 +111,7 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       setBillShowPhone: (v) => set({ billShowPhone: v }),
       setBillShowGstn: (v) => set({ billShowGstn: v }),
       setBillingType: (v) => set({ billingType: v }),
+      setPrinterUseUnicode: (v) => set({ printerUseUnicode: v }),
     }),
     { name: 'pos-settings' }
   )

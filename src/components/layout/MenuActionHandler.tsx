@@ -72,10 +72,15 @@ export default function MenuActionHandler() {
   }, [router]);
 
   async function handleBackup() {
-    if (!window.electronAPI?.backupDatabase) return;
+    console.log('[MenuActionHandler] handleBackup called');
+    if (!window.electronAPI?.backupDatabase) {
+      console.error('[MenuActionHandler] backupDatabase API not available');
+      return;
+    }
     
     toast.loading('Creating backup...', { id: 'backup' });
     const result = await window.electronAPI.backupDatabase();
+    console.log('[MenuActionHandler] backup result:', result);
     toast.remove('backup');
     
     if (result.success) {

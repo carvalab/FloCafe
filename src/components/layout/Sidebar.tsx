@@ -11,6 +11,7 @@ import {
   UserCog,
   Settings,
   LogOut,
+  PanelLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { getLandingPage } from '@/components/layout/AuthGuard';
@@ -42,7 +43,7 @@ const ALL_NAV_ITEMS = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { currentTenant, logout } = useAuthStore();
-  const { isMobile, setOpenMobile } = useSidebar();
+  const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const closeMobile = () => { if (isMobile) setOpenMobile(false); };
 
   const role = currentTenant?.role || 'cashier';
@@ -102,6 +103,12 @@ export default function AppSidebar() {
 
       <SidebarFooter>
         <SidebarMenu>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={toggleSidebar} tooltip="Toggle sidebar">
+              <PanelLeft />
+              <span>Collapse</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
           <SidebarMenuItem>
             <SidebarMenuButton onClick={logout} tooltip="Logout">
               <LogOut />

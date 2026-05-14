@@ -8,6 +8,7 @@
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
+import { normalizeCurrencyToAscii } from './unicode';
 
 export interface GstBillOptions {
   /** 58 mm (2.5", 32 chars) or 80 mm (3.5", 48 chars). Default: 58 */
@@ -22,6 +23,8 @@ export interface GstBillOptions {
   phone?: string;
   /** State code for GST calculation */
   stateCode?: string;
+  /** If false (default), replace ₹/€/£/etc. with ASCII (Rs, EUR, GBP…). */
+  useUnicode?: boolean;
 }
 
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
@@ -34,9 +37,10 @@ export function buildGstBillBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: GstBillOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, showFooter = true, gstin, address, phone, stateCode } = opts;
+  const { paperWidth = 58, showFooter = true, gstin, address, phone, stateCode, useUnicode = false } = opts;
   const cols = CHARS[paperWidth];
-  const currency = tenant.currency ?? '₹';
+  const rawCurrency = tenant.currency ?? '₹';
+  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });

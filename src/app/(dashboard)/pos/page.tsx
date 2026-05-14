@@ -137,8 +137,10 @@ export default function POSPage() {
       if (autoPrintKot) {
         try {
           await printKot(data.order as Order);
-        } catch {
-          toast.error('KOT print failed — check printer connection');
+        } catch (err) {
+          console.error('[POS] KOT print failed:', err);
+          const msg = err instanceof Error ? err.message : 'check printer connection';
+          toast.error(`KOT print failed: ${msg}`);
         }
       }
     } catch (err: unknown) {
@@ -185,8 +187,10 @@ export default function POSPage() {
       if (autoPrintKot) {
         try {
           await printKot(orderData.order as Order);
-        } catch {
-          toast.error('KOT print failed — check printer connection');
+        } catch (err) {
+          console.error('[POS] KOT print failed:', err);
+          const msg = err instanceof Error ? err.message : 'check printer connection';
+          toast.error(`KOT print failed: ${msg}`);
         }
       }
     } catch (err: unknown) {

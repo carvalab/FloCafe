@@ -120,6 +120,7 @@ export interface Customer {
   global_customer_id?: number | null;
   dietary_preferences?: string[] | null;
   favourite_dishes?: string[] | null;
+  tag_counts?: Record<string, number> | null;
 }
 
 export interface Order {

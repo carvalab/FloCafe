@@ -4,7 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
-import { X, UserPlus, Search } from 'lucide-react';
+import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Customer } from '@/lib/types';
 
@@ -13,22 +13,46 @@ interface Props {
   variant?: 'default' | 'topbar';
 }
 
+const TAG_COLORS: Record<string, string> = {
+  veg:    'bg-green-100 text-green-700',
+  nonveg: 'bg-red-100 text-red-700',
+  vegan:  'bg-emerald-100 text-emerald-700',
+  spicy:  'bg-orange-100 text-orange-700',
+};
+
+function tagColor(tag: string) {
+  return TAG_COLORS[tag.toLowerCase()] ?? 'bg-gray-100 text-gray-600';
+}
+
+function TagBadges({ counts }: { counts: Record<string, number> }) {
+  const entries = Object.entries(counts).filter(([, n]) => n > 0);
+  if (entries.length === 0) return null;
+  return (
+    <div className="flex flex-wrap gap-1">
+      {entries.map(([tag, count]) => (
+        <span key={tag} className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${tagColor(tag)}`}>
+          {tag} ×{count}
+        </span>
+      ))}
+    </div>
+  );
+}
+
 export default function CustomerSearch({ onSelected, variant = 'default' }: Props = {}) {
   const cart = useCartStore();
   const { phoneDigits } = usePosSettingsStore();
-  const [query, setQuery] = useState('');
-  const [results, setResults] = useState<Customer[]>([]);
-  const [showDropdown, setShowDropdown] = useState(false);
-  const [showCreate, setShowCreate] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newPhone, setNewPhone] = useState('');
+  const [phone, setPhone] = useState('');
+  const [name, setName] = useState('');
+  const [matched, setMatched] = useState<Customer | null>(null);
+  const [searched, setSearched] = useState(false);
   const [creating, setCreating] = useState(false);
-  const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   const customer = cart.customer;
+  const maxLen = phoneDigits || 10;
+  const isNew = searched && !matched;
 
-  // Auto-fetch customer when customerId is set but customer object is missing
   useEffect(() => {
     if (cart.customerId && !cart.customer) {
       api.get(`/customers/${cart.customerId}`)
@@ -38,53 +62,50 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.customerId]);
 
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
-        setShowDropdown(false);
-        setShowCreate(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
-
-  const searchCustomers = (q: string) => {
-    if (q.length < 2) { setResults([]); return; }
+  const searchByPhone = (p: string) => {
     clearTimeout(debounceRef.current);
+    if (p.length < 3) { setMatched(null); setName(''); setSearched(false); return; }
     debounceRef.current = setTimeout(async () => {
       try {
-        const { data } = await api.get(`/customers-search?q=${encodeURIComponent(q)}`);
-        // Backend returns array directly
-        setResults(Array.isArray(data) ? data : (data.customers || []));
-      } catch { setResults([]); }
+        const { data } = await api.get(`/customers-search?q=${encodeURIComponent(p)}`);
+        const results = Array.isArray(data) ? data : (data.customers || []);
+        const found: Customer | null = results[0] || null;
+        setMatched(found);
+        setName(found ? found.name : '');
+        setSearched(true);
+      } catch {
+        setMatched(null);
+        setName('');
+        setSearched(true);
+      }
     }, 300);
   };
 
-  const handleSelect = (c: Customer) => {
-    cart.setCustomer(c);
-    setShowDropdown(false);
-    setQuery('');
+  const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const digits = e.target.value.replace(/\D/g, '').slice(0, maxLen);
+    setPhone(digits);
+    setMatched(null);
+    setName('');
+    setSearched(false);
+    searchByPhone(digits);
+  };
+
+  const handleSelectMatched = () => {
+    if (!matched) return;
+    cart.setCustomer(matched);
+    setPhone(''); setName(''); setMatched(null); setSearched(false);
     onSelected?.();
   };
 
-  const handleClear = () => {
-    cart.setCustomer(null);
-  };
-
   const handleCreate = async () => {
-    if (!newName.trim() || !newPhone.trim()) return;
+    if (!name.trim() || !phone.trim()) return;
     setCreating(true);
     try {
-      const { data } = await api.post('/customers', {
-        name: newName,
-        phone: newPhone.replace(/\D/g, ''),
-      });
-      handleSelect(data.customer);
-      setShowCreate(false);
-      setNewName('');
-      setNewPhone('');
+      const { data } = await api.post('/customers', { name: name.trim(), phone });
+      cart.setCustomer(data.customer);
+      setPhone(''); setName(''); setMatched(null); setSearched(false);
       toast.success('Customer created');
+      onSelected?.();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
       toast.error(error.response?.data?.message || 'Failed to create customer');
@@ -93,119 +114,164 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
     }
   };
 
+  const handleClear = () => cart.setCustomer(null);
+
+  // ── Shared input classes ───────────────────────────────────────────────────
+  const baseInput = 'px-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none text-sm';
+
+  // ── Customer already selected ──────────────────────────────────────────────
   if (customer) {
+    const hasTags = customer.tag_counts && Object.keys(customer.tag_counts).length > 0;
+
     if (variant === 'topbar') {
       return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-light rounded-lg text-sm min-w-0 w-full">
-          <div className="flex-1 min-w-0 flex items-center gap-x-2 gap-y-0 flex-wrap">
-            <span className="font-semibold text-brand truncate">{customer.name}</span>
-            <span className="text-brand/70 text-xs shrink-0">{customer.phone}</span>
+        <div className="space-y-1 w-full min-w-0">
+          <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-light rounded-lg min-w-0">
+            <div className="flex-1 min-w-0 flex items-center gap-x-2 flex-wrap">
+              <span className="font-semibold text-brand text-sm truncate">{customer.name}</span>
+              <span className="text-brand/70 text-xs shrink-0">{customer.phone}</span>
+            </div>
+            <button onClick={handleClear} className="text-brand hover:text-brand-hover shrink-0 ml-auto">
+              <X size={14} />
+            </button>
           </div>
-          <button onClick={handleClear} className="text-brand hover:text-brand-hover shrink-0 ml-auto">
-            <X size={14} />
-          </button>
+          {hasTags && <TagBadges counts={customer.tag_counts!} />}
         </div>
       );
     }
 
     return (
-      <div className="flex items-center justify-between px-3 py-2 bg-brand-light rounded-lg text-sm">
-        <div className="flex-1 min-w-0">
-          <span className="font-medium text-brand truncate">{customer.name}</span>
-          {customer.phone && (
-            <span className="text-xs text-gray-500 ml-2">{customer.phone}</span>
-          )}
+      <div className="space-y-1">
+        <div className="flex items-center justify-between px-3 py-2 bg-brand-light rounded-lg text-sm">
+          <div className="flex-1 min-w-0">
+            <span className="font-medium text-brand truncate">{customer.name}</span>
+            {customer.phone && <span className="text-xs text-gray-500 ml-2">{customer.phone}</span>}
+          </div>
+          <button onClick={handleClear} className="text-brand hover:text-brand-hover ml-2 shrink-0">
+            <X size={14} />
+          </button>
         </div>
-        <button onClick={handleClear} className="text-brand hover:text-brand-hover ml-2 shrink-0">
-          <X size={14} />
-        </button>
+        {hasTags && <TagBadges counts={customer.tag_counts!} />}
       </div>
     );
   }
 
+  // ── Topbar variant ─────────────────────────────────────────────────────────
+  if (variant === 'topbar') {
+    return (
+      <div className="space-y-1 w-full min-w-0">
+        {/* Row 1: phone + name + action */}
+        <div className="flex items-center gap-2 min-w-0">
+          <input
+            type="tel"
+            inputMode="numeric"
+            value={phone}
+            onChange={handlePhoneChange}
+            placeholder="Phone"
+            className={`${baseInput} w-28 shrink-0 py-1.5`}
+          />
+          <input
+            ref={nameRef}
+            type="text"
+            value={name}
+            onChange={matched ? undefined : (e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') matched ? handleSelectMatched() : handleCreate();
+            }}
+            readOnly={!!matched}
+            placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
+            className={`${baseInput} flex-1 min-w-0 py-1.5 ${matched ? 'bg-gray-50 cursor-pointer' : ''}`}
+            onClick={matched ? handleSelectMatched : undefined}
+          />
+          {matched && (
+            <button
+              onClick={handleSelectMatched}
+              className="shrink-0 px-2.5 py-1.5 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover whitespace-nowrap"
+            >
+              Select
+            </button>
+          )}
+          {isNew && name.trim() && (
+            <button
+              onClick={handleCreate}
+              disabled={creating}
+              className="shrink-0 px-2.5 py-1.5 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
+            >
+              {creating ? '…' : 'Add'}
+            </button>
+          )}
+        </div>
+
+        {/* Row 2: status + tags */}
+        {searched && (
+          <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
+            {matched ? (
+              <>
+                <span className="text-xs text-green-600 font-medium">Customer found</span>
+                {matched.tag_counts && <TagBadges counts={matched.tag_counts} />}
+              </>
+            ) : (
+              <span className="text-xs text-red-500 font-medium">New customer — enter name above</span>
+            )}
+          </div>
+        )}
+      </div>
+    );
+  }
+
+  // ── Default variant (stacked, used in modal) ───────────────────────────────
   return (
-    <div ref={wrapperRef} className="relative">
-      <div className="relative">
-        <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+    <div className="space-y-2">
+      <div className="flex gap-2">
         <input
+          type="tel"
+          inputMode="numeric"
+          value={phone}
+          onChange={handlePhoneChange}
+          placeholder="Phone"
+          className={`${baseInput} flex-1 py-2`}
+        />
+        <input
+          ref={nameRef}
           type="text"
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); searchCustomers(e.target.value); setShowDropdown(true); }}
-          onFocus={() => setShowDropdown(true)}
-          placeholder="Search by phone or name..."
-          className="w-full pl-8 pr-3 py-2 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
+          value={name}
+          onChange={matched ? undefined : (e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') matched ? handleSelectMatched() : handleCreate();
+          }}
+          readOnly={!!matched}
+          placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
+          className={`${baseInput} flex-1 py-2 ${matched ? 'bg-gray-50 cursor-pointer' : ''}`}
+          onClick={matched ? handleSelectMatched : undefined}
         />
       </div>
 
-      {showDropdown && query.length >= 2 && (
-        <div className="absolute z-20 top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-64 overflow-y-auto">
-          {/* Search results */}
-          {results.length > 0 && results.map((c) => (
-            <button
-              key={c.id || c.phone}
-              onClick={() => handleSelect(c)}
-              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm border-b border-gray-50 last:border-0"
-            >
-              <span className="font-medium">{c.name}</span>
-              <span className="text-gray-400 ml-2">{c.phone}</span>
-            </button>
-          ))}
-
-          {/* No results message */}
-          {results.length === 0 && !showCreate && (
-            <div className="px-3 py-2 text-sm text-gray-400">No customer found</div>
-          )}
-
-          {/* New Customer button - only show when no results found */}
-          {!showCreate && results.length === 0 && (
-            <button
-              onClick={() => {
-                setShowCreate(true);
-                if (/^\d+$/.test(query.trim())) {
-                  setNewPhone(query.trim());
-                }
-              }}
-              className="w-full text-left px-3 py-2 hover:bg-gray-50 text-sm text-brand font-medium flex items-center gap-1.5 border-t border-gray-100"
-            >
-              <UserPlus size={14} /> Add New Customer
-            </button>
-          )}
-
-          {/* Create form */}
-          {showCreate && (
-            <div className="p-3 space-y-2">
-              <input
-                type="text"
-                placeholder="Customer Name"
-                value={newName}
-                onChange={(e) => setNewName(e.target.value)}
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand"
-                autoFocus
-              />
-              <input
-                type="text"
-                placeholder="Phone Number"
-                value={newPhone}
-                onChange={(e) => setNewPhone(e.target.value.replace(/\D/g, '').slice(0, 10))}
-                maxLength={10}
-                className="w-full px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand"
-              />
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setShowCreate(false)}
-                  className="flex-1 py-1.5 text-sm text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50"
-                >
-                  Cancel
-                </button>
+      {searched && (
+        <div className="space-y-1.5">
+          {matched ? (
+            <>
+              <p className="text-xs text-green-600 font-medium">Customer found — click name to select</p>
+              {matched.tag_counts && <TagBadges counts={matched.tag_counts} />}
+              <button
+                onClick={handleSelectMatched}
+                className="w-full py-1.5 bg-brand text-white text-sm rounded-lg hover:bg-brand-hover"
+              >
+                Select {matched.name}
+              </button>
+            </>
+          ) : (
+            <>
+              <p className="text-xs text-red-500 font-medium">New customer — enter name to add</p>
+              {name.trim() && (
                 <button
                   onClick={handleCreate}
-                  disabled={creating || !newName.trim() || !newPhone.trim()}
-                  className="flex-1 py-1.5 bg-brand text-white text-sm rounded-lg hover:bg-brand-hover disabled:opacity-50"
+                  disabled={creating}
+                  className="w-full py-1.5 bg-brand text-white text-sm rounded-lg hover:bg-brand-hover disabled:opacity-50"
                 >
-                  {creating ? 'Creating...' : 'Create'}
+                  {creating ? 'Creating…' : `Add "${name.trim()}"`}
                 </button>
-              </div>
-            </div>
+              )}
+            </>
           )}
         </div>
       )}
