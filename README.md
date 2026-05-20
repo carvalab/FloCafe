@@ -21,13 +21,13 @@ FloCafe is a **free, open-source, offline-first Point of Sale (POS) system** bui
 
 | Platform | File | Description |
 |----------|------|-------------|
-| **macOS (Intel)** | `Flo-1.6.0.dmg` | For Intel Macs |
-| **macOS (Apple Silicon)** | `Flo-1.6.0-arm64.dmg` | For M1/M2/M3 Macs |
-| **Windows** | `Flo Setup 1.6.0.exe` | Windows installer |
-| **Linux (AppImage)** | `Flo-1.6.0.AppImage` | Portable Linux binary |
-| **Linux (Debian)** | `flo-desktop_1.6.0_amd64.deb` | Debian/Ubuntu package |
+| **macOS (Intel)** | `Flo-1.6.1.dmg` | For Intel Macs |
+| **macOS (Apple Silicon)** | `Flo-1.6.1-arm64.dmg` | For M1/M2/M3 Macs |
+| **Windows** | `Flo Setup 1.6.1.exe` | Windows installer |
+| **Linux (AppImage)** | `Flo-1.6.1.AppImage` | Portable Linux binary |
+| **Linux (Debian)** | `flo-desktop_1.6.1_amd64.deb` | Debian/Ubuntu package |
 
-**Latest Version:** v1.6.0
+**Latest Version:** v1.6.1
 
 ## 🚀 Features
 
