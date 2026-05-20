@@ -11,7 +11,7 @@ export function registerIpcHandlers(): void {
       
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const result = await dialog.showSaveDialog({
-        defaultPath: path.join(app.getPath('downloads'), `flo-backup-${timestamp}.db`),
+        defaultPath: path.join(app.getPath('documents'), `flo-backup-${timestamp}.db`),
         filters: [{ name: 'SQLite Database', extensions: ['db'] }],
       });
 

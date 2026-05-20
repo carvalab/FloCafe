@@ -181,6 +181,14 @@ function createWindow(): void {
     return { action: 'deny' };
   });
 
+  // Intercept all renderer downloads and show a save dialog instead of
+  // auto-saving to Downloads — required for MAS sandbox compliance.
+  mainWindow.webContents.session.on('will-download', (_event, item) => {
+    item.setSaveDialogOptions({
+      defaultPath: path.join(app.getPath('documents'), item.getFilename()),
+    });
+  });
+
   mainWindow.on('close', (event) => {
     if (!isQuitting) {
       event.preventDefault();
@@ -309,6 +317,17 @@ function createMenu(): void {
         { label: 'Tax Settings', click: () => mainWindow?.webContents.send('settings-tax') },
         { label: 'Printer Setup', click: () => mainWindow?.webContents.send('settings-printer') },
         { label: 'Kitchen Stations', click: () => mainWindow?.webContents.send('settings-kitchen') },
+      ],
+    },
+    {
+      label: 'Window',
+      submenu: [
+        { label: 'Flo Cafe', click: () => { mainWindow?.show(); mainWindow?.focus(); } },
+        { type: 'separator' },
+        { role: 'minimize' },
+        { role: 'zoom' },
+        { type: 'separator' },
+        { role: 'front' },
       ],
     },
     {
