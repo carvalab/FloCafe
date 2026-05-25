@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import { tagLabel } from '@/components/pos/DietaryBadge';
 
@@ -73,6 +73,12 @@ export default function ProductsPage() {
     addon_group_ids: [] as number[],
   });
 
+  const [showCsvModal, setShowCsvModal] = useState(false);
+  const [csvType, setCsvType] = useState<'categories' | 'products' | 'addons'>('categories');
+  const [csvFile, setCsvFile] = useState<File | null>(null);
+  const [csvResult, setCsvResult] = useState<Record<string, unknown> | null>(null);
+  const [csvUploading, setCsvUploading] = useState(false);
+
   const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
 
@@ -95,6 +101,44 @@ export default function ProductsPage() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const openCsvModal = (type: 'categories' | 'products' | 'addons') => {
+    setCsvType(type);
+    setCsvFile(null);
+    setCsvResult(null);
+    setShowCsvModal(true);
+  };
+
+  const downloadCsv = async (path: string, filename: string) => {
+    try {
+      const res = await api.get(path, { responseType: 'blob' });
+      const url = URL.createObjectURL(res.data as Blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error('Download failed');
+    }
+  };
+
+  const handleCsvUpload = async () => {
+    if (!csvFile) return;
+    setCsvUploading(true);
+    setCsvResult(null);
+    try {
+      const text = await csvFile.text();
+      const res = await api.post(`/menu-csv/import/${csvType}`, { csv: text });
+      setCsvResult(res.data);
+      fetchData();
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error ?? 'Import failed';
+      toast.error(msg);
+    } finally {
+      setCsvUploading(false);
+    }
+  };
 
   const resetForm = () => {
     setForm({
@@ -287,7 +331,10 @@ export default function ProductsPage() {
 
       {activeTab === 'products' && (
         <>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end gap-2 mb-4">
+            <Button variant="outline" onClick={() => openCsvModal('products')}>
+              <FileSpreadsheet size={16} className="mr-1" /> CSV
+            </Button>
             <Button onClick={() => { resetForm(); setShowForm(true); }}>
               <Plus size={16} className="mr-1" /> Add Product
             </Button>
@@ -532,7 +579,10 @@ export default function ProductsPage() {
 
       {activeTab === 'categories' && (
         <>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end gap-2 mb-4">
+            <Button variant="outline" onClick={() => openCsvModal('categories')}>
+              <FileSpreadsheet size={16} className="mr-1" /> CSV
+            </Button>
             <Button onClick={() => { resetCategoryForm(); setShowForm(true); }}>
               <Plus size={16} className="mr-1" /> Add Category
             </Button>
@@ -615,7 +665,10 @@ export default function ProductsPage() {
 
       {activeTab === 'addons' && isRestaurant && (
         <>
-          <div className="flex justify-end mb-4">
+          <div className="flex justify-end gap-2 mb-4">
+            <Button variant="outline" onClick={() => openCsvModal('addons')}>
+              <FileSpreadsheet size={16} className="mr-1" /> CSV
+            </Button>
             <Button onClick={() => { resetAddonForm(); setShowAddonModal(true); }}>
               <Plus size={16} className="mr-1" /> Add Addon Group
             </Button>
@@ -704,6 +757,108 @@ export default function ProductsPage() {
             </div>
           )}
         </>
+      )}
+
+      {showCsvModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-lg">
+            <div className="flex justify-between items-center mb-5">
+              <h2 className="text-lg font-bold">
+                CSV Import / Export —{' '}
+                {csvType === 'categories' ? 'Categories' : csvType === 'products' ? 'Products' : 'Addon Groups'}
+              </h2>
+              <button onClick={() => setShowCsvModal(false)} className="text-gray-400 hover:text-gray-600">
+                <X size={20} />
+              </button>
+            </div>
+
+            <div className="space-y-5">
+              {/* Download section */}
+              <div className="bg-gray-50 rounded-xl p-4 space-y-3">
+                <p className="text-sm font-medium text-gray-700">Download</p>
+                <div className="flex gap-3">
+                  <button
+                    onClick={() => downloadCsv(`/menu-csv/template/${csvType}`, `${csvType}-template.csv`)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 font-medium"
+                  >
+                    <Download size={14} /> Blank template
+                  </button>
+                  <button
+                    onClick={() => downloadCsv(`/menu-csv/export/${csvType}`, `${csvType}-export.csv`)}
+                    className="flex items-center gap-2 px-4 py-2 text-sm border border-gray-200 rounded-lg bg-white hover:bg-gray-50 font-medium"
+                  >
+                    <Download size={14} /> Current data
+                  </button>
+                </div>
+                {csvType === 'products' && (
+                  <p className="text-xs text-gray-500">Columns: name, category, price, description, cost, tax_type (none/inclusive/exclusive), tax_rate, tags (veg/non_veg/vegan/spicy/...), is_active (yes/no)</p>
+                )}
+                {csvType === 'categories' && (
+                  <p className="text-xs text-gray-500">Columns: name, description, color (red/green/blue/...), icon (emoji), sort_order</p>
+                )}
+                {csvType === 'addons' && (
+                  <p className="text-xs text-gray-500">Columns: group_name, addon_name, price, group_required (yes/no), group_min_select, group_max_select — group settings are read from the first row with that group name</p>
+                )}
+              </div>
+
+              {/* Upload section */}
+              <div className="space-y-3">
+                <p className="text-sm font-medium text-gray-700">Upload CSV</p>
+                <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
+                  <Upload size={20} className="text-gray-400 mb-1" />
+                  <span className="text-sm text-gray-500">
+                    {csvFile ? csvFile.name : 'Click to choose a CSV file'}
+                  </span>
+                  <input
+                    type="file"
+                    accept=".csv,text/csv"
+                    className="hidden"
+                    onChange={(e) => { setCsvFile(e.target.files?.[0] ?? null); setCsvResult(null); }}
+                  />
+                </label>
+                {csvFile && (
+                  <Button onClick={handleCsvUpload} disabled={csvUploading} className="w-full">
+                    {csvUploading ? 'Importing…' : 'Import'}
+                  </Button>
+                )}
+              </div>
+
+              {/* Result */}
+              {csvResult && (
+                <div className="rounded-xl border border-gray-100 overflow-hidden">
+                  <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border-b border-gray-100">
+                    <CheckCircle size={15} className="text-green-600" />
+                    <span className="text-sm font-medium text-green-800">Import complete</span>
+                  </div>
+                  <div className="px-4 py-3 text-sm text-gray-700 space-y-1">
+                    {csvType === 'addons' ? (
+                      <>
+                        <p>Groups created: <span className="font-medium">{String(csvResult.groups_created ?? 0)}</span></p>
+                        <p>Addons created: <span className="font-medium">{String(csvResult.addons_created ?? 0)}</span></p>
+                      </>
+                    ) : (
+                      <p>Created: <span className="font-medium">{String(csvResult.created ?? 0)}</span></p>
+                    )}
+                    <p>Skipped (already exists): <span className="font-medium">{String(csvResult.skipped ?? 0)}</span></p>
+                  </div>
+                  {Array.isArray(csvResult.errors) && (csvResult.errors as string[]).length > 0 && (
+                    <div className="px-4 py-3 border-t border-gray-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle size={14} className="text-amber-500" />
+                        <span className="text-xs font-medium text-amber-700">Rows skipped due to errors</span>
+                      </div>
+                      <ul className="space-y-1">
+                        {(csvResult.errors as string[]).map((e, i) => (
+                          <li key={i} className="text-xs text-gray-600">{e}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
