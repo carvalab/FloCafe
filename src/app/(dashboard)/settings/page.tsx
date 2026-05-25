@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
-import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database } from 'lucide-react';
+import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -355,6 +355,17 @@ export default function SettingsPage() {
   const [form, setForm] = useState<BusinessForm>(savedBusiness);
   const [savingBusiness, setSavingBusiness] = useState(false);
 
+  const [cloudSettings, setCloudSettings] = useState({
+    cloud_api_key: '',
+    cloud_store_id: '',
+    cloud_sync_enabled: false,
+    cloud_orders_enabled: false,
+    cloud_last_sync: null as string | null,
+  });
+  const [savingCloud, setSavingCloud] = useState(false);
+  const [testingCloud, setTestingCloud] = useState(false);
+  const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
+
   const resetBusiness = () => setForm(savedBusiness);
 
   useEffect(() => {
@@ -369,6 +380,16 @@ export default function SettingsPage() {
     api.get('/mobile/pairing-code').then((res) => {
       setPairingCode(res.data.pairing_code);
       setPairingRotatedAt(res.data.rotated_at);
+    }).catch(() => {});
+
+    api.get('/settings/cloud').then((res) => {
+      setCloudSettings({
+        cloud_api_key: res.data.cloud_api_key || '',
+        cloud_store_id: res.data.cloud_store_id || '',
+        cloud_sync_enabled: !!res.data.cloud_sync_enabled,
+        cloud_orders_enabled: !!res.data.cloud_orders_enabled,
+        cloud_last_sync: res.data.cloud_last_sync || null,
+      });
     }).catch(() => {});
 
     api.get('/settings/business').then((res) => {
@@ -402,6 +423,37 @@ export default function SettingsPage() {
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const saveCloud = async () => {
+    setSavingCloud(true);
+    try {
+      await api.put('/settings/cloud', cloudSettings);
+      toast.success('Cloud sync settings saved');
+      setCloudTestResult(null);
+    } catch {
+      toast.error('Failed to save cloud settings');
+    } finally {
+      setSavingCloud(false);
+    }
+  };
+
+  const testCloudConnection = async () => {
+    if (!cloudSettings.cloud_api_key) { toast.error('Enter an API key first'); return; }
+    setTestingCloud(true);
+    setCloudTestResult(null);
+    try {
+      const res = await fetch('https://soflo.codify.tech/api/sync/heartbeat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Api-Key': cloudSettings.cloud_api_key },
+        body: JSON.stringify({ pos_version: 'test' }),
+      });
+      setCloudTestResult(res.ok ? 'ok' : 'fail');
+    } catch {
+      setCloudTestResult('fail');
+    } finally {
+      setTestingCloud(false);
+    }
+  };
 
   const saveLoyalty = async () => {
     setSavingLoyalty(true);
@@ -493,6 +545,7 @@ export default function SettingsPage() {
           <TabsTrigger value="bill-template">Bill Template</TabsTrigger>
           <TabsTrigger value="data">Data</TabsTrigger>
           <TabsTrigger value="updates">Updates</TabsTrigger>
+          <TabsTrigger value="cloud">Cloud Sync</TabsTrigger>
         </TabsList>
 
         {/* ================================================================
@@ -1475,6 +1528,123 @@ export default function SettingsPage() {
             </button>
           </div>
         </TabsContent>
+        {/* ================================================================
+            TAB: Cloud Sync
+        ================================================================ */}
+        <TabsContent value="cloud">
+          <div className="space-y-6">
+
+            {/* FloAdmin — reporting sync */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-5">
+              <div className="flex items-center gap-2">
+                <Cloud size={20} className="text-brand" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">FloAdmin — Sales Reporting</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Push every paid bill to the cloud so the ReFlo mobile app can show live reports</p>
+                </div>
+              </div>
+
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                  <p className="text-xs text-gray-500 mb-2">Get this from <span className="font-mono">soflo.codify.tech</span> → register your store → copy the API key</p>
+                  <div className="flex gap-2">
+                    <input
+                      type="password"
+                      value={cloudSettings.cloud_api_key}
+                      onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_api_key: e.target.value })}
+                      placeholder="fac_live_xxxxxxxxxxxxxxxxxxxx"
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand outline-none"
+                    />
+                    <button
+                      onClick={testCloudConnection}
+                      disabled={testingCloud}
+                      className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50"
+                    >
+                      {testingCloud ? 'Testing…' : 'Test'}
+                    </button>
+                  </div>
+                  {cloudTestResult === 'ok' && (
+                    <p className="flex items-center gap-1 text-xs text-green-600 mt-1"><CheckCircle2 size={13} /> Connected to FloAdmin</p>
+                  )}
+                  {cloudTestResult === 'fail' && (
+                    <p className="flex items-center gap-1 text-xs text-red-600 mt-1"><CloudOff size={13} /> Connection failed — check key and server</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Store ID <span className="text-gray-400 font-normal">(optional)</span></label>
+                  <input
+                    type="text"
+                    value={cloudSettings.cloud_store_id}
+                    onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_store_id: e.target.value })}
+                    placeholder="Filled automatically after first sync"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono focus:ring-2 focus:ring-brand outline-none"
+                  />
+                </div>
+
+                <label className="flex items-center gap-3 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={cloudSettings.cloud_sync_enabled}
+                    onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_sync_enabled: e.target.checked })}
+                    className="rounded border-gray-300 text-brand focus:ring-brand"
+                  />
+                  <span className="text-sm text-gray-700">Enable bill sync to FloAdmin</span>
+                </label>
+
+                {cloudSettings.cloud_last_sync && (
+                  <p className="text-xs text-gray-400">Last sync: {new Date(cloudSettings.cloud_last_sync).toLocaleString()}</p>
+                )}
+              </div>
+            </div>
+
+            {/* OrderFlow — online orders */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Zap size={20} className="text-amber-500" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">OrderFlow — Online Orders</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Receive orders from Zomato, Swiggy, and other platforms directly in this POS</p>
+                </div>
+              </div>
+
+              <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 text-xs text-amber-700 space-y-1">
+                <p className="font-medium">How it works</p>
+                <p>1. Register your store on <span className="font-mono">reportingserver.codify.tech</span></p>
+                <p>2. Give Zomato/Swiggy your webhook URL (shown after registering)</p>
+                <p>3. Enable online orders below — POS will poll every 5 seconds and show a notification for each new order</p>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={cloudSettings.cloud_orders_enabled}
+                  onChange={(e) => setCloudSettings({ ...cloudSettings, cloud_orders_enabled: e.target.checked })}
+                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                />
+                <span className="text-sm text-gray-700">Enable online order polling from OrderFlow</span>
+              </label>
+
+              {cloudSettings.cloud_store_id && (
+                <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs space-y-1">
+                  <p className="text-gray-500 font-medium">Your webhook URLs (give to platforms):</p>
+                  <p className="font-mono text-gray-700">Zomato: reportingserver.codify.tech/webhooks/zomato/{cloudSettings.cloud_store_id}</p>
+                  <p className="font-mono text-gray-700">Swiggy: reportingserver.codify.tech/webhooks/swiggy/{cloudSettings.cloud_store_id}</p>
+                </div>
+              )}
+            </div>
+
+            <button
+              onClick={saveCloud}
+              disabled={savingCloud}
+              className="px-6 py-2.5 bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium"
+            >
+              {savingCloud ? 'Saving…' : 'Save Cloud Settings'}
+            </button>
+          </div>
+        </TabsContent>
+
       </Tabs>
     </div>
   );
