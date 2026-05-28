@@ -4,6 +4,14 @@ import { getDatabase, now } from '../db';
 
 const router = Router();
 
+function parseTags(raw: any): string[] {
+  if (Array.isArray(raw)) return raw;
+  if (typeof raw === 'string' && raw) {
+    try { return JSON.parse(raw); } catch { return []; }
+  }
+  return [];
+}
+
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -44,7 +52,7 @@ router.get('/', (req: Request, res: Response) => {
         return { ...group, addons };
       });
 
-      return { ...product, category, addon_groups: addonGroupsWithAddons };
+      return { ...product, tags: parseTags(product.tags), category, addon_groups: addonGroupsWithAddons };
     });
 
     res.json({ products: productsWithRelations });
@@ -72,7 +80,7 @@ router.get('/:id', (req: Request, res: Response) => {
       return { ...group, addons };
     });
 
-    res.json({ product: { ...product, category, addonGroups: addonGroupsWithAddons } });
+    res.json({ product: { ...(product as any), tags: parseTags((product as any).tags), category, addonGroups: addonGroupsWithAddons } });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
