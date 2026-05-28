@@ -110,50 +110,51 @@ class CloudSyncService {
   private async ingestOnlineOrder(order: Record<string, unknown>) {
     try {
       const db = getDatabase();
-      const { v4: uuidv4 } = await import('uuid');
 
-      // Build order in local DB
-      const orderId = uuidv4();
       const items = order.items as Array<{
         name: string; qty: number; unit_price: number; total: number; addons?: string[]; instructions?: string;
       }>;
 
-      db.prepare(`
-        INSERT INTO orders (id, order_number, status, order_type, source_platform,
-          customer_name, customer_phone, delivery_address,
-          subtotal, tax_amount, total, notes, created_at, updated_at)
-        VALUES (?, ?, 'pending', ?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
+      const orderNumber = `ONL-${order.external_ref ?? order.id}`;
+      const subtotal = Number(order.subtotal ?? 0);
+      const deliveryCharge = Number(order.delivery_charge ?? 0);
+      const total = Number(order.total ?? 0);
+
+      const result = db.prepare(`
+        INSERT INTO orders (order_number, type, special_instructions,
+          delivery_charge, subtotal, tax_amount, total, status, created_at, updated_at)
+        VALUES (?, 'delivery', ?, ?, ?, 0, ?, 'pending', ?, ?)
       `).run(
-        orderId,
-        `ONL-${order.external_ref ?? order.id}`,
-        (order.order_type as string) ?? 'delivery',
-        (order.platform as string) ?? 'online',
-        (order.customer_name as string) ?? null,
-        (order.customer_phone as string) ?? null,
-        (order.customer_address as string) ?? null,
-        Number(order.subtotal ?? 0),
-        Number(order.total ?? 0),
+        orderNumber,
         (order.special_instructions as string) ?? null,
+        deliveryCharge,
+        subtotal,
+        total,
         now(), now(),
       );
 
-      // Insert order items
+      const orderId = result.lastInsertRowid as number;
+
       for (const item of items) {
+        // Best-effort name match to a local product; sentinel fallback keeps NOT NULL happy
+        const product = db.prepare(`SELECT id FROM products WHERE LOWER(name) = LOWER(?) LIMIT 1`)
+          .get(item.name) as { id: string } | undefined;
+        const productId = product?.id ?? 'online-item';
+
         db.prepare(`
-          INSERT INTO order_items (id, order_id, product_name, quantity, unit_price, subtotal, addons, notes, status, created_at, updated_at)
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price, subtotal, total, addons, special_instructions, status, created_at, updated_at)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
         `).run(
-          uuidv4(), orderId,
-          item.name, item.qty, item.unit_price, item.total,
+          orderId, productId, item.name,
+          item.qty, item.unit_price, item.total, item.total,
           item.addons?.length ? JSON.stringify(item.addons) : null,
           item.instructions ?? null,
           now(), now(),
         );
       }
 
-      log.info('[CloudSync] online order ingested', order.external_ref ?? order.id);
+      log.info('[CloudSync] online order ingested', orderNumber, 'local id:', orderId);
 
-      // Notify frontend via the order receiver callback
       if (this.onOrderReceived) this.onOrderReceived({ ...order, local_order_id: orderId });
     } catch (err) {
       log.error('[CloudSync] ingest error', (err as Error).message);

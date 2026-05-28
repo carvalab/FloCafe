@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { Bonjour } from 'bonjour-service';
 import { initDatabase, closeDatabase } from './db';
 import { startServer, stopServer, getLocalIP, isServerRunning } from './server';
+import { cloudSync } from './services/cloud-sync';
 import { startKdsServer, stopKdsServer, getKdsPort, isKdsServerRunning } from './kds-server';
 import { initPrinter, printReceipt, printKOT } from './printers/thermal';
 import { registerIpcHandlers } from './ipc';
@@ -388,6 +389,9 @@ async function initialize(): Promise<void> {
     console.log('[Flo] Starting local server...');
     await startServer();
 
+    console.log('[Flo] Starting cloud sync...');
+    cloudSync.start();
+
     console.log('[Flo] Starting KDS server on port 3002...');
     await startKdsServer();
 
@@ -463,6 +467,7 @@ app.on('before-quit', () => {
 
 app.on('quit', () => {
   console.log('[Flo] Shutting down...');
+  cloudSync.stop();
   stopMdns();
   stopKdsServer();
   stopServer();

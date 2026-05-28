@@ -94,10 +94,11 @@ export function startKdsServer(): Promise<void> {
         const categoryIds = req.query.category_ids ? String(req.query.category_ids).split(',') : null;
         
         let query = `
-          SELECT o.*, t.number as table_number
+          SELECT DISTINCT o.*, t.number as table_number
           FROM orders o
           LEFT JOIN tables t ON o.table_id = t.id
-          WHERE o.status IN ('pending', 'preparing', 'ready')
+          INNER JOIN order_items oi ON oi.order_id = o.id
+          WHERE oi.status IN ('pending', 'preparing', 'ready')
           AND o.created_at >= datetime('now', '-24 hours')
           ORDER BY o.created_at ASC
         `;
@@ -145,11 +146,12 @@ export function startKdsServer(): Promise<void> {
           return res.status(404).json({ error: 'Order item not found' });
         }
 
-        db.prepare('UPDATE order_items SET status = ?, updated_at = datetime("now") WHERE id = ?')
+        db.prepare("UPDATE order_items SET status = ?, updated_at = datetime('now') WHERE id = ?")
           .run(status, req.params.id);
 
         res.json({ success: true });
       } catch (error: any) {
+        console.error('[KDS Server] PATCH item status error:', error);
         res.status(500).json({ error: error.message });
       }
     });

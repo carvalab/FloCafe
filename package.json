@@ -11,6 +11,7 @@
     "build:all-platforms": "npm run build:frontend && npm run build && electron-builder --win --mac --linux",
     "postinstall": "git submodule update --init --recursive",
     "build:win": "npm run build:frontend && npm run build && electron-builder --win",
+    "build:appx": "npm run build:frontend && npm run build && electron-builder --win --target appx",
     "build:mac": "npm run build:frontend && npm run build && electron-builder --mac",
     "build:mas": "MAS_BUILD=1 npm run build:frontend && MAS_BUILD=1 npm run build && MAS_BUILD=1 electron-builder --mac mas --universal",
     "build:mas-dev": "MAS_BUILD=1 npm run build:frontend && MAS_BUILD=1 npm run build && MAS_BUILD=1 electron-builder --mac masDev",
@@ -98,6 +99,15 @@
         }
       ],
       "icon": "assets/icon.ico"
+    },
+    "appx": {
+      "applicationId": "FloCafe",
+      "backgroundColor": "#1e1e2e",
+      "publisherDisplayName": "YOUR_PUBLISHER_DISPLAY_NAME",
+      "identityName": "YOUR_IDENTITY_NAME",
+      "publisher": "CN=YOUR_PUBLISHER_CN",
+      "displayName": "Flo Cafe",
+      "languages": ["en-US"]
     },
     "mac": {
       "target": [

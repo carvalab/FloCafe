@@ -186,12 +186,6 @@ router.post('/:id/payment', (req: Request, res: Response) => {
         db.prepare("UPDATE orders SET status = 'completed', completed_at = ?, updated_at = ? WHERE id = ?")
           .run(now(), now(), bill.order_id);
 
-        // Close any lingering open items on this order — prevents split-brain where
-        // orders.status = 'completed' but order_items.status is still 'pending'/'preparing'.
-        db.prepare(`
-          UPDATE order_items SET status = 'served', updated_at = ?
-          WHERE order_id = ? AND status IN ('pending', 'preparing', 'ready')
-        `).run(now(), bill.order_id);
 
         const order = db.prepare('SELECT table_id FROM orders WHERE id = ?').get(bill.order_id) as any;
         if (order && order.table_id) {
