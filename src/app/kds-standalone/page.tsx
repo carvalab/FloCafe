@@ -151,6 +151,7 @@ export default function KdsStandalonePage() {
     try {
       await api.patch(`/api/kds/items/${itemId}/status`, { status });
       toast.success(`Item marked as ${STATUS_CONFIG[status].label}`);
+      setModalItem(null);
       fetchOrdersRest();
     } catch {
       toast.error('Failed to update item');
@@ -169,7 +170,7 @@ export default function KdsStandalonePage() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoginError('');
-    setLoading(true);
+    setLoginLoading(true);
 
     try {
       const { data } = await api.post('/api/auth/login', {
@@ -188,10 +189,12 @@ export default function KdsStandalonePage() {
       setUser(loggedInUser);
       localStorage.setItem('kds_user', JSON.stringify(loggedInUser));
       startRestPolling();
+      setLoading(false);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       setLoginError(error.response?.data?.error || 'Login failed');
-      setLoading(false);
+    } finally {
+      setLoginLoading(false);
     }
   };
 
@@ -214,6 +217,7 @@ export default function KdsStandalonePage() {
         const parsed = JSON.parse(savedUser) as LoggedInUser;
         setUser(parsed);
         startRestPolling();
+        setLoading(false);
       } catch {
         localStorage.removeItem('kds_user');
         setLoading(false);

@@ -43,7 +43,6 @@ export default function POSPage() {
   const [addonProduct, setAddonProduct] = useState<Product | null>(null);
   const [checkoutTable, setCheckoutTable] = useState<Table | null>(null);
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
-  const [showPaymentPrompt, setShowPaymentPrompt] = useState<{ orderId: number } | null>(null);
   const [showCustomerPrompt, setShowCustomerPrompt] = useState(false);
   const [showPrepaidCheckout, setShowPrepaidCheckout] = useState(false);
 
@@ -103,13 +102,13 @@ export default function POSPage() {
       return;
     }
 
-    // For prepaid orders, show checkout directly (don't place order yet)
-    if (billingType === 'prepaid') {
+    // Takeaway / delivery / online → collect payment immediately
+    if (cart.orderType !== 'dine_in') {
       setShowPrepaidCheckout(true);
       return;
     }
 
-    // For postpaid orders, place order first
+    // Dine-in → place order, kitchen gets the ticket, payment collected later
     setSubmitting(true);
     try {
       const { data } = await api.post('/orders', {
@@ -132,7 +131,6 @@ export default function POSPage() {
       cart.clearCart();
       setMobileCartOpen(false);
       await refreshTables();
-      setShowPaymentPrompt({ orderId: data.order.id });
 
       if (autoPrintKot) {
         try {
@@ -201,16 +199,6 @@ export default function POSPage() {
     }
   };
 
-  const handleCollectPayment = async (orderId: number) => {
-    setShowPaymentPrompt(null);
-    try {
-      const { data } = await api.post('/bills/generate', { order_id: orderId });
-      setPaymentBill(data.bill);
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to generate bill');
-    }
-  };
 
   const handleSelectAvailableTable = (tableId: number, customer?: { id: number; name: string; phone: string } | null) => {
     cart.setTableId(tableId);
@@ -457,35 +445,6 @@ export default function POSPage() {
         </div>
       )}
 
-      {showPaymentPrompt && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-sm text-center">
-            <h3 className="text-lg font-bold mb-2">Order Placed!</h3>
-            <p className="text-gray-500 text-sm mb-5">
-              {billingType === 'prepaid'
-                ? 'Payment is required for prepaid orders.'
-                : 'Collect payment now or later.'
-              }
-            </p>
-            <div className="flex gap-3">
-              {billingType === 'postpaid' && (
-                <button
-                  onClick={() => setShowPaymentPrompt(null)}
-                  className="flex-1 py-2.5 border border-gray-200 rounded-lg text-sm font-medium hover:bg-gray-50"
-                >
-                  Skip
-                </button>
-              )}
-              <button
-                onClick={() => handleCollectPayment(showPaymentPrompt.orderId)}
-                className={`${billingType === 'prepaid' ? 'w-full' : 'flex-1'} py-2.5 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand-hover`}
-              >
-                Checkout
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
