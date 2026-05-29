@@ -80,20 +80,32 @@ router.put('/:id', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Addon group not found' });
     }
 
-    const { name, description, is_required, min_selection, max_selection, sort_order, is_active } = req.body;
+    const { name, description, is_required, min_selection, max_selection, sort_order, is_active, addons } = req.body;
 
-    db.prepare(`
-      UPDATE addon_groups SET name = COALESCE(?, name), description = COALESCE(?, description),
-        is_required = COALESCE(?, is_required), min_selection = COALESCE(?, min_selection),
-        max_selection = COALESCE(?, max_selection), sort_order = COALESCE(?, sort_order),
-        is_active = COALESCE(?, is_active), updated_at = ?
-      WHERE id = ?
-    `).run(name, description, is_required, min_selection, max_selection, sort_order, is_active, now(), req.params.id);
+    const { updated, updatedAddons } = withTxn(() => {
+      db.prepare(`
+        UPDATE addon_groups SET name = COALESCE(?, name), description = COALESCE(?, description),
+          is_required = COALESCE(?, is_required), min_selection = COALESCE(?, min_selection),
+          max_selection = COALESCE(?, max_selection), sort_order = COALESCE(?, sort_order),
+          is_active = COALESCE(?, is_active), updated_at = ?
+        WHERE id = ?
+      `).run(name, description, is_required, min_selection, max_selection, sort_order, is_active, now(), req.params.id);
 
-    const updated = db.prepare('SELECT * FROM addon_groups WHERE id = ?').get(req.params.id);
-    const addons = db.prepare('SELECT * FROM addons WHERE addon_group_id = ?').all(req.params.id);
+      if (Array.isArray(addons)) {
+        db.prepare('DELETE FROM addons WHERE addon_group_id = ?').run(req.params.id);
+        const insertAddon = db.prepare('INSERT INTO addons (id, addon_group_id, name, price, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)');
+        addons.forEach((addon: any, index: number) => {
+          insertAddon.run(randomUUID(), req.params.id, addon.name, addon.price ?? 0, addon.is_active !== false ? 1 : 0, index, now(), now());
+        });
+      }
 
-    res.json({ addon_group: Object.assign({}, updated, { addons }) });
+      return {
+        updated: db.prepare('SELECT * FROM addon_groups WHERE id = ?').get(req.params.id),
+        updatedAddons: db.prepare('SELECT * FROM addons WHERE addon_group_id = ?').all(req.params.id),
+      };
+    });
+
+    res.json({ addon_group: Object.assign({}, updated, { addons: updatedAddons }) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -134,10 +146,11 @@ router.post('/:groupId/addons', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Addon group not found' });
     }
 
-    const result = db.prepare('INSERT INTO addons (id, addon_group_id, name, price, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
-      .run(randomUUID(), req.params.groupId, name, price, is_active !== false ? 1 : 0, sort_order || 0, now(), now());
+    const addonId = randomUUID();
+    db.prepare('INSERT INTO addons (id, addon_group_id, name, price, is_active, sort_order, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)')
+      .run(addonId, req.params.groupId, name, price, is_active !== false ? 1 : 0, sort_order || 0, now(), now());
 
-    const addon = db.prepare('SELECT * FROM addons WHERE id = ?').get(result.lastInsertRowid);
+    const addon = db.prepare('SELECT * FROM addons WHERE id = ?').get(addonId);
     res.status(201).json({ addon });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
