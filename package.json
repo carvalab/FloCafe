@@ -1,6 +1,6 @@
 {
   "name": "flo-desktop",
-  "version": "1.6.3",
+  "version": "1.6.4",
   "description": "Flo - Self-hosted Point of Sale System",
   "main": "dist/index.js",
   "scripts": {
@@ -44,7 +44,7 @@
     "@types/uuid": "^9.0.8",
     "@types/ws": "^8.5.10",
     "electron": "^31.1.0",
-    "electron-builder": "^24.13.3",
+    "electron-builder": "^26.8.1",
     "typescript": "^5.4.5"
   },
   "dependencies": {
@@ -72,7 +72,8 @@
     },
     "files": [
       "dist/**/*",
-      "node_modules/**/*"
+      "node_modules/**/*",
+      "!**/better-sqlite3/build/Release/test_extension.node"
     ],
     "publish": {
       "provider": "github",
@@ -107,7 +108,9 @@
       "identityName": "YOUR_IDENTITY_NAME",
       "publisher": "CN=YOUR_PUBLISHER_CN",
       "displayName": "Flo Cafe",
-      "languages": ["en-US"]
+      "languages": [
+        "en-US"
+      ]
     },
     "mac": {
       "target": [
