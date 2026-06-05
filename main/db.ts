@@ -8,6 +8,13 @@ import * as bcrypt from 'bcryptjs';
 export const SCHEMA_VERSION = 9;
 
 let db: Database.Database;
+let dbHealthError: string | null = null;
+
+export function getDbHealth(): { ok: boolean; error?: string } {
+  if (!db) return { ok: false, error: 'Database not initialized' };
+  if (dbHealthError) return { ok: false, error: dbHealthError };
+  return { ok: true };
+}
 
 export function getDbPath(): string {
   const userDataPath = app.isPackaged ? app.getPath('userData') : path.join(__dirname, '../../');
@@ -69,7 +76,9 @@ function runStartupIntegrityCheck(): void {
     const integrity = db.prepare('PRAGMA integrity_check').all() as { integrity_check: string }[];
     const bad = integrity.filter((r) => r.integrity_check !== 'ok');
     if (bad.length > 0) {
-      console.error('[DB] ⚠ integrity_check reported issues:', bad.map((r) => r.integrity_check).join('; '));
+      const msg = bad.map((r) => r.integrity_check).join('; ');
+      console.error('[DB] ⚠ integrity_check reported issues:', msg);
+      dbHealthError = `Database integrity error: ${msg}`;
     } else {
       console.log('[DB] integrity_check: ok');
     }
@@ -145,24 +154,33 @@ export async function createBackup(targetPath?: string): Promise<{ path: string;
   console.log('[DB] createBackup: Starting...');
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const backupDir = getBackupDir();
-  
+
   if (!fs.existsSync(backupDir)) {
     fs.mkdirSync(backupDir, { recursive: true });
   }
-  
-  const backupPath = targetPath || path.join(backupDir, `flo-backup-${timestamp}.db`);
-  console.log('[DB] createBackup: Target path:', backupPath);
-  
-  await db.backup(backupPath);
-  
-  const backupDb = new Database(backupPath);
+
+  // Always write to a temp path inside userData first. On MAS, the sandbox
+  // only grants access to the user-selected file itself — opening the backup
+  // DB in WAL mode would try to create .db-wal/.db-shm siblings next to the
+  // user-selected file, which the sandbox blocks. Writing to userData first
+  // avoids that restriction; we copy the final clean file to targetPath.
+  const tempPath = path.join(backupDir, `flo-backup-${timestamp}.db`);
+  const finalPath = targetPath || tempPath;
+
+  console.log('[DB] createBackup: Backing up to temp:', tempPath);
+  await db.backup(tempPath);
+
+  const backupDb = new Database(tempPath);
+  // Switch to DELETE journal mode: checkpoints WAL and removes .db-wal/.db-shm
+  // so the final file is self-contained with no auxiliary files.
+  backupDb.pragma('journal_mode = DELETE');
   backupDb.exec(`
     CREATE TABLE IF NOT EXISTS _flo_meta (
       key TEXT PRIMARY KEY,
       value TEXT
     )
   `);
-  
+
   const currentVersion = getCurrentSchemaVersion();
   backupDb.prepare(`INSERT OR REPLACE INTO _flo_meta (key, value) VALUES (?, ?)`)
     .run('schema_version', String(currentVersion));
@@ -171,9 +189,16 @@ export async function createBackup(targetPath?: string): Promise<{ path: string;
   backupDb.prepare(`INSERT OR REPLACE INTO _flo_meta (key, value) VALUES (?, ?)`)
     .run('app_version', app.getVersion());
   backupDb.close();
-  
-  console.log(`[DB] Backup created: ${backupPath} (schema v${currentVersion})`);
-  return { path: backupPath, schemaVersion: currentVersion };
+
+  if (finalPath !== tempPath) {
+    fs.copyFileSync(tempPath, finalPath);
+    fs.unlinkSync(tempPath);
+    console.log(`[DB] Backup saved to: ${finalPath} (schema v${currentVersion})`);
+  } else {
+    console.log(`[DB] Backup created: ${finalPath} (schema v${currentVersion})`);
+  }
+
+  return { path: finalPath, schemaVersion: currentVersion };
 }
 
 function getColumns(dbInstance: Database.Database, tableName: string): string[] {
@@ -758,6 +783,17 @@ function seedData(): void {
   }
 
   console.log('[DB] Seed data loaded');
+}
+
+const SHORT_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';
+
+export function generateShortId(table: string, length = 6): string {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    let id = '';
+    for (let i = 0; i < length; i++) id += SHORT_ID_CHARS[Math.floor(Math.random() * SHORT_ID_CHARS.length)];
+    if (!db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id)) return id;
+  }
+  throw new Error(`generateShortId: could not find unique id for ${table} after 20 attempts`);
 }
 
 export function generateOrderNumber(): string {

@@ -6,6 +6,7 @@ import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
 import { registerRoutes } from './routes';
+import { getDbHealth } from './db';
 import { setupKdsWebSocket } from './services/kds';
 
 let server: http.Server | null = null;
@@ -49,8 +50,10 @@ export function startServer(): Promise<void> {
 
     // ── API health check ───────────────────────────────────────────────
     app.get('/api/health', (_req: Request, res: Response) => {
-      res.json({
-        status: 'ok',
+      const db = getDbHealth();
+      res.status(db.ok ? 200 : 503).json({
+        status: db.ok ? 'ok' : 'error',
+        db: db.ok ? 'ok' : db.error,
         service: 'Flo Local API',
         version: '1.0.0',
         timestamp: new Date().toISOString(),

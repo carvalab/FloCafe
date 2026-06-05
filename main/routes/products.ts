@@ -1,6 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
-import { getDatabase, now } from '../db';
+import { getDatabase, now, generateShortId } from '../db';
 
 const router = Router();
 
@@ -99,7 +98,7 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     const db = getDatabase();
-    const id = uuidv4();
+    const id = generateShortId('products');
     const result = db.prepare(`
       INSERT INTO products (id, category_id, name, sku, description, price, cost,
         tax_type, tax_rate, track_inventory, stock_quantity, low_stock_threshold,

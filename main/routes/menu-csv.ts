@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now } from '../db';
+import { getDatabase, now, generateShortId } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 
 const router = Router();
@@ -74,13 +74,13 @@ const TEMPLATES: Record<string, string> = {
   ].join('\n'),
 
   products: [
-    'name,category,price,description,cost,tax_type,tax_rate,tags,is_active',
-    'Cappuccino,Beverages,150,Rich espresso with steamed milk,50,inclusive,5,"veg,bestseller",yes',
-    'Espresso,Beverages,100,,40,inclusive,5,veg,yes',
-    'Cold Coffee,Beverages,130,Chilled blended coffee,45,inclusive,5,"veg,new_arrival",yes',
-    'Classic Burger,Food,250,Juicy patty with lettuce and tomato,100,exclusive,5,non_veg,yes',
-    'Veg Sandwich,Food,180,Fresh vegetables in toasted bread,60,none,0,"veg,new_arrival",yes',
-    'Chocolate Cake,Desserts,120,Rich chocolate slice,,none,0,veg,yes',
+    'id,sku,name,category,price,description,cost,tax_type,tax_rate,cashback_percent,tags,is_active',
+    ',,Cappuccino,Beverages,150,Rich espresso with steamed milk,50,inclusive,5,0,"veg,bestseller",yes',
+    ',,Espresso,Beverages,100,,40,inclusive,5,0,veg,yes',
+    ',,Cold Coffee,Beverages,130,Chilled blended coffee,45,inclusive,5,0,"veg,new_arrival",yes',
+    ',,Classic Burger,Food,250,Juicy patty with lettuce and tomato,100,exclusive,5,0,non_veg,yes',
+    ',,Veg Sandwich,Food,180,Fresh vegetables in toasted bread,60,none,0,0,"veg,new_arrival",yes',
+    ',,Chocolate Cake,Desserts,120,Rich chocolate slice,,none,0,0,veg,yes',
   ].join('\n'),
 
   addons: [
@@ -138,7 +138,7 @@ router.get('/export/products', (_req: Request, res: Response) => {
          ORDER BY c.sort_order, p.sort_order, p.name`
       )
       .all() as any[];
-    const lines = ['name,category,price,description,cost,tax_type,tax_rate,tags,is_active'];
+    const lines = ['id,sku,name,category,price,description,cost,tax_type,tax_rate,cashback_percent,tags,is_active'];
     for (const p of rows) {
       let tags = '';
       if (p.tags) {
@@ -146,8 +146,8 @@ router.get('/export/products', (_req: Request, res: Response) => {
         catch { tags = p.tags; }
       }
       lines.push(
-        toCsvRow([p.name, p.category_name, p.price, p.description, p.cost,
-          p.tax_type, p.tax_rate, tags, p.is_active ? 'yes' : 'no'])
+        toCsvRow([p.id, p.sku, p.name, p.category_name, p.price, p.description, p.cost,
+          p.tax_type, p.tax_rate, p.cb_percent ?? 0, tags, p.is_active ? 'yes' : 'no'])
       );
     }
     res.setHeader('Content-Type', 'text/csv');
@@ -234,7 +234,7 @@ router.post('/import/products', (req: Request, res: Response) => {
     const catMap: Record<string, string> = {};
     for (const c of catRows) catMap[c.name.toLowerCase()] = c.id;
 
-    let created = 0, skipped = 0;
+    let created = 0, updated = 0, skipped = 0;
     const errors: string[] = [];
 
     for (let i = 0; i < rows.length; i++) {
@@ -253,11 +253,6 @@ router.post('/import/products', (req: Request, res: Response) => {
         }
       }
 
-      const exists = db
-        .prepare('SELECT id FROM products WHERE name = ? AND category_id IS ? AND deleted_at IS NULL')
-        .get(r.name, categoryId);
-      if (exists) { skipped++; continue; }
-
       let tagsJson: string | null = null;
       if (r.tags) {
         const arr = r.tags.split(',').map((t: string) => t.trim()).filter(Boolean);
@@ -266,17 +261,46 @@ router.post('/import/products', (req: Request, res: Response) => {
 
       const taxType = ['none', 'inclusive', 'exclusive'].includes(r.tax_type) ? r.tax_type : 'none';
       const isActive = !r.is_active || isTruthy(r.is_active) ? 1 : 0;
+      const cost = parseFloat(r.cost) || 0;
+      const taxRate = parseFloat(r.tax_rate) || 0;
+      const cbPercent = parseFloat(r.cashback_percent) || 0;
+      const sku = r.sku || null;
+
+      // If an id is provided, try to update the existing product
+      if (r.id) {
+        const existing = db
+          .prepare('SELECT id FROM products WHERE id = ? AND deleted_at IS NULL')
+          .get(r.id);
+        if (!existing) {
+          errors.push(`Row ${i + 2} (${r.name}): id "${r.id}" not found — leave id blank to create a new item`);
+          continue;
+        }
+        db.prepare(
+          `UPDATE products SET name=?, category_id=?, price=?, description=?, cost=?,
+           tax_type=?, tax_rate=?, cb_percent=?, tags=?, is_active=?, sku=?, updated_at=?
+           WHERE id=?`
+        ).run(r.name, categoryId, price, r.description || null, cost,
+          taxType, taxRate, cbPercent, tagsJson, isActive, sku, now(), r.id);
+        updated++;
+        continue;
+      }
+
+      // No id — insert as new, skip if name+category duplicate
+      const exists = db
+        .prepare('SELECT id FROM products WHERE name = ? AND category_id IS ? AND deleted_at IS NULL')
+        .get(r.name, categoryId);
+      if (exists) { skipped++; continue; }
 
       db.prepare(
-        `INSERT INTO products (id, name, category_id, price, description, cost, tax_type, tax_rate, tags, is_active, sort_order, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
-      ).run(uuidv4(), r.name, categoryId, price, r.description || null,
-        parseFloat(r.cost) || 0, taxType, parseFloat(r.tax_rate) || 0,
-        tagsJson, isActive, now(), now());
+        `INSERT INTO products (id, name, category_id, price, description, cost, tax_type, tax_rate,
+         cb_percent, tags, is_active, sku, sort_order, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, ?, ?)`
+      ).run(generateShortId('products'), r.name, categoryId, price, r.description || null,
+        cost, taxType, taxRate, cbPercent, tagsJson, isActive, sku, now(), now());
       created++;
     }
 
-    res.json({ created, skipped, errors });
+    res.json({ created, updated, skipped, errors });
   } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
