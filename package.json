@@ -9,7 +9,7 @@
     "build": "tsc",
     "build:frontend": "cd frontend && npm ci && NEXT_BUILD_MODE=desktop NEXT_PUBLIC_API_URL=http://localhost:3001/api npm run build",
     "build:all-platforms": "npm run build:frontend && npm run build && electron-builder --win --mac --linux",
-    "postinstall": "git submodule update --init --recursive",
+    "postinstall": "git submodule update --init --recursive && npx @electron/rebuild -f -w better-sqlite3",
     "build:win": "npm run build:frontend && npm run build && electron-builder --win",
     "build:appx": "npm run build:frontend && npm run build && electron-builder --win --target appx",
     "build:mac": "npm run build:frontend && npm run build && electron-builder --mac",
@@ -128,7 +128,10 @@
       "entitlements": "build/entitlements.plist",
       "entitlementsInherit": "build/entitlements.plist",
       "hardenedRuntime": true,
-      "gatekeeperAssess": false
+      "gatekeeperAssess": false,
+      "notarize": {
+        "teamId": "BKDY677XJA"
+      }
     },
     "mas": {
       "category": "public.app-category.business",
