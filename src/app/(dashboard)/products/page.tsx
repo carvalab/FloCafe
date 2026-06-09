@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Product, Category, AddonGroup } from '@/lib/types';
-import { tagLabel } from '@/components/pos/DietaryBadge';
+import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
 
 const PRESET_TAGS = [
   { key: 'veg', label: 'Veg' },
@@ -348,20 +348,36 @@ export default function ProductsPage() {
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Product</th>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Category</th>
               <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Price</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Tax</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Stock</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Status</th>
               <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
-            {products.map((product) => (
+            {products.map((product) => {
+              const p = product as any;
+              const taxLabel = product.tax_type === 'none' || !product.tax_type
+                ? '—'
+                : `${product.tax_type === 'inclusive' ? 'Incl.' : 'Excl.'} ${product.tax_rate}%`;
+              return (
               <tr key={product.id} className="hover:bg-gray-50">
-                <td className="p-4">
+                <td className="p-4 max-w-[220px]">
                   <p className="font-medium text-gray-900">{product.name}</p>
-                  <p className="text-xs text-gray-500">{product.sku || '—'}</p>
+                  <p className="text-[10px] text-gray-400 font-mono mt-0.5 break-all">{product.id}</p>
+                  {product.sku && <p className="text-xs text-gray-400">SKU: {product.sku}</p>}
+                  {product.tags && product.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {product.tags.map((tag: string) => <TagBadge key={tag} tag={tag} />)}
+                    </div>
+                  )}
                 </td>
                 <td className="p-4 text-sm text-gray-600">{product.category?.name || '—'}</td>
-                <td className="p-4 text-right font-medium">{currency}{Number(product.price).toLocaleString()}</td>
+                <td className="p-4 text-right">
+                  <p className="font-medium">{currency}{Number(product.price).toLocaleString()}</p>
+                  {p.cost > 0 && <p className="text-xs text-gray-400">Cost: {currency}{Number(p.cost).toLocaleString()}</p>}
+                </td>
+                <td className="p-4 text-sm text-gray-600">{taxLabel}</td>
                 <td className="p-4 text-center">
                   {product.track_inventory ? (
                     <span className={`text-sm font-medium ${product.stock_quantity <= (product.low_stock_threshold || 0) ? 'text-red-600' : 'text-gray-900'}`}>
@@ -389,7 +405,8 @@ export default function ProductsPage() {
                   </div>
                 </td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
         {products.length === 0 && (
@@ -791,7 +808,7 @@ export default function ProductsPage() {
                   </button>
                 </div>
                 {csvType === 'products' && (
-                  <p className="text-xs text-gray-500">Columns: name, category, price, description, cost, tax_type (none/inclusive/exclusive), tax_rate, tags (veg/non_veg/vegan/spicy/...), is_active (yes/no)</p>
+                  <p className="text-xs text-gray-500">Columns: id (leave blank for new items), sku, name, category, price, description, cost, tax_type (none/inclusive/exclusive), tax_rate, cashback_percent, tags (veg/non_veg/...), is_active (yes/no) — download "Current data" to get item IDs, edit, then re-upload to update existing items</p>
                 )}
                 {csvType === 'categories' && (
                   <p className="text-xs text-gray-500">Columns: name, description, color (red/green/blue/...), icon (emoji), sort_order</p>

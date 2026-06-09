@@ -24,9 +24,12 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401 && typeof window !== 'undefined') {
-      localStorage.removeItem('token');
-      localStorage.removeItem('tenant');
-      window.location.href = '/auth/login';
+      // Don't redirect when already on the login page — let the login handler show the error
+      if (!window.location.pathname.includes('/auth/login')) {
+        localStorage.removeItem('token');
+        localStorage.removeItem('tenant');
+        window.location.href = '/auth/login';
+      }
     }
     return Promise.reject(error);
   }
