@@ -17,14 +17,12 @@ const isMasBuild =
   process.env.MAS_BUILD === '1' ||
   (process as NodeJS.Process & { mas?: boolean }).mas === true;
 
-// Microsoft Store (MSIX) builds: no runtime flag exists in Electron, so
-// electron-builder injects build_channel='msix' via extraMetadata into the
-// bundled package.json, which we read here at startup.
-let isMsixBuild = false;
-try {
-  const appPkg = require(path.join(app.getAppPath(), 'package.json'));
-  isMsixBuild = appPkg.build_channel === 'msix';
-} catch {}
+// Microsoft Store (MSIX) builds: Electron has no process.msix equivalent.
+// MSIX apps are always installed under C:\Program Files\WindowsApps\ so
+// checking the executable path is the most reliable runtime detection.
+const isMsixBuild =
+  process.platform === 'win32' &&
+  process.execPath.toLowerCase().includes('windowsapps');
 
 // Either store build: skip third-party auto-updater entirely.
 const isStoreBuild = isMasBuild || isMsixBuild;

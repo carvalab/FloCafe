@@ -110,10 +110,7 @@
       "displayName": "Flo Cafe",
       "languages": [
         "en-US"
-      ],
-      "extraMetadata": {
-        "build_channel": "msix"
-      }
+      ]
     },
     "mac": {
       "target": [
@@ -132,9 +129,7 @@
       "entitlementsInherit": "build/entitlements.plist",
       "hardenedRuntime": true,
       "gatekeeperAssess": false,
-      "notarize": {
-        "teamId": "BKDY677XJA"
-      }
+      "notarize": false
     },
     "mas": {
       "category": "public.app-category.business",
