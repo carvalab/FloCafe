@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import Database from 'better-sqlite3';
-import { getDatabase, getDbPath, createBackup, SCHEMA_VERSION } from '../db';
+import { getDatabase, getDbPath, createBackup, getCurrentSchemaVersion } from '../db';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -29,7 +29,7 @@ router.get('/export', (req: Request, res: Response) => {
       version: 1,
       app: 'FloDesktop',
       exported_at: new Date().toISOString(),
-      schema_version: String(SCHEMA_VERSION),
+      schema_version: String(getCurrentSchemaVersion()),
       data: exportData,
     });
   } catch (error: any) {
@@ -61,10 +61,10 @@ router.post('/import', async (req: Request, res: Response) => {
     }
 
     const { path: backupPath } = await createBackup();
-    const hasVersionMismatch = importSchemaVersion !== SCHEMA_VERSION;
+    const hasVersionMismatch = importSchemaVersion !== getCurrentSchemaVersion();
 
     if (hasVersionMismatch) {
-      console.log(`[DB Import] Version mismatch: import v${importSchemaVersion} vs current v${SCHEMA_VERSION}. Using data-only merge.`);
+      console.log(`[DB Import] Version mismatch: import v${importSchemaVersion} vs current v${getCurrentSchemaVersion()}. Using data-only merge.`);
     }
 
     db.exec('BEGIN IMMEDIATE');
@@ -108,7 +108,7 @@ router.post('/import', async (req: Request, res: Response) => {
         backup: backupPath,
         schemaVersionMismatch: hasVersionMismatch,
         importedSchemaVersion: importSchemaVersion,
-        currentSchemaVersion: SCHEMA_VERSION
+        currentSchemaVersion: getCurrentSchemaVersion()
       });
     } catch (err: any) {
       db.exec('ROLLBACK');

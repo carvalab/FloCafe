@@ -1,6 +1,6 @@
 import { ipcMain, dialog, app, BrowserWindow, shell } from 'electron';
 import * as path from 'path';
-import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, now, getDbPath, SCHEMA_VERSION, getSchemaVersionFromBackup } from './db';
+import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, now, getDbPath, getCurrentSchemaVersion, getSchemaVersionFromBackup } from './db';
 import { getLocalIP } from './server';
 
 export function registerIpcHandlers(): void {
@@ -55,7 +55,7 @@ export function registerIpcHandlers(): void {
         };
       }
       
-      const versionMismatch = backupVersion !== SCHEMA_VERSION;
+      const versionMismatch = backupVersion !== getCurrentSchemaVersion();
       
       if (versionMismatch) {
         const confirmResult = await dialog.showMessageBox({
@@ -64,7 +64,7 @@ export function registerIpcHandlers(): void {
           defaultId: 1,
           title: 'Schema Version Mismatch',
           message: `Backup was created with Schema v${backupVersion}`,
-          detail: `Current database uses Schema v${SCHEMA_VERSION}.\n\nRestoring will import data only (common fields) to preserve new database structure.\n\nDo you want to continue?`
+          detail: `Current database uses Schema v${getCurrentSchemaVersion()}.\n\nRestoring will import data only (common fields) to preserve new database structure.\n\nDo you want to continue?`
         });
         
         if (confirmResult.response !== 0) {
@@ -76,7 +76,7 @@ export function registerIpcHandlers(): void {
           success: restoreResult.success,
           mode: restoreResult.mode,
           backupVersion,
-          currentVersion: SCHEMA_VERSION,
+          currentVersion: getCurrentSchemaVersion(),
           tablesRestored: restoreResult.tablesRestored,
           message: restoreResult.success 
             ? `Restored ${restoreResult.tablesRestored} tables (data-only mode due to version mismatch)`
@@ -90,7 +90,7 @@ export function registerIpcHandlers(): void {
         success: restoreResult.success,
         mode: restoreResult.mode,
         backupVersion,
-        currentVersion: SCHEMA_VERSION,
+        currentVersion: getCurrentSchemaVersion(),
         tablesRestored: restoreResult.tablesRestored,
         message: restoreResult.success ? 'Database restored successfully' : `Restore failed: ${restoreResult.error}`,
         error: restoreResult.error

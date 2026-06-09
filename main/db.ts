@@ -4,9 +4,6 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as bcrypt from 'bcryptjs';
 
-// Bump this whenever the schema changes incompatibly
-export const SCHEMA_VERSION = 9;
-
 let db: Database.Database;
 let dbHealthError: string | null = null;
 
@@ -239,11 +236,11 @@ export function restoreBackup(backupPath: string, forceDirect: boolean = false):
   const metaRow = backupDb.prepare(`SELECT value FROM _flo_meta WHERE key = 'schema_version'`).get() as { value: string } | undefined;
   const backupSchemaVersion = metaRow ? parseInt(metaRow.value, 10) : 0;
   backupDb.close();
-  
-  console.log(`[DB] Backup schema version: ${backupSchemaVersion}, Current: ${SCHEMA_VERSION}`);
-  
+
   const currentDb = getDatabase();
   const currentVersion = getCurrentSchemaVersion();
+
+  console.log(`[DB] Backup schema version: ${backupSchemaVersion}, Current: ${currentVersion}`);
   
   if (forceDirect || backupSchemaVersion === currentVersion) {
     console.log('[DB] restoreBackup: Direct restore (same schema version)');
@@ -333,87 +330,47 @@ export function getSchemaVersionFromBackup(backupPath: string): number {
   }
 }
 
-function getCurrentSchemaVersion(): number {
-  try {
-    const row = db.prepare("SELECT value FROM settings WHERE key = 'schema_version'").get() as any;
-    return row ? parseInt(row.value, 10) : 0;
-  } catch {
-    return 0;
-  }
+export function getCurrentSchemaVersion(): number {
+  return db.pragma('user_version', { simple: true }) as number;
 }
+
+// ─── Migration registry ───────────────────────────────────────────────────────
+// Each entry runs exactly once, in order, wrapped in a transaction.
+// To add a schema change: append a new entry. Never edit existing entries.
+
+const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
+  {
+    version: 1,
+    name: 'initial_schema',
+    up: () => {
+      createSchema();
+      seedData();
+    },
+  },
+  // Example future migration:
+  // { version: 2, name: 'add_loyalty_tiers', up: () => { db.exec(`ALTER TABLE ...`) } },
+];
 
 function runMigrations(): void {
-  console.log('[DB] Running migrations...');
+  const current = getCurrentSchemaVersion();
+  const target = MIGRATIONS.length > 0 ? MIGRATIONS[MIGRATIONS.length - 1].version : 0;
 
-  // Bootstrap: create settings table to check version
-  db.exec(`CREATE TABLE IF NOT EXISTS settings (
-    key TEXT PRIMARY KEY,
-    value TEXT,
-    updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-  )`);
-
-  const currentVersion = getCurrentSchemaVersion();
-  console.log(`[DB] Schema version: ${currentVersion} → ${SCHEMA_VERSION}`);
-
-  if (currentVersion === 0) {
-    // Fresh install - create everything
-    createSchema();
-    seedData();
-  } else if (currentVersion < SCHEMA_VERSION) {
-    // Incremental migrations
-    runIncrementalMigrations(currentVersion);
+  if (current >= target) {
+    console.log(`[DB] Schema up to date (v${current})`);
+    return;
   }
 
-  console.log('[DB] Migrations complete');
-}
+  console.log(`[DB] Schema: v${current} → v${target}`);
 
-function runIncrementalMigrations(fromVersion: number): void {
-  const insert = (key: string, value: string) =>
-    db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, value);
-
-  // Migration from version 7 to 8
-  if (fromVersion < 8) {
-    console.log('[DB] Running migration to v8...');
-    
-    // Add printers table if it doesn't exist
-    db.exec(`CREATE TABLE IF NOT EXISTS printers (
-      id TEXT PRIMARY KEY,
-      name TEXT NOT NULL,
-      connection_type TEXT NOT NULL CHECK (connection_type IN ('network', 'usb', 'webusb')),
-      ip_address TEXT,
-      port INTEGER DEFAULT 9100,
-      usb_device_path TEXT,
-      is_default INTEGER DEFAULT 0,
-      paper_width TEXT DEFAULT '80mm',
-      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-    )`);
-
-    // Add default printer if none exists
-    const existingPrinter = db.prepare('SELECT COUNT(*) as count FROM printers').get() as any;
-    if (!existingPrinter || existingPrinter.count === 0) {
-      db.prepare(`
-        INSERT INTO printers (id, name, connection_type, paper_width, is_default)
-        VALUES (?, ?, ?, ?, ?)
-      `).run('printer-1', 'Thermal Printer', 'usb', '80mm', 1);
-      console.log('[DB] Added default printer');
-    }
+  for (const migration of MIGRATIONS) {
+    if (migration.version <= current) continue;
+    console.log(`[DB] Applying migration v${migration.version}: ${migration.name}`);
+    db.transaction(() => {
+      migration.up();
+      db.pragma(`user_version = ${migration.version}`);
+    })();
+    console.log(`[DB] Migration v${migration.version} complete`);
   }
-
-  // Migration from version 8 to 9
-  if (fromVersion < 9) {
-    console.log('[DB] Running migration to v9...');
-    try {
-      db.exec(`ALTER TABLE customers ADD COLUMN tag_counts TEXT DEFAULT NULL`);
-      console.log('[DB] Added tag_counts column to customers');
-    } catch (e: any) {
-      if (!e.message?.includes('duplicate column')) throw e;
-    }
-  }
-
-  // Update schema version
-  insert('schema_version', String(SCHEMA_VERSION));
-  console.log('[DB] Incremental migration complete');
 }
 
 function createSchema(): void {
@@ -529,6 +486,7 @@ function createSchema(): void {
       address TEXT,
       loyalty_points INTEGER DEFAULT 0,
       notes TEXT,
+      tag_counts TEXT DEFAULT NULL,
       is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -694,7 +652,6 @@ function seedData(): void {
   const insert = (key: string, value: string) =>
     db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, value);
 
-  insert('schema_version',      String(SCHEMA_VERSION));
   insert('business_name',       'Shop');
   insert('country',             'IN');
   insert('currency',            'INR');

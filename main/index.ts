@@ -11,11 +11,23 @@ import { registerIpcHandlers } from './ipc';
 import log from 'electron-log/main';
 import { autoUpdater } from 'electron-updater';
 
-// Mac App Store builds must not ship a third-party auto-updater. Set at build
-// time via `MAS_BUILD=1` (see build:mas script). The store handles updates.
+// Mac App Store builds: Electron sets process.mas = true inside the MAS sandbox.
+// MAS_BUILD=1 is the build-time fallback (dev/CI).
 const isMasBuild =
   process.env.MAS_BUILD === '1' ||
   (process as NodeJS.Process & { mas?: boolean }).mas === true;
+
+// Microsoft Store (MSIX) builds: no runtime flag exists in Electron, so
+// electron-builder injects build_channel='msix' via extraMetadata into the
+// bundled package.json, which we read here at startup.
+let isMsixBuild = false;
+try {
+  const appPkg = require(path.join(app.getAppPath(), 'package.json'));
+  isMsixBuild = appPkg.build_channel === 'msix';
+} catch {}
+
+// Either store build: skip third-party auto-updater entirely.
+const isStoreBuild = isMasBuild || isMsixBuild;
 
 log.initialize();
 log.transports.file.level = 'info';
@@ -108,9 +120,9 @@ function setupAutoUpdater(): void {
 }
 
 function checkForUpdates(): void {
-  if (isMasBuild) {
-    log.debug('[Update] MAS build — updates handled by the App Store');
-    mainWindow?.webContents.send('update-status', { status: 'mas' });
+  if (isStoreBuild) {
+    log.debug('[Update] Store build — updates handled by the platform store');
+    mainWindow?.webContents.send('update-status', { status: 'store' });
     return;
   }
   if (!isDev) {
@@ -335,7 +347,7 @@ function createMenu(): void {
       label: 'Help',
       submenu: [
         { label: 'About Flo', click: () => showAbout() },
-        ...(isMasBuild
+        ...(isStoreBuild
           ? []
           : [{ label: 'Check for Updates', click: () => checkForUpdates() }]),
       ],
@@ -432,7 +444,7 @@ async function initialize(): Promise<void> {
     createWindow();
     createTray();
     createMenu();
-    if (!isMasBuild) {
+    if (!isStoreBuild) {
       setupAutoUpdater();
       setTimeout(() => checkForUpdates(), 5000);
     }

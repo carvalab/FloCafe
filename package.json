@@ -110,7 +110,10 @@
       "displayName": "Flo Cafe",
       "languages": [
         "en-US"
-      ]
+      ],
+      "extraMetadata": {
+        "build_channel": "msix"
+      }
     },
     "mac": {
       "target": [
