@@ -111,7 +111,7 @@ export default function ProductGrid({
               <button
                 key={product.id}
                 onClick={() => onProductClick(product)}
-                className="bg-white rounded-xl p-4 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group"
+                className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group"
               >
                 {inCart && (
                   <span className="absolute -top-2 -right-2 bg-brand text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold z-10">
@@ -129,30 +129,28 @@ export default function ProductGrid({
                       </span>
                     )}
                     {product.tags && product.tags.length > 0 && (
-                      <span className="absolute top-1.5 left-1.5">
+                      <span className="absolute bottom-1.5 right-1.5">
                         <TagBadge tag={product.tags[0]} />
                       </span>
                     )}
                   </div>
                 )}
 
-                <div className="flex items-center gap-1.5">
-                  {!showProductImages && product.tags && product.tags.length > 0 && (
-                    <span className="shrink-0">
-                      <TagBadge tag={product.tags[0]} />
-                    </span>
-                  )}
-                  <h3 className="font-medium text-gray-900 text-sm truncate">{product.name}</h3>
-                </div>
+                <h3 className="font-medium text-gray-900 text-sm line-clamp-2 leading-snug">{product.name}</h3>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-brand font-bold">
                     {currency}{Number(product.price).toLocaleString()}
                   </p>
-                  {product.addon_groups && product.addon_groups.length > 0 && (
-                    <span className="text-gray-400" title="Customisable">
-                      <SlidersHorizontal size={12} />
-                    </span>
-                  )}
+                  <div className="flex items-center gap-1 shrink-0">
+                    {!showProductImages && product.tags && product.tags.length > 0 && (
+                      <TagBadge tag={product.tags[0]} />
+                    )}
+                    {product.addon_groups && product.addon_groups.length > 0 && (
+                      <span className="text-gray-400" title="Customisable">
+                        <SlidersHorizontal size={12} />
+                      </span>
+                    )}
+                  </div>
                 </div>
               </button>
             );

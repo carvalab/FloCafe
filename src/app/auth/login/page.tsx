@@ -19,6 +19,19 @@ function LoginContent() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [showTenantSelect, setShowTenantSelect] = useState(false);
+  const [dbError, setDbError] = useState<string | null>(null);
+  const [loginError, setLoginError] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch('/api/health')
+      .then(r => r.json())
+      .then(data => {
+        if (data.status !== 'ok') {
+          setDbError(data.db || 'Database error — the app may not function correctly.');
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     loadFromStorage();
@@ -41,12 +54,18 @@ function LoginContent() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setLoginError(null);
     try {
       await login(email, password);
       toast.success('Login successful!');
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error.response?.data?.error || 'Login failed');
+      const error = err as { response?: { status?: number; data?: { error?: string } } };
+      if (error.response?.status === 401) {
+        setLoginError('Invalid email or password');
+      } else {
+        const msg = error.response?.data?.error || 'Login failed — the database may have an error.';
+        setDbError(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -99,6 +118,11 @@ function LoginContent() {
           <img src="/logo.png" alt="Flo" width={120} height={77} className="mx-auto mb-3" />
           <p className="text-muted-foreground mt-2">Sign in to manage your business</p>
         </div>
+        {dbError && (
+          <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+            <strong>Database error:</strong> {dbError}
+          </div>
+        )}
         <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleLogin} className="space-y-4">
@@ -110,6 +134,9 @@ function LoginContent() {
                 <Label htmlFor="password">Password</Label>
                 <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
               </div>
+              {loginError && (
+                <p className="text-sm text-destructive text-center">{loginError}</p>
+              )}
               <Button type="submit" disabled={loading} className="w-full" size="lg">
                 {loading ? 'Signing in...' : 'Sign In'}
               </Button>
