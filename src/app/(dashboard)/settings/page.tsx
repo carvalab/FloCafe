@@ -552,6 +552,7 @@ export default function SettingsPage() {
             TAB: General
         ================================================================ */}
         <TabsContent value="general">
+          <div className="pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Store Details — editable for admin, readonly otherwise */}
@@ -689,14 +690,6 @@ export default function SettingsPage() {
 
               {isAdmin && (
                 <div className="mt-4 flex gap-2">
-                  <button onClick={saveBusinessInfo} disabled={savingBusiness}
-                    className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
-                    {savingBusiness ? 'Saving...' : 'Save'}
-                  </button>
-                  <button onClick={resetBusiness} disabled={savingBusiness}
-                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">
-                    Cancel
-                  </button>
                 </div>
               )}
             </div>
@@ -781,14 +774,12 @@ export default function SettingsPage() {
                       onChange={(e) => setLoyaltyDays(parseInt(e.target.value) || 365)}
                       className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
                     <span className="text-sm text-gray-500">days</span>
-                    <button onClick={saveLoyalty} disabled={savingLoyalty}
-                      className="px-4 py-1.5 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                      {savingLoyalty ? 'Saving...' : 'Save'}
-                    </button>
                   </div>
                 </div>
               </div>
             </div>
+
+          </div>
 
             {/* Account */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -862,7 +853,23 @@ export default function SettingsPage() {
                 </button>
               )}
             </div>
-          </div>
+          </div>{/* end pb-20 */}
+
+          {/* General tab — sticky Save All bar (admin only) */}
+          {isAdmin && (
+            <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-end gap-3 shadow-lg">
+              <button onClick={resetBusiness} disabled={savingBusiness || savingLoyalty}
+                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50">
+                Cancel
+              </button>
+              <button
+                onClick={async () => { await Promise.all([saveBusinessInfo(), saveLoyalty()]); }}
+                disabled={savingBusiness || savingLoyalty}
+                className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
+                {(savingBusiness || savingLoyalty) ? 'Saving...' : 'Save All'}
+              </button>
+            </div>
+          )}
         </TabsContent>
 
         {/* ================================================================
@@ -1176,6 +1183,7 @@ export default function SettingsPage() {
             TAB: Printing
         ================================================================ */}
         <TabsContent value="printing">
+          <div className="pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1264,10 +1272,11 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          {/* Printing tab Save/Cancel */}
-          <div className="mt-6 flex gap-2">
-            <button onClick={savePrinting} className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          </div>{/* end pb-20 */}
+          {/* Printing tab — sticky Save bar */}
+          <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-end gap-3 shadow-lg">
             <button onClick={resetPrinting} className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
+            <button onClick={savePrinting} className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
           </div>
         </TabsContent>
 
@@ -1275,6 +1284,7 @@ export default function SettingsPage() {
             TAB: Bill Template
         ================================================================ */}
         <TabsContent value="bill-template">
+          <div className="pb-20">
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1313,11 +1323,12 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
+          </div>{/* end pb-20 */}
 
-          {/* Bill Template tab Save/Cancel */}
-          <div className="mt-6 flex gap-2">
-            <button onClick={saveBillTemplate} className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          {/* Bill Template tab — sticky Save bar */}
+          <div className="fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 px-6 py-3 flex items-center justify-end gap-3 shadow-lg">
             <button onClick={resetBillTemplate} className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
+            <button onClick={saveBillTemplate} className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
           </div>
         </TabsContent>
 

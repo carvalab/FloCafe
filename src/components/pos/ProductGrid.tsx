@@ -1,6 +1,6 @@
 'use client';
 
-import { Search, SlidersHorizontal } from 'lucide-react';
+import { Search, SlidersHorizontal, Plus, Minus } from 'lucide-react';
 import type { Category, Product } from '@/lib/types';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
@@ -40,11 +40,12 @@ interface Props {
   setSearch: (s: string) => void;
   currency: string;
   onProductClick: (product: Product) => void;
+  sidebarOpen?: boolean;
 }
 
 export default function ProductGrid({
   categories, products, selectedCategory, setSelectedCategory,
-  search, setSearch, currency, onProductClick,
+  search, setSearch, currency, onProductClick, sidebarOpen = true,
 }: Props) {
   const cart = useCartStore();
   const { showProductImages } = usePosSettingsStore();
@@ -102,19 +103,22 @@ export default function ProductGrid({
       </div>
 
       <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-        <div className="grid gap-3" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))' }}>
+        <div className={`grid gap-3 ${
+          sidebarOpen 
+            ? 'grid-cols-4' 
+            : 'grid-cols-5'
+        }`}>
           {filtered.map((product) => {
             const inCart = cart.items.find((i) => i.product.id === product.id);
             const bgColor = firstTagBg(product.tags);
 
             return (
-              <button
+              <div
                 key={product.id}
-                onClick={() => onProductClick(product)}
                 className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group"
               >
                 {inCart && (
-                  <span className="absolute -top-2 -right-2 bg-brand text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold z-10">
+                  <span className="absolute -top-0.5 -right-0.5 bg-brand text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold z-10">
                     {inCart.quantity}
                   </span>
                 )}
@@ -146,13 +150,52 @@ export default function ProductGrid({
                       <TagBadge tag={product.tags[0]} />
                     )}
                     {product.addon_groups && product.addon_groups.length > 0 && (
-                      <span className="text-gray-400" title="Customisable">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onProductClick(product);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Customisable"
+                      >
                         <SlidersHorizontal size={12} />
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>
-              </button>
+
+                {/* -0+ Quantity buttons in bottom right */}
+                <div className={`absolute bottom-2 flex items-center bg-white rounded-full shadow-md border border-gray-200 overflow-hidden cursor-pointer ${
+                  product.addon_groups && product.addon_groups.length > 0 ? 'right-8' : 'right-2'
+                }`}>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (inCart && inCart.quantity > 1) {
+                        cart.updateQuantity(inCart.id, inCart.quantity - 1);
+                      } else if (inCart) {
+                        cart.removeItem(inCart.id);
+                      }
+                    }}
+                    className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-pointer"
+                    disabled={!inCart}
+                  >
+                    <Minus size={12} className={inCart ? 'text-gray-700' : 'text-gray-300'} />
+                  </button>
+                  <span className="text-sm font-medium w-6 text-center text-gray-700">
+                    {inCart ? inCart.quantity : 0}
+                  </span>
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onProductClick(product);
+                    }}
+                    className="w-6 h-6 flex items-center justify-center hover:bg-gray-100 transition-colors cursor-pointer"
+                  >
+                    <Plus size={12} className="text-gray-700" />
+                  </button>
+                </div>
+              </div>
             );
           })}
         </div>

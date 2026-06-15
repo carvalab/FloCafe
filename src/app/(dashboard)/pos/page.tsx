@@ -7,7 +7,7 @@ import { useCartStore } from '@/store/cart';
 import { useHeldOrdersStore } from '@/store/held-orders';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import toast from 'react-hot-toast';
-import { ShoppingCart, X } from 'lucide-react';
+import { ShoppingCart, X, Menu } from 'lucide-react';
 import type { Addon, Category, Product, Table, Bill, Order } from '@/lib/types';
 import {
   Drawer, DrawerContent, DrawerTrigger,
@@ -45,6 +45,7 @@ export default function POSPage() {
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [showCustomerPrompt, setShowCustomerPrompt] = useState(false);
   const [showPrepaidCheckout, setShowPrepaidCheckout] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
   const { printBill, printKot } = usePrinterStore();
@@ -294,6 +295,15 @@ export default function POSPage() {
 
     {/* Main content area */}
     <div className="flex flex-1 min-h-0 overflow-hidden p-4 gap-4">
+      {/* Sidebar toggle button - only visible on desktop */}
+      <button
+        onClick={() => setSidebarOpen(!sidebarOpen)}
+        className="hidden md:flex md:items-center md:justify-center w-8 h-8 bg-white border border-gray-200 rounded-lg shadow-sm hover:bg-gray-50 transition-colors shrink-0"
+        title={sidebarOpen ? "Close sidebar" : "Open sidebar"}
+      >
+        {sidebarOpen ? <X size={16} className="text-gray-600" /> : <Menu size={16} className="text-gray-600" />}
+      </button>
+      
       {/* Product Grid — full width on mobile, flex-1 on desktop */}
       <div className="flex-1 min-w-0 h-full flex flex-col">
         <ProductGrid
@@ -305,13 +315,16 @@ export default function POSPage() {
           setSearch={setSearch}
           currency={currency}
           onProductClick={handleProductClick}
+          sidebarOpen={sidebarOpen}
         />
       </div>
 
-      {/* Desktop Cart — hidden on mobile */}
-      <div className="hidden md:flex md:w-80 md:shrink-0 h-full">
-        <CartPanel {...cartPanelProps} />
-      </div>
+      {/* Desktop Cart — hidden on mobile or when sidebar is closed */}
+      {sidebarOpen && (
+        <div className="hidden md:flex md:w-80 md:shrink-0 h-full">
+          <CartPanel {...cartPanelProps} />
+        </div>
+      )}
     </div>
 
     {/* Mobile: Floating Cart Button + Bottom Sheet — outside flex container */}
@@ -320,7 +333,7 @@ export default function POSPage() {
         <button className="fixed bottom-5 right-5 z-40 w-14 h-14 bg-brand text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-hover transition-colors md:hidden">
           <ShoppingCart size={22} />
           {itemCount > 0 && (
-            <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
               {itemCount}
             </span>
           )}
