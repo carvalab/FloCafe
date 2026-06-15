@@ -1,3 +1,25 @@
+// Normalise a raw tag string to its canonical key used in TAG_CONFIG.
+// Handles case, spaces, hyphens, underscores and common spelling variants so
+// that "Non-Veg", "nonveg", "NON VEG", "non_veg" all map to "non_veg".
+function normalizeTag(raw: string): string {
+  const s = raw.toLowerCase().replace(/[\s\-_]+/g, '');
+  if (s === 'nonveg' || s === 'nonvegetarian' || s === 'nonveg.')  return 'non_veg';
+  if (s === 'veg' || s === 'vegetarian' || s === 'veg.')           return 'veg';
+  if (s === 'vegan')                                               return 'vegan';
+  if (s === 'egg' || s === 'eggetarian')                           return 'egg';
+  if (s === 'spicy' || s === 'hot')                                return 'spicy';
+  if (s === 'containsnuts' || s === 'nuts')                        return 'contains_nuts';
+  if (s === 'glutenfree' || s === 'gf')                            return 'gluten_free';
+  if (s === 'dairyfree' || s === 'df')                             return 'dairy_free';
+  if (s === 'newarrival' || s === 'new')                           return 'new_arrival';
+  if (s === 'bestseller' || s === 'best')                          return 'bestseller';
+  if (s === 'organic')                                             return 'organic';
+  if (s === 'fragrancefree')                                       return 'fragrance_free';
+  if (s === 'limited')                                             return 'limited';
+  // fallback: replace any remaining spaces/hyphens with underscores
+  return raw.toLowerCase().replace(/[\s\-]+/g, '_');
+}
+
 // Tag config: known tags get colours, unknown tags get a neutral style
 const TAG_CONFIG: Record<string, { color: string; bg: string; dot: string }> = {
   // Food / dietary
@@ -18,23 +40,24 @@ const TAG_CONFIG: Record<string, { color: string; bg: string; dot: string }> = {
 };
 
 export function tagLabel(tag: string): string {
+  const canonical = normalizeTag(tag);
   const map: Record<string, string> = {
     veg: 'Veg', vegan: 'Vegan', egg: 'Egg', non_veg: 'Non-Veg',
     spicy: 'Spicy', contains_nuts: 'Contains Nuts', gluten_free: 'Gluten-Free',
     dairy_free: 'Dairy-Free', new_arrival: 'New Arrival', bestseller: 'Bestseller',
     organic: 'Organic', fragrance_free: 'Fragrance-Free', limited: 'Limited',
   };
-  return map[tag] ?? tag.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return map[canonical] ?? canonical.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 // First tag's bg colour for card background tinting
 export function firstTagBg(tags: string[] | null | undefined): string {
   if (!tags?.length) return 'bg-gray-100';
-  return TAG_CONFIG[tags[0]]?.bg ?? 'bg-gray-100';
+  return TAG_CONFIG[normalizeTag(tags[0])]?.bg ?? 'bg-gray-100';
 }
 
 export default function TagBadge({ tag }: { tag: string }) {
-  const cfg = TAG_CONFIG[tag] ?? { color: 'text-gray-600', bg: 'bg-gray-100', dot: 'bg-gray-400' };
+  const cfg = TAG_CONFIG[normalizeTag(tag)] ?? { color: 'text-gray-600', bg: 'bg-gray-100', dot: 'bg-gray-400' };
   return (
     <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase ${cfg.color} ${cfg.bg}`}>
       <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${cfg.dot}`} />

@@ -83,21 +83,6 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
             })}
         </div>
 
-        {isRestaurant && cart.orderType === 'dine_in' && (
-          <button
-            onClick={onShowTablePicker}
-            className={`w-full py-2 text-sm rounded-lg transition-colors ${
-              cart.tableId
-                ? 'bg-orange-500 text-white font-medium hover:bg-orange-600'
-                : 'border border-dashed border-gray-300 text-gray-500 hover:border-brand hover:text-brand'
-            }`}
-          >
-            {cart.tableId
-              ? `Table: ${tables.find((t) => t.id === cart.tableId)?.name || cart.tableId}`
-              : 'Select Table'}
-          </button>
-        )}
-
       </div>
 
       {/* Cart Items */}

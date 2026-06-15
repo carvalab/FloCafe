@@ -73,10 +73,23 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
               <div key={group.id}>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold text-sm text-gray-900">{group.name}</h3>
-                  <span className="text-xs text-gray-400">
-                    {group.is_required && <span className="text-red-500 font-medium">Required</span>}
-                    {group.max_selection && ` (max ${group.max_selection})`}
-                    {group.min_selection > 0 && ` (min ${group.min_selection})`}
+                  <span className="flex items-center gap-2">
+                    {group.is_required && (
+                      <span className="text-xs text-red-500 font-medium">Required</span>
+                    )}
+                    {group.max_selection ? (() => {
+                      const remaining = Math.max(0, group.max_selection - count);
+                      const isZero = remaining === 0;
+                      return (
+                        <span className={`font-semibold transition-all ${
+                          isZero
+                            ? 'text-sm text-amber-500'
+                            : 'text-xs text-sky-500'
+                        }`}>
+                          {isZero ? 'Selection complete' : `${remaining} remaining`}
+                        </span>
+                      );
+                    })() : null}
                   </span>
                 </div>
                 {group.description && <p className="text-xs text-gray-400 mb-2">{group.description}</p>}
@@ -134,7 +147,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
             </button>
           </div>
           <Button onClick={handleAdd} disabled={!isValid} className="w-full" size="lg">
-            Add to Cart &mdash; {currency}{itemTotal.toLocaleString()}
+            Add to Cart - {currency}{itemTotal.toLocaleString()}
           </Button>
         </div>
       </div>

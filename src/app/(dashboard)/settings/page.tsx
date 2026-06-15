@@ -552,6 +552,7 @@ export default function SettingsPage() {
             TAB: General
         ================================================================ */}
         <TabsContent value="general">
+          <div className="pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
 
             {/* Store Details — editable for admin, readonly otherwise */}
@@ -576,49 +577,65 @@ export default function SettingsPage() {
                     <p className="font-medium text-gray-900">{form.businessName || currentTenant?.business_name}</p>
                   )}
                 </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Country</label>
+                {/* Country, Timezone, Currency in single line with individual headings */}
+                <div className="md:col-span-2 space-y-2">
+                  {/* Headings */}
+                  <div className="grid grid-cols-3 gap-2">
+                    <label className="text-sm text-gray-500">Country</label>
+                    <label className="text-sm text-gray-500">Timezone</label>
+                    <label className="text-sm text-gray-500">Currency</label>
+                  </div>
+                  
+                  {/* Input fields */}
                   {isAdmin ? (
-                    <select value={form.countryCode}
-                      onChange={(e) => {
-                        const country = COUNTRIES.find(c => c.code === e.target.value);
-                        setForm((p) => ({
-                          ...p,
-                          countryCode: e.target.value,
-                          currency: country?.currency || p.currency,
-                          timezone: country?.timezone || p.timezone,
-                        }));
-                      }}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white">
-                      <option value="">Select country...</option>
-                      {COUNTRIES.map((c) => (
-                        <option key={c.code} value={c.code}>{c.name} ({c.currencyCode})</option>
-                      ))}
-                    </select>
+                    <div className="grid grid-cols-3 gap-2">
+                      <select 
+                        value={form.countryCode}
+                        onChange={(e) => {
+                          const country = COUNTRIES.find(c => c.code === e.target.value);
+                          setForm((p) => ({
+                            ...p,
+                            countryCode: e.target.value,
+                            currency: country?.currency || p.currency,
+                            timezone: country?.timezone || p.timezone,
+                          }));
+                        }}
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                      >
+                        <option value="">Select country...</option>
+                        {COUNTRIES.map((c) => (
+                          <option key={c.code} value={c.code}>{c.name}</option>
+                        ))}
+                      </select>
+                      <input 
+                        type="text" 
+                        value={form.timezone} 
+                        onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))}
+                        placeholder="Timezone (auto-filled)"
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-gray-50" 
+                        readOnly
+                      />
+                      <input 
+                        type="text" 
+                        value={form.currency} 
+                        onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
+                        placeholder="Currency (auto-filled)"
+                        className="px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-gray-50" 
+                        readOnly
+                      />
+                    </div>
                   ) : (
-                    <p className="font-medium text-gray-900">
-                      {COUNTRIES.find(c => c.code === form.countryCode)?.name || '—'}
-                    </p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Currency</label>
-                  {isAdmin ? (
-                    <input type="text" value={form.currency} onChange={(e) => setForm((p) => ({ ...p, currency: e.target.value }))}
-                      placeholder="INR / THB / USD"
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
-                  ) : (
-                    <p className="font-medium text-gray-900">{form.currency || currentTenant?.currency}</p>
-                  )}
-                </div>
-                <div>
-                  <label className="block text-sm text-gray-500 mb-1">Timezone</label>
-                  {isAdmin ? (
-                    <input type="text" value={form.timezone} onChange={(e) => setForm((p) => ({ ...p, timezone: e.target.value }))}
-                      placeholder="Asia/Kolkata"
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
-                  ) : (
-                    <p className="font-medium text-gray-900">{form.timezone || currentTenant?.timezone}</p>
+                    <div className="grid grid-cols-3 gap-2">
+                      <p className="font-medium text-gray-900">
+                        {COUNTRIES.find(c => c.code === form.countryCode)?.name || '—'}
+                      </p>
+                      <p className="font-medium text-gray-900">
+                        {form.timezone || '—'}
+                      </p>
+                      <p className="font-medium text-gray-900">
+                        {form.currency || '—'}
+                      </p>
+                    </div>
                   )}
                 </div>
                 <div>
@@ -689,14 +706,6 @@ export default function SettingsPage() {
 
               {isAdmin && (
                 <div className="mt-4 flex gap-2">
-                  <button onClick={saveBusinessInfo} disabled={savingBusiness}
-                    className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
-                    {savingBusiness ? 'Saving...' : 'Save'}
-                  </button>
-                  <button onClick={resetBusiness} disabled={savingBusiness}
-                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">
-                    Cancel
-                  </button>
                 </div>
               )}
             </div>
@@ -781,14 +790,12 @@ export default function SettingsPage() {
                       onChange={(e) => setLoyaltyDays(parseInt(e.target.value) || 365)}
                       className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
                     <span className="text-sm text-gray-500">days</span>
-                    <button onClick={saveLoyalty} disabled={savingLoyalty}
-                      className="px-4 py-1.5 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50">
-                      {savingLoyalty ? 'Saving...' : 'Save'}
-                    </button>
                   </div>
                 </div>
               </div>
             </div>
+
+          </div>
 
             {/* Account */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -860,6 +867,21 @@ export default function SettingsPage() {
                 >
                   {rotatingCode ? 'Generating...' : 'Generate Pairing Code'}
                 </button>
+              )}
+              {/* Save buttons - moved from sticky bottom */}
+              {isAdmin && (
+                <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
+                  <button onClick={resetBusiness} disabled={savingBusiness || savingLoyalty}
+                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50">
+                    Cancel
+                  </button>
+                  <button
+                    onClick={async () => { await Promise.all([saveBusinessInfo(), saveLoyalty()]); }}
+                    disabled={savingBusiness || savingLoyalty}
+                    className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
+                    {(savingBusiness || savingLoyalty) ? 'Saving...' : 'Save All'}
+                  </button>
+                </div>
               )}
             </div>
           </div>
@@ -1176,6 +1198,7 @@ export default function SettingsPage() {
             TAB: Printing
         ================================================================ */}
         <TabsContent value="printing">
+          <div className="pb-6">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1263,11 +1286,11 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
-          {/* Printing tab Save/Cancel */}
-          <div className="mt-6 flex gap-2">
-            <button onClick={savePrinting} className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          {/* Printing tab - Save buttons moved from sticky bottom */}
+          <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
             <button onClick={resetPrinting} className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
+            <button onClick={savePrinting} className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          </div>
           </div>
         </TabsContent>
 
@@ -1275,6 +1298,7 @@ export default function SettingsPage() {
             TAB: Bill Template
         ================================================================ */}
         <TabsContent value="bill-template">
+          <div className="pb-6">
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1313,11 +1337,11 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
-          {/* Bill Template tab Save/Cancel */}
-          <div className="mt-6 flex gap-2">
-            <button onClick={saveBillTemplate} className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          {/* Bill Template tab - Save buttons moved from sticky bottom */}
+          <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
             <button onClick={resetBillTemplate} className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium">Cancel</button>
+            <button onClick={saveBillTemplate} className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">Save</button>
+          </div>
           </div>
         </TabsContent>
 

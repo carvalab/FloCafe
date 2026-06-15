@@ -858,11 +858,24 @@ export default function ProductsPage() {
                     )}
                     <p>Skipped (already exists): <span className="font-medium">{String(csvResult.skipped ?? 0)}</span></p>
                   </div>
+                  {Array.isArray(csvResult.warnings) && (csvResult.warnings as string[]).length > 0 && (
+                    <div className="px-4 py-3 border-t border-gray-100 bg-amber-50">
+                      <div className="flex items-center gap-2 mb-2">
+                        <AlertCircle size={14} className="text-amber-500" />
+                        <span className="text-xs font-medium text-amber-700">Some rows had missing fields — imported with defaults</span>
+                      </div>
+                      <ul className="space-y-1">
+                        {(csvResult.warnings as string[]).map((w, i) => (
+                          <li key={i} className="text-xs text-amber-800">{w}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
                   {Array.isArray(csvResult.errors) && (csvResult.errors as string[]).length > 0 && (
                     <div className="px-4 py-3 border-t border-gray-100">
                       <div className="flex items-center gap-2 mb-2">
-                        <AlertCircle size={14} className="text-amber-500" />
-                        <span className="text-xs font-medium text-amber-700">Rows skipped due to errors</span>
+                        <AlertCircle size={14} className="text-red-500" />
+                        <span className="text-xs font-medium text-red-700">Rows skipped due to errors</span>
                       </div>
                       <ul className="space-y-1">
                         {(csvResult.errors as string[]).map((e, i) => (

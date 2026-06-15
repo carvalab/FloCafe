@@ -40,11 +40,12 @@ interface Props {
   setSearch: (s: string) => void;
   currency: string;
   onProductClick: (product: Product) => void;
+  sidebarOpen?: boolean;
 }
 
 export default function ProductGrid({
   categories, products, selectedCategory, setSelectedCategory,
-  search, setSearch, currency, onProductClick,
+  search, setSearch, currency, onProductClick, sidebarOpen = true,
 }: Props) {
   const cart = useCartStore();
   const { showProductImages } = usePosSettingsStore();
@@ -57,15 +58,15 @@ export default function ProductGrid({
 
   return (
     <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
-      <div className="shrink-0 mb-4">
-        <div className="relative mb-3">
-          <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+      <div className="shrink-0 mb-3">
+        <div className="relative mb-2">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search products..."
-            className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
+            className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:border-brand outline-none transition-colors text-sm"
           />
         </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-none">
@@ -102,19 +103,23 @@ export default function ProductGrid({
       </div>
 
       <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+        <div className={`grid gap-3 ${
+          sidebarOpen 
+            ? 'grid-cols-4' 
+            : 'grid-cols-5'
+        }`}>
           {filtered.map((product) => {
             const inCart = cart.items.find((i) => i.product.id === product.id);
             const bgColor = firstTagBg(product.tags);
 
             return (
-              <button
+              <div
                 key={product.id}
                 onClick={() => onProductClick(product)}
-                className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group"
+                className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group cursor-pointer overflow-hidden"
               >
                 {inCart && (
-                  <span className="absolute -top-2 -right-2 bg-brand text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-bold z-10">
+                  <span className="absolute top-0 right-0 bg-brand text-white text-xs w-6 h-6 rounded-bl-lg flex items-center justify-center font-bold z-10">
                     {inCart.quantity}
                   </span>
                 )}
@@ -146,13 +151,21 @@ export default function ProductGrid({
                       <TagBadge tag={product.tags[0]} />
                     )}
                     {product.addon_groups && product.addon_groups.length > 0 && (
-                      <span className="text-gray-400" title="Customisable">
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onProductClick(product);
+                        }}
+                        className="text-gray-400 hover:text-gray-600 transition-colors"
+                        title="Customisable"
+                      >
                         <SlidersHorizontal size={12} />
-                      </span>
+                      </button>
                     )}
                   </div>
                 </div>
-              </button>
+
+              </div>
             );
           })}
         </div>
