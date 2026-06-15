@@ -4,9 +4,19 @@ import { useState, useRef, useEffect } from 'react';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
+import { useAuthStore } from '@/store/auth';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
 import type { Customer } from '@/lib/types';
+
+const CURRENCY_DIAL_CODE: Record<string, string> = {
+  INR: '+91', USD: '+1', GBP: '+44', AUD: '+61', CAD: '+1',
+  SGD: '+65', THB: '+66', AED: '+971', MYR: '+60', NZD: '+64',
+  EUR: '+33', IDR: '+62', PHP: '+63', VND: '+84', SAR: '+966',
+  ZAR: '+27', KES: '+254', NGN: '+234', BRL: '+55', MXN: '+52',
+  JPY: '+81', CNY: '+86', KRW: '+82', PKR: '+92', BDT: '+880',
+  LKR: '+94', NPR: '+977',
+};
 
 interface Props {
   onSelected?: () => void;
@@ -41,6 +51,8 @@ function TagBadges({ counts }: { counts: Record<string, number> }) {
 export default function CustomerSearch({ onSelected, variant = 'default' }: Props = {}) {
   const cart = useCartStore();
   const { phoneDigits } = usePosSettingsStore();
+  const { currentTenant } = useAuthStore();
+  const dialCode = CURRENCY_DIAL_CODE[currentTenant?.currency || ''] || '';
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [matched, setMatched] = useState<Customer | null>(null);
@@ -82,12 +94,36 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   };
 
   const handlePhoneChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const digits = e.target.value.replace(/\D/g, '').slice(0, maxLen);
-    setPhone(digits);
+    const val = e.target.value;
+    let cleaned: string;
+    if (val.startsWith('+')) {
+      const spaceIdx = val.indexOf(' ');
+      if (spaceIdx !== -1) {
+        const code = '+' + val.slice(1, spaceIdx).replace(/\D/g, '');
+        const number = val.slice(spaceIdx + 1).replace(/\D/g, '').slice(0, maxLen);
+        cleaned = `${code} ${number}`;
+      } else {
+        cleaned = '+' + val.slice(1).replace(/\D/g, '').slice(0, maxLen + 4);
+      }
+    } else {
+      cleaned = val.replace(/\D/g, '').slice(0, maxLen);
+    }
+    setPhone(cleaned);
     setMatched(null);
     setName('');
     setSearched(false);
-    searchByPhone(digits);
+    const localPart = cleaned.includes(' ')
+      ? cleaned.split(' ').slice(1).join('')
+      : cleaned.startsWith('+')
+        ? cleaned.replace(/^\+\d{1,4}/, '')
+        : cleaned;
+    searchByPhone(localPart);
+  };
+
+  const handlePhoneFocus = () => {
+    if (!phone && dialCode) {
+      setPhone(dialCode + ' ');
+    }
   };
 
   const handleSelectMatched = () => {
@@ -164,11 +200,12 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
         <div className="flex items-center gap-2 min-w-0">
           <input
             type="tel"
-            inputMode="numeric"
+            inputMode="tel"
             value={phone}
             onChange={handlePhoneChange}
+            onFocus={handlePhoneFocus}
             placeholder="Phone"
-            className={`${baseInput} w-28 shrink-0 py-1.5`}
+            className="w-44 shrink-0 px-3 py-1.5 text-sm border border-amber-400 bg-amber-50 placeholder:text-amber-600/70 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
           />
           <input
             ref={nameRef}
@@ -180,7 +217,11 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             }}
             readOnly={!!matched}
             placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
-            className={`${baseInput} flex-1 min-w-0 py-1.5 ${matched ? 'bg-gray-50 cursor-pointer' : ''}`}
+            className={`w-48 shrink-0 px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none ${
+              matched
+                ? 'border-gray-200 bg-gray-50 cursor-pointer focus:ring-brand/20 focus:border-brand'
+                : 'border-indigo-200 bg-indigo-50 placeholder:text-indigo-400/80 focus:ring-indigo-200 focus:border-indigo-400'
+            }`}
             onClick={matched ? handleSelectMatched : undefined}
           />
           {matched && (
