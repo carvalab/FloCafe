@@ -109,9 +109,9 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
       cleaned = val.replace(/\D/g, '').slice(0, maxLen);
     }
     setPhone(cleaned);
-    setMatched(null);
-    setName('');
-    setSearched(false);
+    if (matched !== null) setMatched(null);
+    if (name !== '') setName('');
+    if (searched) setSearched(false);
     const localPart = cleaned.includes(' ')
       ? cleaned.split(' ').slice(1).join('')
       : cleaned.startsWith('+')
@@ -217,7 +217,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             }}
             readOnly={!!matched}
             placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
-            className={`w-48 shrink-0 px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none ${
+            className={`w-48 shrink-0 px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none transition-colors duration-150 ${
               matched
                 ? 'border-gray-200 bg-gray-50 cursor-pointer focus:ring-brand/20 focus:border-brand'
                 : 'border-indigo-200 bg-indigo-50 placeholder:text-indigo-400/80 focus:ring-indigo-200 focus:border-indigo-400'
@@ -243,19 +243,19 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
           )}
         </div>
 
-        {/* Row 2: status + tags */}
-        {searched && (
-          <div className="flex items-center flex-wrap gap-x-2 gap-y-1">
-            {matched ? (
+        {/* Row 2: status + tags — always rendered to reserve height and prevent layout shift */}
+        <div className="h-4 flex items-center flex-wrap gap-x-2 gap-y-1 overflow-hidden">
+          {searched && (
+            matched ? (
               <>
                 <span className="text-xs text-green-600 font-medium">Customer found</span>
                 {matched.tag_counts && <TagBadges counts={matched.tag_counts} />}
               </>
             ) : (
               <span className="text-xs text-red-500 font-medium">New customer — enter name above</span>
-            )}
-          </div>
-        )}
+            )
+          )}
+        </div>
       </div>
     );
   }
