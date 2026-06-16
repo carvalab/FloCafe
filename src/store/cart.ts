@@ -3,11 +3,12 @@ import type { Customer, Product, Addon, CartItem } from '@/lib/types';
 
 interface CartState {
   items: CartItem[];
-  orderType: 'dine_in' | 'takeaway' | 'delivery' | 'online';
+  orderType: 'dine_in' | 'takeaway' | 'delivery';
   tableId: number | null;
   customerId: number | string | null;
   customer: Customer | null;
   guestCount: number;
+  deliveryAddress: string;
 
   addItem: (product: Product, quantity?: number, addons?: Addon[], specialInstructions?: string) => void;
   removeItem: (cartItemId: string) => void;
@@ -19,6 +20,7 @@ interface CartState {
   setCustomerId: (id: number | string | null) => void;
   setCustomer: (customer: Customer | null) => void;
   setGuestCount: (count: number) => void;
+  setDeliveryAddress: (address: string) => void;
 
   subtotal: () => number;
   itemCount: () => number;
@@ -42,6 +44,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   customerId: null,
   customer: null,
   guestCount: 1,
+  deliveryAddress: '',
 
   addItem: (product, quantity = 1, addons = [], specialInstructions = '') => {
     const items = get().items;
@@ -78,18 +81,19 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   clearCart: () => {
-    set({ items: [], tableId: null, customerId: null, customer: null, guestCount: 1 });
+    set({ items: [], tableId: null, customerId: null, customer: null, guestCount: 1, deliveryAddress: '' });
   },
 
   loadItems: (items, tableId, customerId, guestCount) => {
     set({ items, tableId, customerId, guestCount });
   },
 
-  setOrderType: (type) => set({ orderType: type }),
+  setOrderType: (type) => set({ orderType: type, deliveryAddress: type !== 'delivery' ? '' : undefined }),
   setTableId: (id) => set({ tableId: id }),
   setCustomerId: (id) => set({ customerId: id }),
   setCustomer: (customer) => set({ customer, customerId: customer?.id ?? null }),
   setGuestCount: (count) => set({ guestCount: count }),
+  setDeliveryAddress: (address) => set({ deliveryAddress: address }),
 
   subtotal: () => {
     return get().items.reduce((sum, item) => {

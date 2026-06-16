@@ -1,8 +1,8 @@
 'use client';
 
 import {
-  ShoppingCart, UtensilsCrossed, Package, Truck, Globe,
-  Plus, Minus, Trash2, Pause,
+  ShoppingCart, UtensilsCrossed, Package, Truck,
+  Plus, Minus, Trash2, Pause, MapPin,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useCartStore } from '@/store/cart';
@@ -25,7 +25,6 @@ const orderTypeIcons = {
   dine_in: UtensilsCrossed,
   takeaway: Package,
   delivery: Truck,
-  online: Globe,
 };
 
 export default function CartPanel({ tables, currency, submitting, onPlaceOrder, onShowTablePicker, variant = 'sidebar' }: Props) {
@@ -62,7 +61,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
       {/* Order Type */}
       <div className="p-4 border-b border-gray-100 space-y-2">
         <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
-          {(['dine_in', 'takeaway', 'delivery', 'online'] as const)
+          {(['dine_in', 'takeaway', 'delivery'] as const)
             .filter((type) => isRestaurant || type !== 'dine_in')
             .map((type) => {
               const Icon = orderTypeIcons[type];
@@ -83,6 +82,19 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
             })}
         </div>
 
+        {/* Delivery address — shown inline when delivery is selected */}
+        {cart.orderType === 'delivery' && (
+          <div className="flex items-center gap-2">
+            <MapPin size={14} className="text-gray-400 shrink-0" />
+            <input
+              type="text"
+              value={cart.deliveryAddress}
+              onChange={(e) => cart.setDeliveryAddress(e.target.value)}
+              placeholder="Delivery address"
+              className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
+            />
+          </div>
+        )}
       </div>
 
       {/* Cart Items */}
