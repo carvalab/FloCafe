@@ -87,6 +87,7 @@ export default function SettingsPage() {
   usePrinterStatusSync();
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
 
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
   const [loyaltyDays, setLoyaltyDays] = useState(365);
   const [savingLoyalty, setSavingLoyalty] = useState(false);
 
@@ -373,7 +374,8 @@ export default function SettingsPage() {
     fetchDetectedPrinters();
     fetchKdsInfo();
 
-    api.get('/settings/tax').then((res) => {
+    api.get('/settings/loyalty').then((res) => {
+      setLoyaltyEnabled(!!res.data.loyalty_enabled);
       if (res.data.loyalty_expiry_days) setLoyaltyDays(Number(res.data.loyalty_expiry_days));
     }).catch(() => {});
 
@@ -458,7 +460,10 @@ export default function SettingsPage() {
   const saveLoyalty = async () => {
     setSavingLoyalty(true);
     try {
-      await api.put('/settings/loyalty', { loyalty_expiry_days: loyaltyDays });
+      await api.put('/settings/loyalty', {
+        loyalty_enabled: loyaltyEnabled,
+        loyalty_expiry_days: loyaltyDays,
+      });
       toast.success('Loyalty settings saved');
     } catch {
       toast.error('Failed to save');
@@ -781,17 +786,40 @@ export default function SettingsPage() {
                 <Gift size={20} className="text-gray-500" />
                 <h2 className="font-semibold text-gray-900">Loyalty Program</h2>
               </div>
-              <div className="space-y-4">
-                <div>
-                  <p className="font-medium text-gray-900">Points Expiry</p>
-                  <p className="text-sm text-gray-500 mb-2">Number of days before earned loyalty points expire</p>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min={1} max={3650} value={loyaltyDays}
-                      onChange={(e) => setLoyaltyDays(parseInt(e.target.value) || 365)}
-                      className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                    <span className="text-sm text-gray-500">days</span>
+              <div className="space-y-5">
+                {/* Enable toggle */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">Enable Loyalty Program</p>
+                    <p className="text-sm text-gray-500">Customers earn points on every purchase</p>
                   </div>
+                  <button
+                    onClick={() => setLoyaltyEnabled(!loyaltyEnabled)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      loyaltyEnabled ? 'bg-brand' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      loyaltyEnabled ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
                 </div>
+
+                {loyaltyEnabled && (
+                  <>
+                    {/* Points expiry */}
+                    <div>
+                      <p className="font-medium text-gray-900">Points Expiry</p>
+                      <p className="text-sm text-gray-500 mb-2">Number of days before earned points expire</p>
+                      <div className="flex items-center gap-3">
+                        <input type="number" min={1} max={3650} value={loyaltyDays}
+                          onChange={(e) => setLoyaltyDays(parseInt(e.target.value) || 365)}
+                          className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                        <span className="text-sm text-gray-500">days</span>
+                      </div>
+                    </div>
+                  </>
+                )}
               </div>
             </div>
 

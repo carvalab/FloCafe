@@ -161,17 +161,14 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
 
     if (variant === 'topbar') {
       return (
-        <div className="space-y-1 w-full min-w-0">
-          <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-light rounded-lg min-w-0">
-            <div className="flex-1 min-w-0 flex items-center gap-x-2 flex-wrap">
-              <span className="font-semibold text-brand text-sm truncate">{customer.name}</span>
-              <span className="text-brand/70 text-xs shrink-0">{customer.phone}</span>
-            </div>
-            <button onClick={handleClear} className="text-brand hover:text-brand-hover shrink-0 ml-auto">
-              <X size={14} />
-            </button>
+        <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-light rounded-lg min-w-0 w-full">
+          <div className="flex-1 min-w-0 flex items-center gap-x-2 flex-wrap">
+            <span className="font-semibold text-brand text-sm truncate">{customer.name}</span>
+            <span className="text-brand/70 text-xs shrink-0">{customer.phone}</span>
           </div>
-          {hasTags && <TagBadges counts={customer.tag_counts!} />}
+          <button onClick={handleClear} className="text-brand hover:text-brand-hover shrink-0 ml-auto">
+            <X size={14} />
+          </button>
         </div>
       );
     }

@@ -10,7 +10,7 @@ import { useHeldOrdersStore } from '@/store/held-orders';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import toast from 'react-hot-toast';
-import type { Table } from '@/lib/types';
+import type { Table, Order } from '@/lib/types';
 
 interface Props {
   tables: Table[];
@@ -19,6 +19,7 @@ interface Props {
   onPlaceOrder: () => void;
   onShowTablePicker: () => void;
   variant?: 'sidebar' | 'drawer';
+  existingOrder?: Order | null;
 }
 
 const orderTypeIcons = {
@@ -28,7 +29,7 @@ const orderTypeIcons = {
   online: Globe,
 };
 
-export default function CartPanel({ tables, currency, submitting, onPlaceOrder, onShowTablePicker, variant = 'sidebar' }: Props) {
+export default function CartPanel({ tables, currency, submitting, onPlaceOrder, onShowTablePicker, variant = 'sidebar', existingOrder }: Props) {
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
   const { currentTenant } = useAuthStore();
@@ -87,10 +88,25 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
 
       {/* Cart Items */}
       <div className={isDrawer ? 'overflow-y-auto p-4 max-h-[40vh]' : 'flex-1 overflow-y-auto p-4'}>
+        {/* Previously ordered items (add-items mode) */}
+        {existingOrder && existingOrder.items && existingOrder.items.filter((i: any) => i.status !== 'cancelled').length > 0 && (
+          <div className="mb-3 pb-3 border-b border-dashed border-gray-200">
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Already ordered</p>
+            <div className="space-y-1.5">
+              {existingOrder.items.filter((i: any) => i.status !== 'cancelled').map((item: any) => (
+                <div key={item.id} className="flex justify-between items-center">
+                  <span className="text-xs text-gray-500">{item.quantity}× {item.product_name}</span>
+                  <span className="text-xs text-gray-400">{currency}{Number(item.total).toLocaleString()}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {cart.items.length === 0 ? (
-          <div className={`flex flex-col items-center justify-center text-gray-400 ${isDrawer ? 'py-8' : 'h-full'}`}>
-            <ShoppingCart size={40} />
-            <p className="mt-2 text-sm">Cart is empty</p>
+          <div className={`flex flex-col items-center justify-center text-gray-400 ${existingOrder ? 'py-4' : isDrawer ? 'py-8' : 'h-full'}`}>
+            <ShoppingCart size={existingOrder ? 24 : 40} />
+            <p className="mt-2 text-sm">{existingOrder ? 'Add new items above' : 'Cart is empty'}</p>
           </div>
         ) : (
           <div className="space-y-3">
