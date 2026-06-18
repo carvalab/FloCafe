@@ -125,16 +125,16 @@ export default function TableCheckoutModal({
             <p className="text-xs text-gray-400 uppercase tracking-wider mb-2">Previous Items (already ordered)</p>
             <div className="space-y-1">
               {activeItems.map((item) => (
-                <div key={item.id} className="flex justify-between items-start py-1.5 px-2 bg-gray-50 rounded-lg opacity-60">
+                <div key={item.id} className="flex justify-between items-start py-1.5 px-2 bg-gray-50 rounded-lg">
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-gray-700 font-medium">
                       {item.quantity}x {item.product_name}
                     </p>
                     {item.special_instructions && (
                       <p className="text-xs text-gray-400 italic">{item.special_instructions}</p>
                     )}
                   </div>
-                  <span className="text-xs text-gray-400 ml-2">
+                  <span className="text-xs text-gray-600 ml-2 font-medium">
                     {currency}{Number(item.total).toLocaleString()}
                   </span>
                 </div>
