@@ -18,6 +18,12 @@ const nextConfig: NextConfig = {
   images: {
     unoptimized: isDesktop,
   },
+
+  // Silence "outside workspace root" warning when the project is used as a
+  // git submodule or inside a monorepo and turbopack can't auto-detect root.
+  turbopack: {
+    root: '.',
+  },
 };
 
 export default nextConfig;
