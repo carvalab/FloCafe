@@ -14,6 +14,7 @@ interface AuthState {
   selectTenant: (tenantId: number) => Promise<void>;
   logout: () => void;
   loadFromStorage: () => void;
+  updateCurrentTenant: (updates: Partial<Tenant>) => void;
 }
 
 interface RegisterData {
@@ -68,6 +69,15 @@ export const useAuthStore = create<AuthState>((set) => ({
     localStorage.removeItem('token');
     localStorage.removeItem('tenant');
     set({ user: null, token: null, tenants: [], currentTenant: null });
+  },
+
+  updateCurrentTenant: (updates) => {
+    set((state) => {
+      if (!state.currentTenant) return state;
+      const updated = { ...state.currentTenant, ...updates };
+      localStorage.setItem('tenant', JSON.stringify(updated));
+      return { currentTenant: updated };
+    });
   },
 
   loadFromStorage: () => {

@@ -24,6 +24,7 @@ import PaymentModal from '@/components/pos/PaymentModal';
 import PrepaidCheckoutModal from '@/components/pos/PrepaidCheckoutModal';
 import PosTopbar from '@/components/pos/PosTopbar';
 import { usePrinterStore } from '@/hooks/usePrinter';
+import { getCurrencySymbol } from '@/lib/countries';
 
 export default function POSPage() {
   const { currentTenant } = useAuthStore();
@@ -50,7 +51,7 @@ export default function POSPage() {
   const [showPrepaidCheckout, setShowPrepaidCheckout] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
 
-  const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const { printBill, printKot } = usePrinterStore();
 
   const refreshTables = async () => {

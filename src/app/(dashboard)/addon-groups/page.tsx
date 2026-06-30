@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react';
 import type { AddonGroup, Addon } from '@/lib/types';
+import { getCurrencySymbol } from '@/lib/countries';
 
 export default function AddonGroupsPage() {
   const { currentTenant } = useAuthStore();
@@ -27,7 +28,7 @@ export default function AddonGroupsPage() {
   const [addingAddonTo, setAddingAddonTo] = useState<number | null>(null);
   const [editingAddon, setEditingAddon] = useState<{ groupId: number; addon: Addon } | null>(null);
 
-  const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
   const fetchGroups = async () => {
     try {

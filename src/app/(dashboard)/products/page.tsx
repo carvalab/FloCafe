@@ -8,6 +8,7 @@ import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
+import { getCurrencySymbol } from '@/lib/countries';
 
 const PRESET_TAGS = [
   { key: 'veg', label: 'Veg' },
@@ -79,7 +80,7 @@ export default function ProductsPage() {
   const [csvResult, setCsvResult] = useState<Record<string, unknown> | null>(null);
   const [csvUploading, setCsvUploading] = useState(false);
 
-  const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
 
   const fetchData = async () => {

@@ -9,10 +9,11 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import toast from 'react-hot-toast';
 import { Plus, Search, X, Edit, Wallet, History, TrendingUp, TrendingDown } from 'lucide-react';
 import type { Customer } from '@/lib/types';
+import { getCurrencySymbol } from '@/lib/countries';
 
 export default function CustomersPage() {
   const { currentTenant } = useAuthStore();
-  const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState('');

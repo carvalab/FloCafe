@@ -9,6 +9,7 @@ import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
 import type { Order, Bill } from '@/lib/types';
+import { getCurrencySymbol } from '@/lib/countries';
 
 const itemStatusConfig: Record<string, { icon: string; color: string; label: string }> = {
   pending: { icon: '⏳', color: 'text-yellow-600', label: 'Waiting' },
@@ -28,7 +29,7 @@ export default function OrdersPage() {
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
 
-  const currency = currentTenant?.currency === 'THB' ? '฿' : '₹';
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 

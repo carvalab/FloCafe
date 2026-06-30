@@ -45,6 +45,10 @@ export function getCountryByCode(code: string): Country | undefined {
   return COUNTRIES.find(c => c.code === code);
 }
 
+export function getCurrencySymbol(currency: string): string {
+  return COUNTRIES.find(c => c.currency === currency)?.currencyCode ?? currency;
+}
+
 export function formatCurrency(amount: number, currencyCode: string): string {
   return `${currencyCode} ${amount.toFixed(2)}`;
 }

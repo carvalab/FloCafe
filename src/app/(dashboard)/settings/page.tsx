@@ -81,7 +81,7 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
 }
 
 export default function SettingsPage() {
-  const { currentTenant, user } = useAuthStore();
+  const { currentTenant, user, updateCurrentTenant } = useAuthStore();
   const posSettings = usePosSettingsStore();
   const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
   usePrinterStatusSync();
@@ -497,6 +497,7 @@ export default function SettingsPage() {
       posSettings.setBillShowPhone(form.billShowPhone);
       posSettings.setBillShowGstn(form.billShowGstn);
       posSettings.setBillingType(form.billingType);
+      updateCurrentTenant({ currency: form.currency, timezone: form.timezone });
       toast.success('Store details saved');
     } catch {
       toast.error('Failed to save');
