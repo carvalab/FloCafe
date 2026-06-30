@@ -96,8 +96,9 @@ export default function StaffPage() {
       }
       setShowForm(false);
       fetchStaff();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || 'Failed to save');
     }
   };
 

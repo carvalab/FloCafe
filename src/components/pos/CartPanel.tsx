@@ -10,7 +10,7 @@ import { useHeldOrdersStore } from '@/store/held-orders';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import toast from 'react-hot-toast';
-import type { Table, Order } from '@/lib/types';
+import type { Table, Order, OrderItem } from '@/lib/types';
 
 interface Props {
   tables: Table[];
@@ -101,11 +101,11 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
       {/* Cart Items */}
       <div className={isDrawer ? 'overflow-y-auto p-4 max-h-[40vh]' : 'flex-1 overflow-y-auto p-4'}>
         {/* Previously ordered items (add-items mode) */}
-        {existingOrder && existingOrder.items && existingOrder.items.filter((i: any) => i.status !== 'cancelled').length > 0 && (
+        {existingOrder && existingOrder.items && existingOrder.items.filter((i: OrderItem) => i.status !== 'cancelled').length > 0 && (
           <div className="mb-3 pb-3 border-b border-dashed border-gray-200">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Already ordered</p>
             <div className="space-y-1.5">
-              {existingOrder.items.filter((i: any) => i.status !== 'cancelled').map((item: any) => (
+              {existingOrder.items.filter((i: OrderItem) => i.status !== 'cancelled').map((item: OrderItem) => (
                 <div key={item.id} className="flex justify-between items-center">
                   <span className="text-xs text-gray-500">{item.quantity}× {item.product_name}</span>
                   <span className="text-xs text-gray-400">{currency}{Number(item.total).toLocaleString()}</span>

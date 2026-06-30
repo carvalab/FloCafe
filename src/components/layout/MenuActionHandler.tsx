@@ -3,30 +3,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-
-declare global {
-  interface Window {
-    electronAPI?: {
-      onMenuAction: (callback: (action: string) => void) => void;
-      backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
-      restoreBackup: () => Promise<{ success: boolean; error?: string }>;
-      getAppInfo: () => Promise<{
-        version: string;
-        name: string;
-        electron: string;
-        node: string;
-        platform: string;
-      }>;
-      getStatus: () => Promise<{
-        server: string;
-        memory: { heapUsed: number; heapTotal: number; rss: number };
-        uptime: number;
-        port: number;
-      }>;
-      platform: string;
-    };
-  }
-}
+import '@/types/electron';
 
 export default function MenuActionHandler() {
   const router = useRouter();

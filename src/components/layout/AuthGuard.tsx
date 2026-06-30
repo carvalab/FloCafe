@@ -36,6 +36,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
         .catch(() => {})
         .finally(() => setCheckingSetup(false));
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: transitions auth state machine from checking to ready
       setCheckingSetup(false);
     }
   }, [isPublicPath, loading, user, router]);

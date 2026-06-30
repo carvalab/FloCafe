@@ -8,6 +8,7 @@ import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle } from 'lucide-reac
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
+import type { OrderItem } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 
@@ -169,8 +170,8 @@ export default function OrdersPage() {
       ) : (
         <div className="flex-1 overflow-y-auto space-y-4">
           {filteredOrders.map((order) => {
-            const activeItems = (order.items || []).filter((i: any) => i.status !== 'cancelled');
-            const cancelledItems = (order.items || []).filter((i: any) => i.status === 'cancelled');
+            const activeItems = (order.items || []).filter((i: OrderItem) => i.status !== 'cancelled');
+            const cancelledItems = (order.items || []).filter((i: OrderItem) => i.status === 'cancelled');
             const paid = isOrderPaid(order);
 
             return (
@@ -212,7 +213,7 @@ export default function OrdersPage() {
                 {/* Items */}
                 <div className="px-4 py-3">
                   <div className="space-y-2">
-                    {activeItems.map((item: any) => {
+                    {activeItems.map((item: OrderItem) => {
                       const config = itemStatusConfig[item.status] || itemStatusConfig.pending;
                       return (
                         <div key={item.id} className="flex items-center justify-between py-1.5">
@@ -246,7 +247,7 @@ export default function OrdersPage() {
                   {/* Cancelled items */}
                   {cancelledItems.length > 0 && isOwnerOrManager && (
                     <div className="mt-2 pt-2 border-t border-gray-50">
-                      {cancelledItems.map((item: any) => (
+                      {cancelledItems.map((item: OrderItem) => (
                         <div key={item.id} className="flex items-center justify-between py-1 opacity-50">
                           <div className="flex items-center gap-2">
                             <span className="text-xs">❌</span>

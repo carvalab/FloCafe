@@ -357,7 +357,6 @@ export default function ProductsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {products.map((product) => {
-              const p = product as any;
               const taxLabel = product.tax_type === 'none' || !product.tax_type
                 ? '—'
                 : `${product.tax_type === 'inclusive' ? 'Incl.' : 'Excl.'} ${product.tax_rate}%`;

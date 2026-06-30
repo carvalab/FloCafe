@@ -5,7 +5,7 @@ import { X, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import type { Table, Order, Bill } from '@/lib/types';
+import type { Table, Order, Bill, OrderItem } from '@/lib/types';
 
 interface Props {
   table: Table;
@@ -95,7 +95,7 @@ export default function TableCheckoutModal({
   }
 
   // Filter active items (not cancelled)
-  const activeItems = (order.items || []).filter((item: any) => item.status !== 'cancelled');
+  const activeItems = (order.items || []).filter((item: OrderItem) => item.status !== 'cancelled');
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">

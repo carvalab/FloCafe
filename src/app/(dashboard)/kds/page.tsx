@@ -142,8 +142,9 @@ export default function KdsPage() {
       setUser(loggedInUser);
       localStorage.setItem('kds_user', JSON.stringify(loggedInUser));
       tryWebSocket(loggedInUser.token);
-    } catch (err: any) {
-      setLoginError(err.response?.data?.error || 'Login failed');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setLoginError(error.response?.data?.error || 'Login failed');
       setLoading(false);
     }
   };

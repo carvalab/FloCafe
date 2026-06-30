@@ -115,19 +115,19 @@ export default function SettingsPage() {
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
 
   useEffect(() => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      (window as any).electronAPI.onUpdateStatus((status: UpdateStatus) => {
-        setUpdateStatus(status);
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      window.electronAPI.onUpdateStatus((status) => {
+        setUpdateStatus(status as UpdateStatus);
       });
-      (window as any).electronAPI.getUpdateStatus().then((status: any) => {
-        if (status) setUpdateStatus({ status: status.updateAvailable ? 'available' : 'up-to-date', version: status.version });
+      window.electronAPI.getUpdateStatus().then((status) => {
+        if (status) setUpdateStatus({ status: status.status as UpdateStatus['status'], version: status.info?.version });
       });
     }
   }, []);
 
   const handleCheckUpdates = () => {
-    if (typeof window !== 'undefined' && (window as any).electronAPI) {
-      (window as any).electronAPI.checkForUpdates();
+    if (typeof window !== 'undefined' && window.electronAPI) {
+      window.electronAPI.checkForUpdates();
     }
   };
 
@@ -184,7 +184,13 @@ export default function SettingsPage() {
   const quickAddDetected = async (p: DetectedPrinter) => {
     setAddingDetectedName(p.name);
     try {
-      const payload: any = {
+      const payload: {
+        name: string;
+        connection_type: 'network' | 'usb';
+        paper_width: string;
+        ip_address?: string;
+        port?: number;
+      } = {
         name: p.name,
         connection_type: p.connectionType === 'network' ? 'network' : 'usb',
         paper_width: p.paperWidth || '80mm',
@@ -197,8 +203,9 @@ export default function SettingsPage() {
       toast.success(`${p.name} added`);
       fetchPrinters();
       refreshHardwarePrinter();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to add printer');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error?.response?.data?.error || 'Failed to add printer');
     } finally {
       setAddingDetectedName(null);
     }
@@ -278,8 +285,9 @@ export default function SettingsPage() {
     try {
       await api.post(`/printers/${printer.id}/test`);
       toast.success('Test print sent!');
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Test print failed');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error?.response?.data?.error || 'Test print failed');
     } finally {
       setTestingPrinterId(null);
     }

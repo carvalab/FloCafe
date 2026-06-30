@@ -22,7 +22,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', country_code: '+91' });
 
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
-  const [ledgerData, setLedgerData] = useState<{ balance: number; next_expiry: string | null; transactions: any[] } | null>(null);
+  const [ledgerData, setLedgerData] = useState<{ balance: number; next_expiry: string | null; transactions: { id: number; type: string; amount: number; description: string; created_at: string }[] } | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
   const openLedger = async (c: Customer) => {
@@ -82,8 +82,9 @@ export default function CustomersPage() {
       }
       setShowForm(false);
       fetchCustomers();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to save');
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || 'Failed to save');
     }
   };
 
@@ -202,7 +203,7 @@ export default function CustomersPage() {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-50">
-                        {ledgerData.transactions.map((t: any) => (
+                        {ledgerData.transactions.map((t: { id: number; type: string; amount: number; description: string; created_at: string }) => (
                           <tr key={t.id} className="hover:bg-gray-50">
                             <td className="px-4 py-3 text-gray-600 whitespace-nowrap">{fmtDate(t.created_at)}</td>
                             <td className="px-4 py-3 text-gray-700">{t.description || '—'}</td>

@@ -91,8 +91,9 @@ export function buildGstBillBytes(
     enc.text(padRow(line, formatAmount(item.total, currency), cols)).newline();
 
     // Show HSN if available
-    if ((item as any).hsn_code) {
-      enc.size('small').text(`    HSN: ${(item as any).hsn_code}`).size('normal').newline();
+    const hsnCode = 'hsn_code' in item ? (item as { hsn_code?: string }).hsn_code : undefined;
+    if (hsnCode) {
+      enc.size('small').text(`    HSN: ${hsnCode}`).size('normal').newline();
     }
 
     // Addons

@@ -49,7 +49,9 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         })
         .catch(() => {});
     } else {
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: resets wallet state when customer changes
       setWalletBalance(null);
+      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: resets wallet state when customer changes
       setNextExpiry(null);
     }
   }, [customer?.id]);

@@ -60,7 +60,7 @@ export default function SetupPage() {
     setStep(3);
   };
 
-  const completeSetup = (data: any) => {
+  const completeSetup = (data: { access_token: string; tenant: Record<string, unknown> }) => {
     localStorage.setItem('token', data.access_token);
     localStorage.setItem('tenant', JSON.stringify(data.tenant));
     loadFromStorage();
@@ -277,7 +277,7 @@ export default function SetupPage() {
                     return (
                       <button
                         key={bt.type}
-                        onClick={() => setForm({ ...form, business_type: bt.type as any })}
+                        onClick={() => setForm({ ...form, business_type: bt.type as 'retail' | 'restaurant' | 'salon' })}
                         className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
                           isSelected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                         }`}
