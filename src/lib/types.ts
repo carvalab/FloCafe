@@ -158,7 +158,7 @@ export interface OrderItem {
   total: number;
   addons: { id?: number; name: string; price?: number }[] | null;
   special_instructions: string | null;
-  status: 'pending' | 'preparing' | 'ready' | 'served';
+  status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
 }
 
 export interface Bill {

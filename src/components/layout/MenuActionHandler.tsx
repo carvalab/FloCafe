@@ -3,7 +3,6 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import toast from 'react-hot-toast';
-import '@/types/electron';
 
 export default function MenuActionHandler() {
   const router = useRouter();

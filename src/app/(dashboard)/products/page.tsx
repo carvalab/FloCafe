@@ -375,7 +375,7 @@ export default function ProductsPage() {
                 <td className="p-4 text-sm text-gray-600">{product.category?.name || '—'}</td>
                 <td className="p-4 text-right">
                   <p className="font-medium">{currency}{Number(product.price).toLocaleString()}</p>
-                  {p.cost > 0 && <p className="text-xs text-gray-400">Cost: {currency}{Number(p.cost).toLocaleString()}</p>}
+                  {product.cost_price != null && product.cost_price > 0 && <p className="text-xs text-gray-400">Cost: {currency}{Number(product.cost_price).toLocaleString()}</p>}
                 </td>
                 <td className="p-4 text-sm text-gray-600">{taxLabel}</td>
                 <td className="p-4 text-center">
