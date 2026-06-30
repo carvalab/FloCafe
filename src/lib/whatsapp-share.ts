@@ -57,7 +57,7 @@ export function getWhatsAppShareUrl(
 
   // Use wa.me API - works for both personal and business WhatsApp
   // If businessPhone is provided, send to business account, otherwise to customer
-  let waPhone = businessPhone?.replace(/\D/g, '') || '';
+  const waPhone = businessPhone?.replace(/\D/g, '') || '';
 
   // Build wa.me URL
   const waUrl = `https://wa.me/${waPhone || phone}?text=${encodeURIComponent(message)}`;

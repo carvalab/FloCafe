@@ -1119,8 +1119,8 @@ export default function SettingsPage() {
                       <select value={printerForm.paper_width}
                         onChange={(e) => setPrinterForm((p) => ({ ...p, paper_width: e.target.value }))}
                         className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand">
-                        <option value="58mm">58mm (2.5")</option>
-                        <option value="80mm">80mm (3.1")</option>
+                        <option value="58mm">58mm (2.5&quot;)</option>
+                        <option value="80mm">80mm (3.1&quot;)</option>
                       </select>
                     </div>
                   </div>
@@ -1565,7 +1565,7 @@ export default function SettingsPage() {
                   <p className="text-sm text-red-600 mt-1">{updateStatus.error}</p>
                 )}
                 {updateStatus.status === 'up-to-date' && (
-                  <p className="text-sm text-gray-600">You're running the latest version!</p>
+                  <p className="text-sm text-gray-600">You&apos;re running the latest version!</p>
                 )}
                 {updateStatus.status === 'dev-mode' && (
                   <p className="text-sm text-yellow-600">Update checking is disabled in development mode.</p>

@@ -31,12 +31,43 @@ declare global {
 export default function MenuActionHandler() {
   const router = useRouter();
 
+  async function handleBackup() {
+    console.log('[MenuActionHandler] handleBackup called');
+    if (!window.electronAPI?.backupDatabase) {
+      console.error('[MenuActionHandler] backupDatabase API not available');
+      return;
+    }
+
+    toast.loading('Creating backup...', { id: 'backup' });
+    const result = await window.electronAPI.backupDatabase();
+    console.log('[MenuActionHandler] backup result:', result);
+    toast.remove('backup');
+
+    if (result.success) {
+      toast.success(`Backup saved to ${result.path}`);
+    } else {
+      toast.error(`Backup failed: ${result.error}`);
+    }
+  }
+
+  async function handleRestore() {
+    if (!window.electronAPI?.restoreBackup) return;
+
+    const result = await window.electronAPI.restoreBackup();
+    if (result.success) {
+      toast.success('Database restored successfully. Restarting...');
+      setTimeout(() => window.location.reload(), 1500);
+    } else if (result.error !== 'Cancelled') {
+      toast.error(`Restore failed: ${result.error}`);
+    }
+  }
+
   useEffect(() => {
     if (typeof window === 'undefined' || !window.electronAPI?.onMenuAction) return;
 
     window.electronAPI.onMenuAction((action: string) => {
       console.log('[Menu] Action received:', action);
-      
+
       switch (action) {
         case 'new-order':
           router.push('/pos');
@@ -70,37 +101,6 @@ export default function MenuActionHandler() {
       }
     });
   }, [router]);
-
-  async function handleBackup() {
-    console.log('[MenuActionHandler] handleBackup called');
-    if (!window.electronAPI?.backupDatabase) {
-      console.error('[MenuActionHandler] backupDatabase API not available');
-      return;
-    }
-    
-    toast.loading('Creating backup...', { id: 'backup' });
-    const result = await window.electronAPI.backupDatabase();
-    console.log('[MenuActionHandler] backup result:', result);
-    toast.remove('backup');
-    
-    if (result.success) {
-      toast.success(`Backup saved to ${result.path}`);
-    } else {
-      toast.error(`Backup failed: ${result.error}`);
-    }
-  }
-
-  async function handleRestore() {
-    if (!window.electronAPI?.restoreBackup) return;
-    
-    const result = await window.electronAPI.restoreBackup();
-    if (result.success) {
-      toast.success('Database restored successfully. Restarting...');
-      setTimeout(() => window.location.reload(), 1500);
-    } else if (result.error !== 'Cancelled') {
-      toast.error(`Restore failed: ${result.error}`);
-    }
-  }
 
   return null;
 }

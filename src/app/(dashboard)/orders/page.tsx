@@ -223,7 +223,7 @@ export default function OrdersPage() {
                             </span>
                             <span className="text-sm text-gray-900 truncate">{item.product_name}</span>
                             {item.special_instructions && (
-                              <span className="text-xs text-red-500 italic truncate">"{item.special_instructions}"</span>
+                              <span className="text-xs text-red-500 italic truncate">&quot;{item.special_instructions}&quot;</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">

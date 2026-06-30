@@ -809,7 +809,7 @@ export default function ProductsPage() {
                   </button>
                 </div>
                 {csvType === 'products' && (
-                  <p className="text-xs text-gray-500">Columns: id (leave blank for new items), sku, name, category, price, description, cost, tax_type (none/inclusive/exclusive), tax_rate, cashback_percent, tags (veg/non_veg/...), is_active (yes/no) — download "Current data" to get item IDs, edit, then re-upload to update existing items</p>
+                  <p className="text-xs text-gray-500">Columns: id (leave blank for new items), sku, name, category, price, description, cost, tax_type (none/inclusive/exclusive), tax_rate, cashback_percent, tags (veg/non_veg/...), is_active (yes/no) — download &quot;Current data&quot; to get item IDs, edit, then re-upload to update existing items</p>
                 )}
                 {csvType === 'categories' && (
                   <p className="text-xs text-gray-500">Columns: name, description, color (red/green/blue/...), icon (emoji), sort_order</p>
