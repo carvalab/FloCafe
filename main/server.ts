@@ -10,6 +10,7 @@ import { registerRoutes } from './routes';
 import { getJWTSecret } from './routes/auth';
 import { getDbHealth } from './db';
 import { setupKdsWebSocket } from './services/kds';
+import { rateLimit } from './middleware/security';
 
 let server: http.Server | null = null;
 let app: Express;
@@ -94,8 +95,24 @@ export function startServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     app = express();
 
-    app.use(cors());
+    app.use(cors({
+      origin: (origin, callback) => {
+        // Allow requests with no origin (like curl or desktop apps)
+        if (!origin) return callback(null, true);
+
+        // Allow localhost and local private IPs
+        if (/^https?:\/\/localhost(:[0-9]+)?$/.test(origin) ||
+          /^https?:\/\/(127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin)) {
+          return callback(null, true);
+        }
+
+        callback(new Error('Not allowed by CORS'));
+      }
+    }));
     app.use(express.json());
+
+    // ── Global API rate limiting ───────────────────────────────────────
+    app.use('/api', rateLimit({ windowMs: 60 * 1000, max: 100 }));
 
     // ── Content Security Policy ────────────────────────────────────────
     // Blocks eval() and remote code. 'unsafe-inline' is required for

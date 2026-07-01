@@ -58,24 +58,67 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
 
   return {
     id: 1,
-    business_name:  s.business_name  || 'Shop',
-    slug:           'local',
-    database_name:  'local',
-    business_type:  s.business_type  || 'restaurant',
-    country:        s.country        || 'IN',
-    currency:       s.currency       || 'INR',
+    business_name: s.business_name || 'Shop',
+    slug: 'local',
+    database_name: 'local',
+    business_type: s.business_type || 'restaurant',
+    country: s.country || 'IN',
+    currency: s.currency || 'INR',
     currency_symbol: s.currency_symbol || '₹',
-    timezone:       s.timezone       || 'Asia/Kolkata',
-    plan:           'desktop',
-    status:         'active',
-    role:           userRole,  // user's role — AuthGuard uses this for routing
+    timezone: s.timezone || 'Asia/Kolkata',
+    plan: 'desktop',
+    status: 'active',
+    role: userRole,  // user's role — AuthGuard uses this for routing
   };
 }
+
+// ── Rate Limiting (In-Memory for local offline apps) ──────────────────────────
+const loginAttempts = new Map<string, { count: number; lockedUntil: number }>();
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MINUTES = 15;
+
+function checkRateLimit(ip: string): { allowed: boolean; waitMinutes?: number } {
+  const nowMs = Date.now();
+  let record = loginAttempts.get(ip);
+
+  if (record) {
+    if (record.lockedUntil > nowMs) {
+      const waitMinutes = Math.ceil((record.lockedUntil - nowMs) / 60000);
+      return { allowed: false, waitMinutes };
+    }
+    // If lock expired, reset
+    if (record.lockedUntil > 0 && record.lockedUntil <= nowMs) {
+      record = { count: 0, lockedUntil: 0 };
+      loginAttempts.set(ip, record);
+    }
+  }
+  return { allowed: true };
+}
+
+function incrementFailedLogin(ip: string) {
+  const record = loginAttempts.get(ip) || { count: 0, lockedUntil: 0 };
+  record.count += 1;
+  if (record.count >= MAX_ATTEMPTS) {
+    record.lockedUntil = Date.now() + LOCKOUT_MINUTES * 60000;
+  }
+  loginAttempts.set(ip, record);
+}
+
+function resetSuccessfulLogin(ip: string) {
+  loginAttempts.delete(ip);
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
 
 router.post('/login', (req: Request, res: Response) => {
   try {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const rateLimit = checkRateLimit(ip);
+    if (!rateLimit.allowed) {
+      return res.status(429).json({ error: `Too many failed attempts. Try again in ${rateLimit.waitMinutes} minutes.` });
+    }
+
     const { email, password } = req.body;
 
     if (!email || !password) {
@@ -86,8 +129,11 @@ router.post('/login', (req: Request, res: Response) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email) as any;
 
     if (!user || !bcrypt.compareSync(password, user.password)) {
+      incrementFailedLogin(ip);
       return res.status(401).json({ error: 'Invalid credentials' });
     }
+
+    resetSuccessfulLogin(ip);
 
     const token = jwt.sign(
       { userId: user.id, email: user.email, role: user.role },
@@ -346,6 +392,13 @@ router.post('/setup/seed', (req: Request, res: Response) => {
     }
 
     const db = getDatabase();
+
+    // ── Security: only allowed during first-run (no users exist yet) ──────────
+    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
+    if (userCount.count > 0) {
+      return res.status(403).json({ error: 'Setup already complete. This endpoint is disabled.' });
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     if (business_name) {
       db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_name', ?, ?)`).run(business_name, now());

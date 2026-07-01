@@ -24,31 +24,31 @@ function upsertSettings(db: ReturnType<typeof getDatabase>, entries: Record<stri
 
 function businessShape(s: Record<string, string>) {
   return {
-    business_name:   s.business_name   || '',
-    timezone:        s.timezone        || 'Asia/Kolkata',
-    currency:        s.currency        || 'INR',
-    country:         s.country         || 'IN',
-    gstin:           s.gstin           || '',
-    state_code:      s.state_code      || '',
+    business_name: s.business_name || '',
+    timezone: s.timezone || 'Asia/Kolkata',
+    currency: s.currency || 'INR',
+    country: s.country || 'IN',
+    gstin: s.gstin || '',
+    state_code: s.state_code || '',
     business_address: s.business_address || '',
-    business_phone:  s.business_phone  || '',
-    billing_type:    s.billing_type    || 'postpaid',
-    bill_show_name:    s.bill_show_name    !== 'false',
+    business_phone: s.business_phone || '',
+    billing_type: s.billing_type || 'postpaid',
+    bill_show_name: s.bill_show_name !== 'false',
     bill_show_address: s.bill_show_address !== 'false',
-    bill_show_phone:   s.bill_show_phone   !== 'false',
-    bill_show_gstn:    s.bill_show_gstn    === 'true',
+    bill_show_phone: s.bill_show_phone !== 'false',
+    bill_show_gstn: s.bill_show_gstn === 'true',
   };
 }
 
 function taxShape(s: Record<string, string>) {
   return {
-    tax_registered:       s.tax_registered === 'true',
-    gstin:                s.gstin           || '',
-    state_code:           s.state_code      || '',
-    tax_scheme:           s.tax_scheme      || 'regular',
-    country:              s.country         || 'IN',
-    loyalty_enabled:      s.loyalty_enabled === 'true',
-    loyalty_expiry_days:  parseInt(s.loyalty_expiry_days  || '365'),
+    tax_registered: s.tax_registered === 'true',
+    gstin: s.gstin || '',
+    state_code: s.state_code || '',
+    tax_scheme: s.tax_scheme || 'regular',
+    country: s.country || 'IN',
+    loyalty_enabled: s.loyalty_enabled === 'true',
+    loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
     loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
     loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
   };
@@ -108,10 +108,10 @@ router.get('/loyalty', (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({
-      loyalty_enabled:       s.loyalty_enabled === 'true',
-      loyalty_expiry_days:   parseInt(s.loyalty_expiry_days  || '365'),
+      loyalty_enabled: s.loyalty_enabled === 'true',
+      loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
       loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
-      loyalty_redeem_value:  parseFloat(s.loyalty_redeem_value || '0.25'),
+      loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -125,10 +125,10 @@ router.put('/loyalty', (req: Request, res: Response) => {
     upsertSettings(db, { loyalty_enabled, loyalty_expiry_days, loyalty_points_per_rs, loyalty_redeem_value });
     const s = getAllSettings(db);
     res.json({
-      loyalty_enabled:       s.loyalty_enabled === 'true',
-      loyalty_expiry_days:   parseInt(s.loyalty_expiry_days  || '365'),
+      loyalty_enabled: s.loyalty_enabled === 'true',
+      loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
       loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
-      loyalty_redeem_value:  parseFloat(s.loyalty_redeem_value || '0.25'),
+      loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
