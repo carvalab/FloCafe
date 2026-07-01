@@ -41,7 +41,7 @@ export default function MenuActionHandler() {
   useEffect(() => {
     if (typeof window === 'undefined' || !window.electronAPI?.onMenuAction) return;
 
-    window.electronAPI.onMenuAction((action: string) => {
+    const unsubscribe = window.electronAPI.onMenuAction((action: string) => {
       console.log('[Menu] Action received:', action);
 
       switch (action) {
@@ -76,6 +76,8 @@ export default function MenuActionHandler() {
           console.log('[Menu] Unknown action:', action);
       }
     });
+
+    return () => { unsubscribe?.(); };
   }, [router]);
 
   return null;

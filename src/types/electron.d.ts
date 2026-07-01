@@ -5,7 +5,7 @@
 
 export interface ElectronAPI {
   // Menu
-  onMenuAction: (callback: (action: string) => void) => void;
+  onMenuAction: (callback: (action: string) => void) => (() => void);
 
   // Database
   backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
