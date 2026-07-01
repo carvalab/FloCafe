@@ -116,12 +116,13 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI) {
-      window.electronAPI.onUpdateStatus((status) => {
+      const unsubscribe = window.electronAPI.onUpdateStatus((status) => {
         setUpdateStatus(status as UpdateStatus);
       });
       window.electronAPI.getUpdateStatus().then((status) => {
         if (status) setUpdateStatus({ status: status.status as UpdateStatus['status'], version: status.info?.version });
       });
+      return () => { unsubscribe?.(); };
     }
   }, []);
 

@@ -29,7 +29,7 @@ export interface ElectronAPI {
   }>;
 
   // Updates
-  onUpdateStatus: (callback: (status: UpdateStatus) => void) => void;
+  onUpdateStatus: (callback: (status: UpdateStatus) => void) => (() => void);
   getUpdateStatus: () => Promise<UpdateStatus>;
   checkForUpdates: () => Promise<void>;
 
