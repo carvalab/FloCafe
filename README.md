@@ -58,15 +58,21 @@ FloCafe runs entirely on your own machine — no internet, no subscriptions, no 
 
 Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases):
 
-| Platform | File |
-|----------|------|
-| macOS (Apple Silicon) | `Flo-1.7.1-arm64.dmg` |
-| macOS (Intel) | `Flo-1.7.1.dmg` |
-| Windows | `Flo Setup 1.7.1.exe` |
-| Linux (AppImage) | `Flo-1.7.1.AppImage` |
-| Linux (Debian) | `flo-desktop_1.7.1_amd64.deb` |
+| Platform | File | Description |
+|----------|------|-------------|
+| **macOS** | [Mac App Store](https://apps.apple.com/in/app/flo-cafe/id6763136018) | Recommended — auto-updates |
+| **macOS (Intel DMG)** | `Flo-1.7.1.dmg` | Direct download for Intel Macs |
+| **macOS (Apple Silicon DMG)** | `Flo-1.7.1-arm64.dmg` | Direct download for M1/M2/M3/M4 |
+| **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
+| **Windows (EXE)** | `Flo Setup 1.7.1.exe` | Direct download installer |
+| **Linux (AppImage)** | `Flo-1.7.1.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
+| **Linux (Debian)** | `flo-desktop_1.7.1_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
 
-## Features
+**Latest Version:** v1.7.1
+
+**Release note:** Linux artifacts are now built on `ubuntu-20.04` so the native `better-sqlite3` module stays compatible with Ubuntu 20.04 and other older glibc-based distributions.
+
+## 🚀 Features
 
 ### Core POS
 - Fast order entry with product search

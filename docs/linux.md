@@ -11,6 +11,10 @@
 
 Both are `x86_64` only.
 
+Linux release artifacts are built on `ubuntu-20.04` to keep the native
+`better-sqlite3` binary compatible with older glibc versions, including
+Ubuntu 20.04.
+
 ```bash
 # deb
 sudo dpkg -i flo-cafe_*.deb && sudo apt-get install -f
@@ -101,6 +105,5 @@ _(None currently open — all items resolved as of 2025-06.)_
 - **Window menu zoom/front** — Wrapped `{ role: 'zoom' }` and `{ role: 'front' }` in `process.platform === 'darwin'` check. No longer a no-op on Linux/Windows.
 - **Single-instance locking on AppImage** — Custom PID file lock implemented at `~/.config/flo-desktop/singleton.lock` with `/proc/<pid>` existence check.
 - **Auto-updater** — Disabled on Linux at source level. No error noise. Manual re-download from [GitHub Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases) for now.
-
 
 
