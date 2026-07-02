@@ -6,8 +6,8 @@
 
 | Format | For |
 |--------|-----|
-| **AppImage** (`Flo-Cafe-*.AppImage`) | Any distro — no install needed |
-| **deb** (`flo-cafe_*.deb`) | Debian / Ubuntu and derivatives |
+| **AppImage** (`Flo.Cafe-*.AppImage`) | Any distro — no install needed |
+| **deb** (`flo-desktop_*.deb`) | Debian / Ubuntu and derivatives |
 
 Both are `x86_64` only.
 
@@ -17,10 +17,10 @@ Ubuntu 20.04.
 
 ```bash
 # deb
-sudo dpkg -i flo-cafe_*.deb && sudo apt-get install -f
+sudo dpkg -i flo-desktop_*.deb && sudo apt-get install -f
 
 # AppImage
-chmod +x Flo-Cafe-*.AppImage && ./Flo-Cafe-*.AppImage
+chmod +x Flo.Cafe-*.AppImage && ./Flo.Cafe-*.AppImage
 ```
 
 ---
@@ -40,7 +40,7 @@ sudo apt install libfuse2t64
 No FUSE? Run extracted:
 
 ```bash
-./Flo-Cafe-*.AppImage --appimage-extract
+./Flo.Cafe-*.AppImage --appimage-extract
 ./squashfs-root/AppRun
 ```
 
@@ -105,5 +105,4 @@ _(None currently open — all items resolved as of 2025-06.)_
 - **Window menu zoom/front** — Wrapped `{ role: 'zoom' }` and `{ role: 'front' }` in `process.platform === 'darwin'` check. No longer a no-op on Linux/Windows.
 - **Single-instance locking on AppImage** — Custom PID file lock implemented at `~/.config/flo-desktop/singleton.lock` with `/proc/<pid>` existence check.
 - **Auto-updater** — Disabled on Linux at source level. No error noise. Manual re-download from [GitHub Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases) for now.
-
 

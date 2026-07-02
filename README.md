@@ -61,11 +61,11 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 | Platform | File | Description |
 |----------|------|-------------|
 | **macOS** | [Mac App Store](https://apps.apple.com/in/app/flo-cafe/id6763136018) | Recommended — auto-updates |
-| **macOS (Intel DMG)** | `Flo-1.7.1.dmg` | Direct download for Intel Macs |
-| **macOS (Apple Silicon DMG)** | `Flo-1.7.1-arm64.dmg` | Direct download for M1/M2/M3/M4 |
+| **macOS (Intel DMG)** | `Flo.Cafe-1.7.1.dmg` | Direct download for Intel Macs |
+| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.7.1-arm64.dmg` | Direct download for M1/M2/M3/M4 |
 | **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
-| **Windows (EXE)** | `Flo Setup 1.7.1.exe` | Direct download installer |
-| **Linux (AppImage)** | `Flo-1.7.1.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
+| **Windows (EXE)** | `Flo.Cafe.Setup.1.7.1.exe` | Direct download installer |
+| **Linux (AppImage)** | `Flo.Cafe-1.7.1.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
 | **Linux (Debian)** | `flo-desktop_1.7.1_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
 
 **Latest Version:** v1.7.1
