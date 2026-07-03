@@ -3,10 +3,12 @@ import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
-import { getDatabase, now } from '../db';
+import { getCurrentSchemaVersion, getDatabase, now } from '../db';
 
 const router = Router();
 const JWT_EXPIRES_IN = '24h';
+const INITIAL_ADMIN_ROLE = 'owner';
+const VALID_BUSINESS_TYPES = new Set(['retail', 'restaurant', 'salon']);
 
 /**
  * Lazy-loaded JWT secret. On first access, reads from the settings table.
@@ -58,7 +60,7 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
 
   return {
     id: 1,
-    business_name: s.business_name || 'Shop',
+    business_name: s.business_name || 'Store',
     slug: 'local',
     database_name: 'local',
     business_type: s.business_type || 'restaurant',
@@ -70,6 +72,39 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
     status: 'active',
     role: userRole,  // user's role — AuthGuard uses this for routing
   };
+}
+
+function getUserCount(db: ReturnType<typeof getDatabase>): number {
+  return (db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number }).count;
+}
+
+function normalizeEmail(email: unknown): string {
+  return String(email || '').trim().toLowerCase();
+}
+
+function isValidEmail(email: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+function upsertSettings(db: ReturnType<typeof getDatabase>, entries: Record<string, unknown>): void {
+  const stmt = db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `);
+
+  for (const [key, value] of Object.entries(entries)) {
+    if (value !== undefined && value !== null) stmt.run(key, String(value), now());
+  }
+}
+
+function currencySymbolFor(currency: string): string {
+  switch (currency) {
+    case 'INR': return '₹';
+    case 'USD': return '$';
+    case 'EUR': return '€';
+    case 'GBP': return '£';
+    default: return currency;
+  }
 }
 
 // ── Rate Limiting (In-Memory for local offline apps) ──────────────────────────
@@ -296,87 +331,137 @@ router.post('/password/change', (req: Request, res: Response) => {
 router.get('/setup/status', (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    const needsSetup = userCount.count === 0;
-    res.json({ needsSetup });
+    const userCount = getUserCount(db);
+    const needsSetup = userCount === 0;
+    res.json({
+      needsSetup,
+      userCount,
+      initialRole: INITIAL_ADMIN_ROLE,
+      schemaVersion: getCurrentSchemaVersion(),
+    });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
 });
 
 // ── POST /api/auth/setup/initialize ─────────────────────────────────────────────
-// Creates the initial admin user and sets business type
+// Creates the initial owner user. This endpoint is disabled after any user exists.
 
 router.post('/setup/initialize', (req: Request, res: Response) => {
   try {
-    const { name, email, password, business_type, business_name } = req.body;
+    const {
+      name,
+      password,
+      business_type = 'restaurant',
+      business_name,
+      store_name,
+      country = 'IN',
+      currency = 'INR',
+      currency_symbol,
+      timezone = 'Asia/Kolkata',
+      business_address,
+      address,
+      business_phone,
+      phone,
+      gstin,
+      state_code,
+      tax_registered,
+      billing_type,
+    } = req.body;
+    const email = normalizeEmail(req.body.email);
+    const displayName = String(name || '').trim();
+    const normalizedBusinessType = String(business_type || 'restaurant').trim();
+    const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
+    const storeName = String(store_name || business_name || '').trim();
+    const resolvedStoreName = storeName || 'Store';
+    const outletAddress = String(business_address || address || '').trim();
+    const outletPhone = String(business_phone || phone || '').trim();
 
-    if (!name || !email || !password) {
+    if (!displayName || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
     }
 
-    if (!['retail', 'restaurant', 'salon'].includes(business_type)) {
+    if (!isValidEmail(email)) {
+      return res.status(400).json({ error: 'A valid email is required' });
+    }
+
+    if (String(password).length < 6) {
+      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    }
+
+    if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
       return res.status(400).json({ error: 'Invalid business type' });
     }
 
     const db = getDatabase();
-
-    const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
-    if (existingUser) {
-      return res.status(400).json({ error: 'User with this email already exists' });
+    const beforeCount = getUserCount(db);
+    if (beforeCount > 0) {
+      return res.status(403).json({ error: 'Setup already complete. This endpoint is disabled.' });
     }
 
-    const userId = uuidv4();
+    let userId = '';
     const hashedPassword = bcrypt.hashSync(password, 10);
 
-    db.prepare(`
-      INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(userId, name, email, hashedPassword, 'owner', 1, now(), now());
+    db.transaction(() => {
+      const userCount = getUserCount(db);
+      if (userCount > 0) {
+        throw new Error('Setup already complete. This endpoint is disabled.');
+      }
 
-    db.prepare(`
-      INSERT OR REPLACE INTO settings (key, value, updated_at)
-      VALUES ('business_type', ?, ?)
-    `).run(business_type, now());
+      const existingUser = db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+      if (existingUser) {
+        throw new Error('User with this email already exists');
+      }
 
-    if (business_name) {
+      userId = uuidv4();
       db.prepare(`
-        INSERT OR REPLACE INTO settings (key, value, updated_at)
-        VALUES ('business_name', ?, ?)
-      `).run(business_name, now());
-    }
+        INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, displayName, email, hashedPassword, INITIAL_ADMIN_ROLE, 1, now(), now());
+
+      upsertSettings(db, {
+        business_name: resolvedStoreName,
+        business_type: normalizedBusinessType,
+        country,
+        currency: normalizedCurrency,
+        currency_symbol: currency_symbol || currencySymbolFor(normalizedCurrency),
+        timezone,
+        business_address: outletAddress,
+        business_phone: outletPhone,
+        address: outletAddress,
+        phone: outletPhone,
+        email,
+        gstin,
+        state_code,
+        tax_registered,
+        billing_type,
+        onboarding_completed: 'true',
+      });
+    })();
 
     const token = jwt.sign(
-      { userId, email, role: 'owner' },
+      { userId, email, role: INITIAL_ADMIN_ROLE },
       getJWTSecret(),
       { expiresIn: JWT_EXPIRES_IN }
     );
 
-    const tenant = {
-      id: 1,
-      business_name: business_name || 'My Store',
-      slug: 'local',
-      database_name: 'local',
-      business_type,
-      country: 'IN',
-      currency: business_type === 'retail' ? 'INR' : (business_type === 'restaurant' ? 'INR' : 'INR'),
-      currency_symbol: '₹',
-      timezone: 'Asia/Kolkata',
-      plan: 'desktop',
-      status: 'active',
-      role: 'owner',
-    };
+    const tenant = buildLocalTenant(db, INITIAL_ADMIN_ROLE);
 
     res.json({
       access_token: token,
       token_type: 'bearer',
       expires_in: 86400,
-      user: { id: userId, name, email, role: 'owner' },
+      user: { id: userId, name: displayName, email, role: INITIAL_ADMIN_ROLE },
+      tenant,
       tenants: [tenant],
     });
   } catch (error: any) {
     console.error('[Auth] Setup error:', error);
-    res.status(500).json({ error: error.message });
+    const message = error.message || 'Setup failed';
+    const status = message.includes('already complete') ? 403
+      : message.includes('already exists') ? 400
+        : 500;
+    res.status(status).json({ error: message });
   }
 });
 
@@ -386,16 +471,17 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 router.post('/setup/seed', (req: Request, res: Response) => {
   try {
     const { business_type, business_name } = req.body;
+    const normalizedBusinessType = String(business_type || 'restaurant').trim();
 
-    if (!['retail', 'restaurant', 'salon'].includes(business_type)) {
+    if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
       return res.status(400).json({ error: 'Invalid business type' });
     }
 
     const db = getDatabase();
 
     // ── Security: only allowed during first-run (no users exist yet) ──────────
-    const userCount = db.prepare('SELECT COUNT(*) as count FROM users').get() as { count: number };
-    if (userCount.count > 0) {
+    const userCount = getUserCount(db);
+    if (userCount > 0) {
       return res.status(403).json({ error: 'Setup already complete. This endpoint is disabled.' });
     }
     // ─────────────────────────────────────────────────────────────────────────
@@ -403,7 +489,8 @@ router.post('/setup/seed', (req: Request, res: Response) => {
     if (business_name) {
       db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_name', ?, ?)`).run(business_name, now());
     }
-    db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', ?, ?)`).run(business_type, now());
+    db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', ?, ?)`).run(normalizedBusinessType, now());
+    db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)`).run(now());
 
     const hashedPassword = bcrypt.hashSync('admin123', 10);
     const ownerId = uuidv4();
@@ -412,7 +499,7 @@ router.post('/setup/seed', (req: Request, res: Response) => {
       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
     `).run(ownerId, 'Owner', 'admin@flo.local', hashedPassword, 'owner', 1, now(), now());
 
-    if (business_type === 'restaurant') {
+    if (normalizedBusinessType === 'restaurant') {
       const cats = [
         ['cat-1', 'Starters', '#FF6B6B', '🍔', 1],
         ['cat-2', 'Main Course', '#4ECDC4', '🍛', 2],
@@ -439,7 +526,7 @@ router.post('/setup/seed', (req: Request, res: Response) => {
       for (const [id, number, capacity] of tables) {
         db.prepare(`INSERT OR IGNORE INTO tables (id, number, capacity) VALUES (?, ?, ?)`).run(id, number, capacity);
       }
-    } else if (business_type === 'retail') {
+    } else if (normalizedBusinessType === 'retail') {
       const cats = [
         ['cat-1', 'Electronics', '#3B82F6', '📱', 1],
         ['cat-2', 'Clothing', '#8B5CF6', '👕', 2],
@@ -459,7 +546,7 @@ router.post('/setup/seed', (req: Request, res: Response) => {
       for (const [id, catId, name, price, sort] of products) {
         db.prepare(`INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active) VALUES (?, ?, ?, ?, ?, 1)`).run(id, catId, name, price, sort);
       }
-    } else if (business_type === 'salon') {
+    } else if (normalizedBusinessType === 'salon') {
       const cats = [
         ['cat-1', 'Hair', '#EC4899', '✂️', 1],
         ['cat-2', 'Facial', '#F59E0B', '💆', 2],

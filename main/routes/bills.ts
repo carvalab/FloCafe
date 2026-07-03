@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, generateBillNumber, now, withTxn } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
+import { cloudSync } from '../services/cloud-sync';
 
 const router = Router();
 
@@ -252,6 +253,9 @@ router.post('/:id/payment', (req: Request, res: Response) => {
     });
 
     if (paymentStatus === 'paid') notifyKdsUpdate();
+    if (paymentStatus === 'paid' && (result.bill as any)?.id) {
+      cloudSync.recordBillPaid((result.bill as any).id);
+    }
 
     res.json(result);
   } catch (error: any) {

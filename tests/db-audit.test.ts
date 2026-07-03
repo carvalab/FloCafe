@@ -6,7 +6,7 @@
  *   - Orphaned foreign keys on every relation we care about
  *   - Missing/empty/NULL ids on every table with a PRIMARY KEY
  *   - Duplicate ids (shouldn't happen under PK, but verify)
- *   - Missing seed rows (default owner, settings, schema_version)
+ *   - First-run/setup sanity (owner after setup, required settings, PRAGMA user_version)
  *
  * Usage:
  *   npm run test:db-audit
@@ -94,11 +94,10 @@ for (const dbPath of targets) {
   console.log('   Tables found: ' + tables.length);
   console.log('   ' + tables.join(', '));
 
-  const schemaVersionRow = tableExists('settings')
-    ? db.prepare(`SELECT value FROM settings WHERE key='schema_version'`).get() as any
-    : null;
-  if (schemaVersionRow) ok('schema_version = ' + schemaVersionRow.value);
-  else fail('settings.schema_version missing');
+  const userVersionRow = db.prepare('PRAGMA user_version').get() as any;
+  const userVersion = Number(userVersionRow?.user_version || 0);
+  if (userVersion > 0) ok('PRAGMA user_version = ' + userVersion);
+  else warn('PRAGMA user_version is 0');
 
   section('SQLite built-in integrity_check');
   const integrity = db.prepare('PRAGMA integrity_check').all() as any[];
@@ -186,26 +185,34 @@ for (const dbPath of targets) {
 
   section('Seed data sanity');
   if (tableExists('users')) {
-    const owners = count(`SELECT COUNT(*) FROM users WHERE role = 'owner' AND is_active = 1`);
-    if (owners === 0) fail('no active owner user — login will be impossible');
-    else ok(owners + ' active owner user(s)');
+    const totalUsers = count(`SELECT COUNT(*) FROM users`);
+    if (totalUsers === 0) {
+      ok('first-run setup pending: no users yet');
+    } else {
+      const owners = count(`SELECT COUNT(*) FROM users WHERE role = 'owner' AND is_active = 1`);
+      if (owners === 0) fail('no active owner user — login will be impossible');
+      else ok(owners + ' active owner user(s)');
 
-    const noEmail = count(`SELECT COUNT(*) FROM users WHERE email IS NULL OR email = ''`);
-    if (noEmail > 0) warn(noEmail + ' user(s) without email');
+      const noEmail = count(`SELECT COUNT(*) FROM users WHERE email IS NULL OR email = ''`);
+      if (noEmail > 0) warn(noEmail + ' user(s) without email');
 
-    const noPassword = count(`SELECT COUNT(*) FROM users WHERE password IS NULL OR password = ''`);
-    if (noPassword > 0) fail(noPassword + ' user(s) without password hash');
+      const noPassword = count(`SELECT COUNT(*) FROM users WHERE password IS NULL OR password = ''`);
+      if (noPassword > 0) fail(noPassword + ' user(s) without password hash');
+    }
   }
 
   if (tableExists('printers')) {
+    const printerCount = count(`SELECT COUNT(*) FROM printers`);
     const defaults = count(`SELECT COUNT(*) FROM printers WHERE is_default = 1`);
-    if (defaults === 0) warn('no default printer configured');
+    if (printerCount === 0) ok('no printer configured yet');
+    else if (defaults === 0) warn('no default printer configured');
     else if (defaults > 1) fail(defaults + ' printers marked as default (expect exactly 1)');
     else ok('exactly 1 default printer');
   }
 
   if (tableExists('settings')) {
-    const required = ['business_name', 'currency', 'timezone', 'schema_version'];
+    const setupPending = tableExists('users') && count(`SELECT COUNT(*) FROM users`) === 0;
+    const required = setupPending ? ['currency', 'timezone'] : ['business_name', 'currency', 'timezone'];
     for (const key of required) {
       const r = db.prepare(`SELECT value FROM settings WHERE key = ?`).get(key) as any;
       if (!r || r.value === null || r.value === '') warn('settings missing required key: ' + key);

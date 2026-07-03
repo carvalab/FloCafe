@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn } from '../db';
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
+import { cloudSync } from '../services/cloud-sync';
 
 const router = Router();
 
@@ -205,6 +206,7 @@ router.post('/', (req: Request, res: Response) => {
     });
 
     notifyKdsUpdate();
+    cloudSync.recordOrderChanged(order.id, 'order.created');
 
     if (customer_id) {
       try {
@@ -321,6 +323,8 @@ router.post('/:id/items', (req: Request, res: Response) => {
       return { updatedOrder, updatedItems };
     });
 
+    cloudSync.recordOrderChanged(req.params.id, 'order.updated');
+
     res.json({ order: Object.assign({}, updatedOrder, { items: updatedItems }) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -405,6 +409,8 @@ router.patch('/:id/status', (req: Request, res: Response) => {
       const table = tableRow2 ? { ...tableRow2, name: tableRow2.number } : null;
       return { updatedOrder, orderItems, table };
     });
+
+    cloudSync.recordOrderChanged(req.params.id, `order.${status}`);
 
     res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table }) });
   } catch (error: any) {

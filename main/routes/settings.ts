@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
+import { cloudSync, DEFAULT_CLOUD_SERVER_URL, normalizeCloudServerUrl } from '../services/cloud-sync';
 
 const router = Router();
 
@@ -18,8 +19,39 @@ function upsertSettings(db: ReturnType<typeof getDatabase>, entries: Record<stri
     ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
   `);
   for (const [key, val] of Object.entries(entries)) {
-    if (val !== undefined) stmt.run(key, String(val), now());
+    if (val !== undefined) stmt.run(key, val === null ? '' : String(val), now());
   }
+}
+
+const SENSITIVE_SETTING_KEYS = new Set([
+  'jwt_secret',
+  'cloud_api_key',
+  'cloud_device_secret',
+]);
+
+function maskSetting(key: string, value: string): string {
+  if (!SENSITIVE_SETTING_KEYS.has(key)) return value;
+  return value ? `****${value.slice(-4)}` : '';
+}
+
+function publicSettingsShape(settings: Record<string, string>): Record<string, string> {
+  const publicSettings: Record<string, string> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    publicSettings[key] = maskSetting(key, value);
+  }
+  return publicSettings;
+}
+
+function boolFlag(value: unknown): string | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value === 'string') {
+    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()) ? '1' : '0';
+  }
+  return value ? '1' : '0';
+}
+
+function isMaskedSecret(value: unknown): boolean {
+  return typeof value === 'string' && value.startsWith('****');
 }
 
 function businessShape(s: Record<string, string>) {
@@ -139,16 +171,7 @@ router.put('/loyalty', (req: Request, res: Response) => {
 
 router.get('/cloud', (req: Request, res: Response) => {
   try {
-    const s = getAllSettings(getDatabase());
-    // Mask the API key — only last 4 chars visible. Full key accepted via PUT.
-    const rawKey = s.cloud_api_key || '';
-    res.json({
-      cloud_api_key: rawKey ? `****${rawKey.slice(-4)}` : null,
-      cloud_store_id: s.cloud_store_id || null,
-      cloud_sync_enabled: s.cloud_sync_enabled === '1',
-      cloud_orders_enabled: s.cloud_orders_enabled === '1',
-      cloud_last_sync: s.cloud_last_sync || null,
-    });
+    res.json(cloudSync.getStatus());
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -156,17 +179,59 @@ router.get('/cloud', (req: Request, res: Response) => {
 
 router.put('/cloud', (req: Request, res: Response) => {
   try {
-    const { cloud_api_key, cloud_store_id, cloud_sync_enabled, cloud_orders_enabled } = req.body;
+    const {
+      cloud_server_url,
+      cloud_api_key,
+      cloud_store_id,
+      cloud_sync_enabled,
+      cloud_orders_enabled,
+      cloud_reports_enabled,
+      cloud_command_polling_enabled,
+    } = req.body;
     const db = getDatabase();
-    upsertSettings(db, {
-      cloud_api_key: cloud_api_key || null,
-      cloud_store_id: cloud_store_id || null,
-      cloud_sync_enabled: cloud_sync_enabled ? '1' : '0',
-      cloud_orders_enabled: cloud_orders_enabled ? '1' : '0',
-    });
-    res.json({ ok: true });
+    const updates: Record<string, string | undefined> = {
+      cloud_store_id: cloud_store_id === undefined ? undefined : String(cloud_store_id || ''),
+      cloud_sync_enabled: boolFlag(cloud_sync_enabled),
+      cloud_orders_enabled: boolFlag(cloud_orders_enabled),
+      cloud_reports_enabled: boolFlag(cloud_reports_enabled),
+      cloud_command_polling_enabled: boolFlag(cloud_command_polling_enabled),
+    };
+
+    if (cloud_server_url !== undefined) {
+      updates.cloud_server_url = normalizeCloudServerUrl(cloud_server_url || DEFAULT_CLOUD_SERVER_URL);
+    }
+    if (cloud_api_key !== undefined && !isMaskedSecret(cloud_api_key)) {
+      updates.cloud_api_key = String(cloud_api_key || '');
+    }
+
+    upsertSettings(db, updates);
+    cloudSync.reload();
+    res.json(cloudSync.getStatus());
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/cloud/register', async (req: Request, res: Response) => {
+  try {
+    if (req.body?.cloud_server_url !== undefined) {
+      upsertSettings(getDatabase(), {
+        cloud_server_url: normalizeCloudServerUrl(req.body.cloud_server_url || DEFAULT_CLOUD_SERVER_URL),
+      });
+    }
+    const result = await cloudSync.register();
+    res.json(result);
+  } catch (error: any) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+router.post('/cloud/test', async (_req: Request, res: Response) => {
+  try {
+    const result = await cloudSync.testConnection();
+    res.json(result);
+  } catch (error: any) {
+    res.status(502).json({ error: error.message });
   }
 });
 
@@ -187,7 +252,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
 router.get('/', (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
-    res.json({ settings: s });
+    res.json({ settings: publicSettingsShape(s) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -195,6 +260,9 @@ router.get('/', (req: Request, res: Response) => {
 
 router.get('/:key', (req: Request, res: Response) => {
   try {
+    if (SENSITIVE_SETTING_KEYS.has(req.params.key)) {
+      return res.status(403).json({ error: 'This setting is sensitive and cannot be read directly' });
+    }
     const db = getDatabase();
     const setting = db.prepare('SELECT * FROM settings WHERE key = ?').get(req.params.key);
     if (!setting) {

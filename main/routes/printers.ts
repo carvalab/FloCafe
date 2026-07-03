@@ -184,8 +184,7 @@ router.post('/:id/test', async (req: Request, res: Response) => {
         success = await printViaNetwork(printer.ip_address, printer.port || 9100, testData);
         break;
       case 'usb':
-        // node-thermal-printer auto-detects USB printers, no path needed
-        success = await printViaUSB(testData, undefined);
+        success = await printViaUSB(testData, printer.name);
         break;
       case 'webusb':
         // WebUSB is handled entirely in the browser; return the bytes for the frontend to send

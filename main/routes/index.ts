@@ -19,6 +19,7 @@ import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
 import { menuCsvRoutes } from './menu-csv';
 import { getDatabase, now, parseItemJson } from '../db';
+import { cloudSync } from '../services/cloud-sync';
 
 export function registerRoutes(app: Express): void {
   // Auth routes
@@ -148,6 +149,7 @@ export function registerRoutes(app: Express): void {
 
       const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+      cloudSync.recordOrderChanged(orderId, 'order.item_cancelled');
 
       res.json({ order: { ...updatedOrder, items } });
     } catch (error: any) {
@@ -200,6 +202,7 @@ export function registerRoutes(app: Express): void {
 
       const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+      cloudSync.recordOrderChanged(orderId, 'order.item_restored');
 
       res.json({ order: { ...updatedOrder, items } });
     } catch (error: any) {

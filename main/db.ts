@@ -3,9 +3,40 @@ import * as path from 'path';
 import { app } from 'electron';
 import * as fs from 'fs';
 import * as bcrypt from 'bcryptjs';
+import * as crypto from 'crypto';
 
 let db: Database.Database;
 let dbHealthError: string | null = null;
+
+const DEFAULT_CLOUD_SERVER_URL = 'https://blue.flopos.com/';
+
+function randomSecret(): string {
+  return crypto.randomBytes(32).toString('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '');
+}
+
+function sha256Hex(value: string): string {
+  return crypto.createHash('sha256').update(value).digest('hex');
+}
+
+function getSettingValue(key: string): string | null {
+  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string | null } | undefined;
+  return row?.value ?? null;
+}
+
+function upsertSetting(key: string, value: string): void {
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run(key, value, now());
+}
+
+function insertSettingIfMissing(key: string, value: string): void {
+  db.prepare('INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES (?, ?, ?)')
+    .run(key, value, now());
+}
 
 export function getDbHealth(): { ok: boolean; error?: string } {
   if (!db) return { ok: false, error: 'Database not initialized' };
@@ -44,6 +75,24 @@ export function initDatabase(): void {
 
   runStartupIntegrityCheck();
   autoRepairPaymentDetails();
+  autoRepairDefaultPrinter();
+}
+
+export function ensureCloudIdentity(): { posHash: string; deviceSecret: string } {
+  let deviceSecret = getSettingValue('cloud_device_secret');
+  if (!deviceSecret) {
+    deviceSecret = randomSecret();
+    upsertSetting('cloud_device_secret', deviceSecret);
+  }
+
+  let posHash = getSettingValue('cloud_pos_hash');
+  if (!posHash) {
+    posHash = `pos_${sha256Hex(deviceSecret).slice(0, 40)}`;
+    upsertSetting('cloud_pos_hash', posHash);
+  }
+
+  insertSettingIfMissing('cloud_device_created_at', now());
+  return { posHash, deviceSecret };
 }
 
 /** Atomic multi-statement mutation. Use for anything touching >1 row or >1 table. */
@@ -132,6 +181,35 @@ function autoRepairPaymentDetails(): void {
     console.log(`[DB] auto-repaired payment_details on ${toFix.length} bill(s)`);
   } catch (err: any) {
     console.error('[DB] autoRepairPaymentDetails failed:', err.message);
+  }
+}
+
+/** Keep printer selection deterministic if an older install ended up with multiple defaults. */
+function autoRepairDefaultPrinter(): void {
+  try {
+    const defaults = db.prepare(`
+      SELECT id FROM printers
+      WHERE is_default = 1
+      ORDER BY CASE WHEN id = 'printer-1' AND name = 'Thermal Printer' THEN 1 ELSE 0 END ASC,
+               COALESCE(updated_at, created_at, '') DESC,
+               COALESCE(created_at, '') DESC,
+               name COLLATE NOCASE ASC,
+               id ASC
+    `).all() as { id: string }[];
+
+    if (defaults.length <= 1) return;
+
+    const keepId = defaults[0].id;
+    db.prepare(`
+      UPDATE printers
+      SET is_default = CASE WHEN id = ? THEN 1 ELSE 0 END,
+          updated_at = CASE WHEN id = ? THEN updated_at ELSE ? END
+      WHERE is_default = 1
+    `).run(keepId, keepId, now());
+
+    console.log(`[DB] auto-repaired default printers; kept ${keepId}`);
+  } catch (err: any) {
+    console.error('[DB] autoRepairDefaultPrinter failed:', err.message);
   }
 }
 
@@ -369,7 +447,7 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     name: 'initial_schema',
     up: () => {
       createSchema();
-      seedData();
+      seedInstallDefaults();
     },
   },
   {
@@ -378,7 +456,12 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     up: () => {
       // Migrate from plaintext PINs to hashed PINs.
       // New installs going forward store only pin_hash.
-      db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT`);
+      const userColumns = getColumns(db, 'users');
+      if (!userColumns.includes('pin_hash')) {
+        db.exec(`ALTER TABLE users ADD COLUMN pin_hash TEXT`);
+      }
+
+      if (!userColumns.includes('pin')) return;
 
       const usersWithPin = db.prepare('SELECT id, pin FROM users WHERE pin IS NOT NULL').all() as { id: string; pin: string }[];
       for (const user of usersWithPin) {
@@ -389,6 +472,14 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
         db.prepare('UPDATE users SET pin_hash = ?, pin = NULL WHERE id = ?')
           .run(bcrypt.hashSync(pin, 10), user.id);
       }
+    },
+  },
+  {
+    version: 3,
+    name: 'cloud_identity_and_outbox',
+    up: () => {
+      createCloudSyncSchema();
+      seedCloudSyncDefaults();
     },
   },
 ];
@@ -691,11 +782,53 @@ function createSchema(): void {
   `);
 }
 
-function seedData(): void {
+function createCloudSyncSchema(): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS cloud_sync_outbox (
+      id TEXT PRIMARY KEY,
+      event_type TEXT NOT NULL,
+      entity_type TEXT,
+      entity_id TEXT,
+      payload TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending'
+        CHECK (status IN ('pending', 'sending', 'delivered', 'failed')),
+      attempt_count INTEGER NOT NULL DEFAULT 0,
+      next_attempt_at TEXT,
+      last_error TEXT,
+      delivered_at TEXT,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_cloud_sync_outbox_status
+      ON cloud_sync_outbox(status, next_attempt_at, created_at);
+    CREATE INDEX IF NOT EXISTS idx_cloud_sync_outbox_entity
+      ON cloud_sync_outbox(entity_type, entity_id);
+  `);
+}
+
+function seedCloudSyncDefaults(): void {
+  createCloudSyncSchema();
+
+  const serverUrl = getSettingValue('cloud_server_url');
+  if (!serverUrl) upsertSetting('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
+
+  insertSettingIfMissing('cloud_sync_enabled', '0');
+  insertSettingIfMissing('cloud_orders_enabled', '0');
+  insertSettingIfMissing('cloud_reports_enabled', '0');
+  insertSettingIfMissing('cloud_command_polling_enabled', '0');
+  insertSettingIfMissing('cloud_connected', 'false');
+  insertSettingIfMissing('cloud_registration_status', 'unregistered');
+
+  ensureCloudIdentity();
+}
+
+function seedInstallDefaults(): void {
   const insert = (key: string, value: string) =>
     db.prepare('INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)').run(key, value);
 
-  insert('business_name', 'Shop');
+  insert('business_name', '');
+  insert('business_type', 'restaurant');
   insert('country', 'IN');
   insert('currency', 'INR');
   insert('currency_symbol', '₹');
@@ -703,86 +836,25 @@ function seedData(): void {
   insert('address', '');
   insert('phone', '');
   insert('email', '');
+  insert('business_address', '');
+  insert('business_phone', '');
   insert('tax_registered', 'false');
   insert('gstin', '');
   insert('state_code', '');
   insert('tax_scheme', 'regular');
   insert('billing_type', 'postpaid');
   insert('loyalty_expiry_days', '365');
-  insert('cloud_server_url', '');
+  insert('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
   insert('cloud_connected', 'false');
+  insert('cloud_sync_enabled', '0');
+  insert('cloud_orders_enabled', '0');
+  insert('cloud_reports_enabled', '0');
+  insert('cloud_command_polling_enabled', '0');
+  insert('cloud_registration_status', 'unregistered');
 
-  // Default owner account
-  const hashedPassword = bcrypt.hashSync('admin123', 10);
-  db.prepare(`
-    INSERT OR IGNORE INTO users (id, name, email, password, role)
-    VALUES (?, ?, ?, ?, ?)
-  `).run('user-1', 'Owner', 'admin@flo.local', hashedPassword, 'owner');
+  seedCloudSyncDefaults();
 
-  // Default KDS/Chef accounts
-  const chefPassword = bcrypt.hashSync('chef123', 10);
-  db.prepare(`
-    INSERT OR IGNORE INTO users (id, name, email, password, role)
-    VALUES (?, ?, ?, ?, ?)
-  `).run('user-2', 'Chef', 'chef@flo.local', chefPassword, 'chef');
-
-  db.prepare(`
-    INSERT OR IGNORE INTO users (id, name, email, password, role)
-    VALUES (?, ?, ?, ?, ?)
-  `).run('user-3', 'Kitchen Manager', 'kitchen@flo.local', chefPassword, 'manager');
-
-  // Default printer (will be detected on first run)
-  db.prepare(`
-    INSERT OR IGNORE INTO printers (id, name, connection_type, paper_width, is_default)
-    VALUES (?, ?, ?, ?, ?)
-  `).run('printer-1', 'Thermal Printer', 'usb', '80mm', 1);
-
-  // Sample categories
-  const cats = [
-    ['cat-1', 'Food', '#FF6B6B', '🍔', 1],
-    ['cat-2', 'Beverages', '#4ECDC4', '🥤', 2],
-    ['cat-3', 'Desserts', '#FFE66D', '🍰', 3],
-  ];
-  for (const [id, name, color, icon, sort] of cats) {
-    db.prepare(`
-      INSERT OR IGNORE INTO categories (id, name, color, icon, sort_order)
-      VALUES (?, ?, ?, ?, ?)
-    `).run(id, name, color, icon, sort);
-  }
-
-  // Sample products
-  const products = [
-    ['prod-1', 'cat-1', 'Cheeseburger', 250.00, 1],
-    ['prod-2', 'cat-1', 'Veggie Wrap', 180.00, 2],
-    ['prod-3', 'cat-1', 'Chicken Sandwich', 220.00, 3],
-    ['prod-4', 'cat-1', 'French Fries', 80.00, 4],
-    ['prod-5', 'cat-2', 'Cola', 60.00, 1],
-    ['prod-6', 'cat-2', 'Fresh Lime Soda', 70.00, 2],
-    ['prod-7', 'cat-2', 'Mango Lassi', 90.00, 3],
-    ['prod-8', 'cat-2', 'Mineral Water', 30.00, 4],
-    ['prod-9', 'cat-3', 'Chocolate Brownie', 120.00, 1],
-    ['prod-10', 'cat-3', 'Ice Cream Scoop', 80.00, 2],
-  ];
-  for (const [id, catId, name, price, sort] of products) {
-    db.prepare(`
-      INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active)
-      VALUES (?, ?, ?, ?, ?, 1)
-    `).run(id, catId, name, price, sort);
-  }
-
-  // Sample tables
-  const tables = [
-    ['tbl-1', 'T1', 4], ['tbl-2', 'T2', 4], ['tbl-3', 'T3', 6],
-    ['tbl-4', 'T4', 2], ['tbl-5', 'T5', 4], ['tbl-6', 'T6', 8],
-  ];
-  for (const [id, number, capacity] of tables) {
-    db.prepare(`
-      INSERT OR IGNORE INTO tables (id, number, capacity)
-      VALUES (?, ?, ?)
-    `).run(id, number, capacity);
-  }
-
-  console.log('[DB] Seed data loaded');
+  console.log('[DB] Install defaults loaded; first-run setup pending');
 }
 
 const SHORT_ID_CHARS = 'abcdefghijklmnopqrstuvwxyz0123456789';

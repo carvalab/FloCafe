@@ -27,11 +27,12 @@
     "pack": "electron-builder --dir",
     "start": "electron .",
     "rebuild": "HOME=~/.electron-gyp node-gyp rebuild --target=$(node -p \"require('./node_modules/electron/package.json').version\") --arch=$(node -p \"process.arch\") --dist-url=https://electronjs.org/headers --runtime=electron --directory node_modules/better-sqlite3",
-    "test": "npm run test:backup && npm run test:printer && npm run test:db-audit",
-    "test:backup": "npx -y ts-node --transpile-only -P tests/tsconfig.json tests/backup-restore.test.ts",
-    "test:printer": "npx -y ts-node --transpile-only -P tests/tsconfig.json tests/printer.test.ts",
-    "test:db-audit": "npx -y ts-node --transpile-only -P tests/tsconfig.json tests/db-audit.test.ts",
-    "repair:payments": "npx -y ts-node --transpile-only -P tests/tsconfig.json tests/repair-payment-details.ts"
+    "test": "npm run test:first-run && npm run test:backup && npm run test:printer && npm run test:db-audit",
+    "test:first-run": "node tests/run-electron-node-test.cjs tests/first-run-setup.test.ts",
+    "test:backup": "ts-node --transpile-only -P tests/tsconfig.json tests/backup-restore.test.ts",
+    "test:printer": "ts-node --transpile-only -P tests/tsconfig.json tests/printer.test.ts",
+    "test:db-audit": "ts-node --transpile-only -P tests/tsconfig.json tests/db-audit.test.ts",
+    "repair:payments": "ts-node --transpile-only -P tests/tsconfig.json tests/repair-payment-details.ts"
   },
   "author": {
     "name": "Flo",
@@ -53,6 +54,7 @@
     "@types/ws": "^8.5.10",
     "electron": "^31.7.7",
     "electron-builder": "^26.8.1",
+    "ts-node": "^10.9.2",
     "typescript": "^5.4.5"
   },
   "dependencies": {
@@ -200,7 +202,13 @@
     },
     "snap": {
       "confinement": "strict",
-      "plugs": ["cups-control", "avahi-observe", "avahi-control", "raw-usb", "removable-media"],
+      "plugs": [
+        "cups-control",
+        "avahi-observe",
+        "avahi-control",
+        "raw-usb",
+        "removable-media"
+      ],
       "environment": {
         "TMPDIR": "$XDG_RUNTIME_DIR"
       }

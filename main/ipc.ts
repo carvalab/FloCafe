@@ -16,6 +16,17 @@ const ALLOWED_IPC_KEYS = new Set([
   'printer_method', 'paper_size', 'bill_template',
 ]);
 
+const SENSITIVE_SETTING_KEYS = new Set([
+  'jwt_secret',
+  'cloud_api_key',
+  'cloud_device_secret',
+]);
+
+function maskSetting(key: string, value: string): string {
+  if (!SENSITIVE_SETTING_KEYS.has(key)) return value;
+  return value ? `****${value.slice(-4)}` : '';
+}
+
 export function registerIpcHandlers(): void {
   // Database backup/restore
   ipcMain.handle('backup-database', async () => {
@@ -121,12 +132,7 @@ export function registerIpcHandlers(): void {
       const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
       const settings: Record<string, string> = {};
       rows.forEach((row) => {
-        // Mask cloud API key — same as HTTP GET /api/settings/cloud
-        if (row.key === 'cloud_api_key' && row.value) {
-          settings[row.key] = `****${row.value.slice(-4)}`;
-        } else {
-          settings[row.key] = row.value;
-        }
+        settings[row.key] = maskSetting(row.key, row.value);
       });
       return settings;
     } catch (error: any) {
