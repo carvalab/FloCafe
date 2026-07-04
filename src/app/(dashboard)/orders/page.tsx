@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -29,6 +29,8 @@ export default function OrdersPage() {
   const [filter, setFilter] = useState<FilterType>('active');
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
+  const [printingBillId, setPrintingBillId] = useState<number | null>(null);
+  const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -83,6 +85,19 @@ export default function OrdersPage() {
   const handlePaymentComplete = () => {
     setPaymentBill(null);
     fetchOrders();
+  };
+
+  const handlePrint = async (billId: number) => {
+    setPrintingBillId(billId);
+    try {
+      await api.post(`/bills/${billId}/print`, { print_type: 'receipt' });
+      toast.success('Receipt printed successfully');
+    } catch {
+      toast.error('Failed to print receipt');
+    } finally {
+      setPrintingBillId(null);
+      setConfirmPrintBillId(null);
+    }
   };
 
   const deleteItem = async (orderId: number, itemId: number) => {
@@ -269,16 +284,29 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Footer with actions */}
-                {showCheckout(order) && (
-                  <div className="px-4 py-3 border-t border-gray-100 flex justify-end">
-                    <Button
-                      onClick={() => handleCheckout(order.id)}
-                      disabled={generatingBill === order.id}
-                      size="sm"
-                    >
-                      <CreditCard size={14} className="mr-1.5" />
-                      {generatingBill === order.id ? 'Generating...' : 'Checkout'}
-                    </Button>
+                {(showCheckout(order) || order.bill) && (
+                  <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+                    {order.bill && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setConfirmPrintBillId(order.bill!.id)}
+                        disabled={printingBillId === order.bill.id}
+                        size="sm"
+                      >
+                        <Printer size={14} className="mr-1.5" />
+                        {printingBillId === order.bill.id ? 'Printing...' : 'Print'}
+                      </Button>
+                    )}
+                    {showCheckout(order) && (
+                      <Button
+                        onClick={() => handleCheckout(order.id)}
+                        disabled={generatingBill === order.id}
+                        size="sm"
+                      >
+                        <CreditCard size={14} className="mr-1.5" />
+                        {generatingBill === order.id ? 'Generating...' : 'Checkout'}
+                      </Button>
+                    )}
                   </div>
                 )}
               </div>
@@ -295,6 +323,33 @@ export default function OrdersPage() {
           onClose={() => setPaymentBill(null)}
           onPaid={handlePaymentComplete}
         />
+      )}
+
+      {/* Print Confirmation Modal */}
+      {confirmPrintBillId !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-2">Print Receipt</h2>
+            <p className="text-sm text-gray-600 mb-6">Are you sure you want to print this receipt?</p>
+            <div className="flex justify-end gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setConfirmPrintBillId(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => handlePrint(confirmPrintBillId)}
+                disabled={printingBillId === confirmPrintBillId}
+              >
+                <Printer size={14} className="mr-1.5" />
+                {printingBillId === confirmPrintBillId ? 'Printing...' : 'Confirm Print'}
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
