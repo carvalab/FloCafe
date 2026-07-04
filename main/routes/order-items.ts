@@ -19,8 +19,14 @@ function getRoleFromToken(req: Request): string | null {
 }
 
 // PATCH /api/order-items/:id/status — update a single item's kitchen status
+// Only chef, manager, or owner can update item status
 router.patch('/:id/status', (req: Request, res: Response) => {
   try {
+    const role = getRoleFromToken(req);
+    if (!role || !['chef', 'manager', 'owner'].includes(role)) {
+      return res.status(403).json({ error: 'Only chef, manager, or owner can update item status' });
+    }
+
     const { status } = req.body;
     const validStatuses = ['pending', 'preparing', 'ready', 'served'];
 

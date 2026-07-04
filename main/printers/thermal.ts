@@ -108,7 +108,7 @@ async function detectMacOSPrinters(): Promise<PrinterInfo[]> {
 
 async function getMacOSPrinterStatus(name: string): Promise<'idle' | 'printing' | 'offline'> {
   try {
-    const out = execSync(`lpstat -p "${name}" 2>/dev/null`, { encoding: 'utf8' }).toLowerCase();
+    const out = execFileSync('lpstat', ['-p', name], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] }).toLowerCase();
     if (out.includes('disabled')) return 'offline';
     if (out.includes('printing') || out.includes('now printing')) return 'printing';
     return 'idle';
@@ -122,7 +122,7 @@ async function getMacOSPrinterDetails(name: string): Promise<{ make: string; mod
   let model = 'Thermal Printer';
 
   try {
-    const info = execSync(`lpoptions -p "${name}" -l 2>/dev/null`, { encoding: 'utf8' });
+    const info = execFileSync('lpoptions', ['-p', name, '-l'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
 
     const lower = info.toLowerCase();
 
@@ -190,7 +190,7 @@ function extractEpsonModel(name: string, info: string): string {
 
 async function isMacOSDefaultPrinter(name: string): Promise<boolean> {
   try {
-    const defaultPrinter = execSync('lpstat -d 2>/dev/null', { encoding: 'utf8' });
+    const defaultPrinter = execFileSync('lpstat', ['-d'], { encoding: 'utf8', stdio: ['pipe', 'pipe', 'pipe'] });
     return defaultPrinter.includes(name);
   } catch {
     return false;
