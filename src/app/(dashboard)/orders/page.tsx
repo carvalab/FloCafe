@@ -33,6 +33,9 @@ export default function OrdersPage() {
   const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelFreeTable, setCancelFreeTable] = useState(true);
+  const [cancelOverridePin, setCancelOverridePin] = useState('');
   const [loyaltyEnabled, setLoyaltyEnabled] = useState<Record<number, boolean>>({});
   const [discountModalOrder, setDiscountModalOrder] = useState<Order | null>(null);
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
@@ -248,17 +251,13 @@ export default function OrdersPage() {
   const handleCancelOrder = async () => {
     if (!cancelModalOrder) return;
 
-    const reason = (document.getElementById('cancelReason') as HTMLInputElement)?.value;
-    const freeTable = (document.getElementById('freeTable') as HTMLInputElement)?.checked;
-    const overridePin = (document.getElementById('overridePin') as HTMLInputElement)?.value;
-
     setCancellingOrderId(cancelModalOrder.id);
     try {
       await api.patch(`/orders/${cancelModalOrder.id}/status`, {
         status: 'cancelled',
-        reason: reason || undefined,
-        free_table: freeTable || false,
-        override_pin: overridePin || undefined,
+        reason: cancelReason || undefined,
+        free_table: cancelFreeTable,
+        override_pin: cancelOverridePin || undefined,
       });
       toast.success('Order cancelled successfully');
       fetchOrders();
@@ -267,6 +266,9 @@ export default function OrdersPage() {
     } finally {
       setCancellingOrderId(null);
       setCancelModalOrder(null);
+      setCancelReason('');
+      setCancelFreeTable(true);
+      setCancelOverridePin('');
     }
   };
 
@@ -330,6 +332,7 @@ export default function OrdersPage() {
           <option value="dine_in">Dine In</option>
           <option value="takeaway">Takeaway</option>
           <option value="delivery">Delivery</option>
+          <option value="online">Online</option>
         </select>
 
         {/* Status filter */}
@@ -631,6 +634,8 @@ export default function OrdersPage() {
                 <input
                   id="cancelReason"
                   type="text"
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
                   placeholder="Enter reason for cancellation"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
@@ -641,6 +646,8 @@ export default function OrdersPage() {
                   <input
                     id="freeTable"
                     type="checkbox"
+                    checked={cancelFreeTable}
+                    onChange={(e) => setCancelFreeTable(e.target.checked)}
                     className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <label htmlFor="freeTable" className="text-sm text-gray-700">
@@ -657,6 +664,8 @@ export default function OrdersPage() {
                   <input
                     id="overridePin"
                     type="password"
+                    value={cancelOverridePin}
+                    onChange={(e) => setCancelOverridePin(e.target.value)}
                     placeholder="Enter manager PIN"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
@@ -758,19 +767,23 @@ export default function OrdersPage() {
               <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Subtotal</span>
-                  <span className="text-gray-900">{currency}{Number(discountModalOrder.total).toLocaleString()}</span>
+                  <span className="text-gray-900">{currency}{Number(discountModalOrder.subtotal).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Tax</span>
+                  <span className="text-gray-900">{currency}{Number(discountModalOrder.tax_amount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-purple-600">
                     Discount
                     {discountType === 'percentage' && discountValue > 0 && (
-                      <span className="text-gray-400 ml-1">({discountValue}%)</span>
+                      <span className="text-gray-400 ml-1">({discountValue}% on subtotal)</span>
                     )}
                   </span>
                   <span className="text-purple-600">
                     -{currency}{
                       discountType === 'percentage'
-                        ? (Number(discountModalOrder.total) * discountValue / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        ? (Number(discountModalOrder.subtotal) * discountValue / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                         : Number(discountValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     }
                   </span>
@@ -780,8 +793,8 @@ export default function OrdersPage() {
                   <span className="text-gray-900">
                     {currency}{
                       discountType === 'percentage'
-                        ? (Number(discountModalOrder.total) * (1 - discountValue / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : (Number(discountModalOrder.total) - discountValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        ? (Number(discountModalOrder.subtotal) * (1 - discountValue / 100) + Number(discountModalOrder.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : (Number(discountModalOrder.subtotal) - Number(discountValue) + Number(discountModalOrder.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     }
                   </span>
                 </div>

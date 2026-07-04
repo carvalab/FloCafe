@@ -88,6 +88,10 @@ export default function KdsPage() {
   }, []);
 
   const startRestPolling = useCallback(() => {
+    // Clear any existing interval first
+    if (restIntervalRef.current) {
+      clearInterval(restIntervalRef.current);
+    }
     setConnectionMode('rest');
     setConnected(true);
     fetchOrdersRest();
@@ -244,6 +248,11 @@ export default function KdsPage() {
         const parsed = JSON.parse(savedUser) as LoggedInUser;
         setUser(parsed);
         tryWebSocket(parsed.token);
+        // Fallback: set loading to false after 5 seconds if WebSocket doesn't connect
+        const loadingTimeout = setTimeout(() => {
+          setLoading(false);
+        }, 5000);
+        return () => clearTimeout(loadingTimeout);
       } catch {
         localStorage.removeItem('kds_user');
         setLoading(false);
