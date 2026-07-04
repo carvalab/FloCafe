@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -38,6 +38,11 @@ export default function OrdersPage() {
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState<string>('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterTable, setFilterTable] = useState('');
+  const [filterType, setFilterType] = useState('');
+  const [filterStatus, setFilterStatus] = useState('');
+  const [tables, setTables] = useState<any[]>([]);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -60,6 +65,18 @@ export default function OrdersPage() {
     return () => clearInterval(interval);
   }, []);
 
+  useEffect(() => {
+    const fetchTables = async () => {
+      try {
+        const { data } = await api.get('/tables');
+        setTables(data.tables || []);
+      } catch {
+        // Ignore error
+      }
+    };
+    fetchTables();
+  }, []);
+
   const isOrderPaid = (order: Order) => order.bill?.payment_status === 'paid';
 
   const getTimeSince = (dateStr: string) => {
@@ -70,9 +87,32 @@ export default function OrdersPage() {
   };
 
   const filteredOrders = orders.filter((order) => {
-    if (filter === 'all') return true;
-    if (filter === 'active') return !['completed', 'cancelled'].includes(order.status);
-    if (filter === 'unpaid') return order.bill && order.bill.payment_status !== 'paid';
+    // Tab filter
+    if (filter === 'active' && ['completed', 'cancelled'].includes(order.status)) return false;
+    if (filter === 'unpaid' && !(order.bill && order.bill.payment_status !== 'paid')) return false;
+
+    // Search by order number
+    if (searchQuery && !order.order_number.toLowerCase().includes(searchQuery.toLowerCase())) {
+      return false;
+    }
+    // Filter by table
+    if (filterTable && order.table_id !== filterTable) {
+      return false;
+    }
+    // Filter by type
+    if (filterType && order.type !== filterType) {
+      return false;
+    }
+    // Filter by status
+    if (filterStatus === 'active' && ['completed', 'cancelled'].includes(order.status)) {
+      return false;
+    }
+    if (filterStatus === 'completed' && order.status !== 'completed') {
+      return false;
+    }
+    if (filterStatus === 'cancelled' && order.status !== 'cancelled') {
+      return false;
+    }
     return true;
   });
 
@@ -233,6 +273,59 @@ export default function OrdersPage() {
             </button>
           ))}
         </div>
+      </div>
+
+      {/* Filter Bar */}
+      <div className="flex flex-wrap items-center gap-3 mb-4">
+        {/* Search by order number */}
+        <div className="relative flex-1 min-w-[200px]">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            placeholder="Search by order number..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand bg-white"
+          />
+        </div>
+
+        {/* Table filter */}
+        <select
+          value={filterTable}
+          onChange={(e) => setFilterTable(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+        >
+          <option value="">All Tables</option>
+          {tables.map((table: any) => (
+            <option key={table.id} value={String(table.id)}>
+              {table.name}
+            </option>
+          ))}
+        </select>
+
+        {/* Type filter */}
+        <select
+          value={filterType}
+          onChange={(e) => setFilterType(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+        >
+          <option value="">All Types</option>
+          <option value="dine_in">Dine In</option>
+          <option value="takeaway">Takeaway</option>
+          <option value="delivery">Delivery</option>
+        </select>
+
+        {/* Status filter */}
+        <select
+          value={filterStatus}
+          onChange={(e) => setFilterStatus(e.target.value)}
+          className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+        >
+          <option value="">All Statuses</option>
+          <option value="active">Active</option>
+          <option value="completed">Completed</option>
+          <option value="cancelled">Cancelled</option>
+        </select>
       </div>
 
       {/* Orders List */}
