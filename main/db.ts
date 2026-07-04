@@ -490,6 +490,23 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('max_item_notes_length', '100');
     },
   },
+  {
+    version: 5,
+    name: 'add_print_logs_table',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS print_logs (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          bill_id INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          printed_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          print_type TEXT DEFAULT 'receipt',
+          FOREIGN KEY (bill_id) REFERENCES bills(id),
+          FOREIGN KEY (user_id) REFERENCES users(id)
+        )
+      `);
+    },
+  },
 ];
 
 function runMigrations(): void {
