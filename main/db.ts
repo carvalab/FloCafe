@@ -482,6 +482,14 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       seedCloudSyncDefaults();
     },
   },
+  {
+    version: 4,
+    name: 'add_notes_limits_settings',
+    up: () => {
+      insertSettingIfMissing('max_order_notes_length', '200');
+      insertSettingIfMissing('max_item_notes_length', '100');
+    },
+  },
 ];
 
 function runMigrations(): void {

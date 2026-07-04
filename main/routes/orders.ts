@@ -4,6 +4,30 @@ import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 
+export function validateOrderNotes(notes: string | null | undefined): void {
+  if (!notes) return;
+  const db = getDatabase();
+  const maxLength = parseInt(
+    (db.prepare('SELECT value FROM settings WHERE key = ?').get('max_order_notes_length') as any)?.value || '200',
+    10,
+  );
+  if (notes.length > maxLength) {
+    throw new Error(`Order notes exceed maximum length of ${maxLength} characters`);
+  }
+}
+
+export function validateItemNotes(notes: string | null | undefined): void {
+  if (!notes) return;
+  const db = getDatabase();
+  const maxLength = parseInt(
+    (db.prepare('SELECT value FROM settings WHERE key = ?').get('max_item_notes_length') as any)?.value || '100',
+    10,
+  );
+  if (notes.length > maxLength) {
+    throw new Error(`Item notes exceed maximum length of ${maxLength} characters`);
+  }
+}
+
 const router = Router();
 
 function syncCustomerTagCounts(db: any, customerId: string, items: { product_id: string; quantity: number }[]) {
@@ -103,6 +127,11 @@ router.post('/', (req: Request, res: Response) => {
     }
 
     const db = getDatabase();
+
+    validateOrderNotes(special_instructions);
+    for (const item of items) {
+      validateItemNotes(item.special_instructions);
+    }
     const orderNumber = generateOrderNumber();
 
     // Get settings for tax calculation
@@ -238,6 +267,10 @@ router.post('/:id/items', (req: Request, res: Response) => {
     const { items } = req.body;
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
+    }
+
+    for (const item of items) {
+      validateItemNotes(item.special_instructions);
     }
 
     // Get settings
