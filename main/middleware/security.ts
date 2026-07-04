@@ -70,3 +70,20 @@ export function authRateLimit() {
     message: 'Too many authentication attempts. Please try again later.',
   });
 }
+
+/**
+ * Role-based authorization middleware.
+ * Must be used after requireAuth.
+ */
+export function requireRole(...roles: string[]) {
+  return (req: Request, res: Response, next: Function) => {
+    const user = (req as any).user;
+    if (!user) {
+      return res.status(401).json({ error: 'Authentication required' });
+    }
+    if (!roles.includes(user.role)) {
+      return res.status(403).json({ error: 'Insufficient permissions' });
+    }
+    next();
+  };
+}

@@ -4,6 +4,7 @@ import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { validateOrderNotes, validateItemNotes } from './orders-validation';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -341,9 +342,16 @@ router.post('/:id/items', (req: Request, res: Response) => {
       const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];
       let subtotal = 0;
       let totalTax = 0;
+      const allTaxBreakdowns: any[] = [];
       for (const item of orderItems) {
         subtotal += item.subtotal;
         totalTax += item.tax_amount;
+        if (item.tax_breakdown) {
+          try {
+            const breakdown = JSON.parse(item.tax_breakdown);
+            if (Array.isArray(breakdown)) allTaxBreakdowns.push(...breakdown);
+          } catch {}
+        }
       }
 
       const preRoundTotal = subtotal + totalTax + ((order as any).packaging_charge || 0);
@@ -351,8 +359,8 @@ router.post('/:id/items', (req: Request, res: Response) => {
       const roundOff = total - preRoundTotal;
 
       db.prepare(`
-        UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-      `).run(subtotal, totalTax, total, roundOff, now(), req.params.id);
+        UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+      `).run(subtotal, totalTax, JSON.stringify(allTaxBreakdowns), total, roundOff, now(), req.params.id);
 
       const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
       const updatedItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
@@ -489,7 +497,7 @@ router.patch('/:id/loyalty', (req: Request, res: Response) => {
   res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
 });
 
-router.patch('/:id/discount', (req: Request, res: Response) => {
+router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
@@ -554,7 +562,7 @@ router.patch('/:id/discount', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
+router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;

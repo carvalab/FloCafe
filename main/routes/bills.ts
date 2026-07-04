@@ -3,6 +3,7 @@ import { getDatabase, generateBillNumber, now, withTxn, getSettingValue } from '
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -172,9 +173,10 @@ router.post('/:id/payment', (req: Request, res: Response) => {
       ).get() as any)?.value;
       if (loyaltySetting === 'true') {
         const expiryRow = (db.prepare(
-          `SELECT value FROM settings WHERE key = 'loyalty_expiry_days'`
+          `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
         ).get() as any)?.value;
-        const expiryDays = parseInt(expiryRow || '365');
+        const expiryMonths = parseInt(expiryRow || '6');
+        const expiryDays = expiryMonths * 30;
         const expires = new Date();
         expires.setDate(expires.getDate() + expiryDays);
         loyaltyExpiresAt = expires.toISOString().slice(0, 19).replace('T', ' ');
@@ -265,7 +267,7 @@ router.post('/:id/payment', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/applyDiscount', (req: Request, res: Response) => {
+router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { type, value, reason } = req.body;
 
@@ -307,15 +309,17 @@ router.post('/:id/applyDiscount', (req: Request, res: Response) => {
       discountAmount = parseFloat(value);
     }
 
-    const newTotal = Math.max(0, bill.subtotal + bill.tax_amount + bill.delivery_charge + bill.packaging_charge - discountAmount + bill.round_off);
+    const preRoundTotal = Math.max(0, bill.subtotal + bill.tax_amount + bill.delivery_charge + bill.packaging_charge - discountAmount);
+    const newTotal = Math.round(preRoundTotal);
+    const newRoundOff = newTotal - preRoundTotal;
     const newBalance = newTotal - bill.paid_amount;
 
     const updatedBill = withTxn(() => {
       db.prepare(`
         UPDATE bills SET discount_amount = ?, discount_type = ?, discount_value = ?,
-          discount_reason = ?, total = ?, balance = ?, updated_at = ?
+          discount_reason = ?, total = ?, round_off = ?, balance = ?, updated_at = ?
         WHERE id = ?
-      `).run(discountAmount, type, value, reason || null, newTotal, newBalance, now(), req.params.id);
+      `).run(discountAmount, type, value, reason || null, newTotal, newRoundOff, newBalance, now(), req.params.id);
 
       db.prepare(`
         UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,

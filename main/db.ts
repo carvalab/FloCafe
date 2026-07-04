@@ -102,6 +102,10 @@ export function withTxn<T>(fn: () => T): T {
 
 /** Safely append an object to a JSON-array column. Creates the array if missing/invalid. */
 export function appendJsonArray(table: string, idColumn: string, idValue: any, column: string, value: any): void {
+  // Validate identifiers to prevent SQL injection
+  if (!isSafeIdentifier(table) || !isSafeIdentifier(idColumn) || !isSafeIdentifier(column)) {
+    throw new Error(`Invalid identifier: table=${table}, idColumn=${idColumn}, column=${column}`);
+  }
   const row = db.prepare(`SELECT ${column} AS v FROM ${table} WHERE ${idColumn} = ?`).get(idValue) as any;
   let arr: any[] = [];
   if (row && row.v) {
@@ -530,6 +534,13 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('discount_requires_approval', '0');
       insertSettingIfMissing('discount_max_percentage', '50');
       insertSettingIfMissing('discount_max_amount', '100');
+    },
+  },
+  {
+    version: 8,
+    name: 'add_loyalty_index',
+    up: () => {
+      db.exec('CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON loyalty_ledger(customer_id, type)');
     },
   },
 ];
