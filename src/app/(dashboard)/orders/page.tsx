@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -31,6 +31,8 @@ export default function OrdersPage() {
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
   const [printingBillId, setPrintingBillId] = useState<number | null>(null);
   const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -149,6 +151,31 @@ export default function OrdersPage() {
 
   const showCheckout = (order: Order) => {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
+  };
+
+  const handleCancelOrder = async () => {
+    if (!cancelModalOrder) return;
+
+    const reason = (document.getElementById('cancelReason') as HTMLInputElement)?.value;
+    const freeTable = (document.getElementById('freeTable') as HTMLInputElement)?.checked;
+    const overridePin = (document.getElementById('overridePin') as HTMLInputElement)?.value;
+
+    setCancellingOrderId(cancelModalOrder.id);
+    try {
+      await api.patch(`/orders/${cancelModalOrder.id}/status`, {
+        status: 'cancelled',
+        reason: reason || undefined,
+        free_table: freeTable || false,
+        override_pin: overridePin || undefined,
+      });
+      toast.success('Order cancelled successfully');
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to cancel order');
+    } finally {
+      setCancellingOrderId(null);
+      setCancelModalOrder(null);
+    }
   };
 
   return (
@@ -284,7 +311,7 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Footer with actions */}
-                {(showCheckout(order) || order.bill) && (
+                {(showCheckout(order) || order.bill || !['completed', 'cancelled'].includes(order.status)) && (
                   <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
                     {order.bill && (
                       <Button
@@ -305,6 +332,26 @@ export default function OrdersPage() {
                       >
                         <CreditCard size={14} className="mr-1.5" />
                         {generatingBill === order.id ? 'Generating...' : 'Checkout'}
+                      </Button>
+                    )}
+                    {!['completed', 'cancelled'].includes(order.status) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setCancelModalOrder(order)}
+                        disabled={cancellingOrderId === order.id}
+                        size="sm"
+                        className={
+                          order.status === 'pending'
+                            ? 'border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700'
+                            : 'border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700'
+                        }
+                      >
+                        {order.status === 'pending' ? (
+                          <XCircle size={14} className="mr-1.5" />
+                        ) : (
+                          <Lock size={14} className="mr-1.5" />
+                        )}
+                        {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel'}
                       </Button>
                     )}
                   </div>
@@ -346,6 +393,74 @@ export default function OrdersPage() {
               >
                 <Printer size={14} className="mr-1.5" />
                 {printingBillId === confirmPrintBillId ? 'Printing...' : 'Confirm Print'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Order Modal */}
+      {cancelModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Cancel Order #{cancelModalOrder.order_number}</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label htmlFor="cancelReason" className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason (optional)
+                </label>
+                <input
+                  id="cancelReason"
+                  type="text"
+                  placeholder="Enter reason for cancellation"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                />
+              </div>
+
+              {cancelModalOrder.type === 'dine_in' && cancelModalOrder.table && (
+                <div className="flex items-center gap-2">
+                  <input
+                    id="freeTable"
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
+                  />
+                  <label htmlFor="freeTable" className="text-sm text-gray-700">
+                    Free table {cancelModalOrder.table.name}
+                  </label>
+                </div>
+              )}
+
+              {cancelModalOrder.status !== 'pending' && (
+                <div>
+                  <label htmlFor="overridePin" className="block text-sm font-medium text-gray-700 mb-1">
+                    Override PIN
+                  </label>
+                  <input
+                    id="overridePin"
+                    type="password"
+                    placeholder="Enter manager PIN"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                  />
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCancelModalOrder(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleCancelOrder}
+                disabled={cancellingOrderId === cancelModalOrder.id}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                {cancellingOrderId === cancelModalOrder.id ? 'Cancelling...' : 'Confirm Cancel'}
               </Button>
             </div>
           </div>
