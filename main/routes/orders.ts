@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn, verifyPin } from '../db';
+import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn, verifyPin, getSettingValue } from '../db';
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
@@ -467,6 +467,134 @@ router.patch('/:id/loyalty', (req: Request, res: Response) => {
     const { loyalty_enabled } = req.body;
 
     res.json({ success: true, loyalty_enabled: !!loyalty_enabled });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch('/:id/discount', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const { discount_type, discount_value, discount_reason } = req.body;
+
+    // Validate discount_type
+    if (!discount_type || !['percentage', 'amount'].includes(discount_type)) {
+      return res.status(400).json({ error: 'discount_type must be "percentage" or "amount"' });
+    }
+
+    // Validate discount_value is a positive number
+    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value <= 0) {
+      return res.status(400).json({ error: 'discount_value must be a positive number' });
+    }
+
+    // Check against limits from settings
+    if (discount_type === 'percentage') {
+      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+      if (discount_value > maxPercentage) {
+        return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
+      }
+    } else if (discount_type === 'amount') {
+      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+      if (discount_value > maxAmount) {
+        return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
+      }
+    }
+
+    // Calculate discount amount
+    let discountAmount: number;
+    if (discount_type === 'percentage') {
+      discountAmount = (order.subtotal * discount_value) / 100;
+    } else {
+      discountAmount = Math.min(discount_value, order.subtotal);
+    }
+    discountAmount = Math.round(discountAmount * 100) / 100;
+
+    // Recalculate total from subtotal + tax - discount
+    const preRoundTotal = order.subtotal + (order.tax_amount || 0) - discountAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+    const roundOff = Math.round(preRoundTotal) - preRoundTotal;
+    const newTotal = Math.round(preRoundTotal) + roundOff;
+
+    db.prepare(`
+      UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
+        discount_reason = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+    `).run(discountAmount, discount_type, discount_value, discount_reason || null, newTotal, roundOff, now(), req.params.id);
+
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+
+    res.json({ order: updatedOrder });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const item = db.prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?').get(req.params.itemId, req.params.id) as any;
+    if (!item) {
+      return res.status(404).json({ error: 'Item not found' });
+    }
+
+    const { discount_type, discount_value } = req.body;
+
+    // Validate discount_type
+    if (!discount_type || !['percentage', 'amount'].includes(discount_type)) {
+      return res.status(400).json({ error: 'discount_type must be "percentage" or "amount"' });
+    }
+
+    // Validate discount_value is a positive number
+    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value <= 0) {
+      return res.status(400).json({ error: 'discount_value must be a positive number' });
+    }
+
+    // Calculate item discount amount
+    let discountAmount: number;
+    if (discount_type === 'percentage') {
+      discountAmount = (item.unit_price * item.quantity * discount_value) / 100;
+    } else {
+      discountAmount = Math.min(discount_value, item.unit_price * item.quantity);
+    }
+    discountAmount = Math.round(discountAmount * 100) / 100;
+
+    // Recalculate item total
+    const newSubtotal = Math.max(0, (item.unit_price * item.quantity) - discountAmount);
+    const newTotal = newSubtotal + item.tax_amount;
+
+    // Update item (order_items only has discount_amount column)
+    db.prepare(`
+      UPDATE order_items SET discount_amount = ?,
+        subtotal = ?, total = ?, updated_at = ? WHERE id = ?
+    `).run(discountAmount, newSubtotal, newTotal, now(), req.params.itemId);
+
+    // Update order totals
+    const allItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];
+    let orderSubtotal = 0;
+    let orderTax = 0;
+    for (const i of allItems) {
+      orderSubtotal += i.subtotal;
+      orderTax += i.tax_amount;
+    }
+    const preRoundTotal = orderSubtotal + orderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+    const roundOff = Math.round(preRoundTotal) - preRoundTotal;
+    const orderTotal = Math.round(preRoundTotal) + roundOff;
+
+    db.prepare(`
+      UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+    `).run(orderSubtotal, orderTax, orderTotal, roundOff, now(), req.params.id);
+
+    const updatedItem = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.itemId) as any;
+
+    res.json({ item: updatedItem });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

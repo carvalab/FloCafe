@@ -21,7 +21,7 @@ function sha256Hex(value: string): string {
   return crypto.createHash('sha256').update(value).digest('hex');
 }
 
-function getSettingValue(key: string): string | null {
+export function getSettingValue(key: string): string | null {
   const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string | null } | undefined;
   return row?.value ?? null;
 }
@@ -520,6 +520,16 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('loyalty_expiry_months', '6');
       insertSettingIfMissing('loyalty_min_redemption', '100');
       insertSettingIfMissing('loyalty_max_redemption_percentage', '50');
+    },
+  },
+  {
+    version: 7,
+    name: 'add_discount_settings',
+    up: () => {
+      insertSettingIfMissing('discount_mode', 'both');
+      insertSettingIfMissing('discount_requires_approval', '0');
+      insertSettingIfMissing('discount_max_percentage', '50');
+      insertSettingIfMissing('discount_max_amount', '100');
     },
   },
 ];
