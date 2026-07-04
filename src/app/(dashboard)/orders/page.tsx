@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -38,6 +38,7 @@ export default function OrdersPage() {
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   const [discountValue, setDiscountValue] = useState<number>(0);
   const [discountReason, setDiscountReason] = useState<string>('');
+  const [addItemsOrder, setAddItemsOrder] = useState<Order | null>(null);
   const [searchQuery, setSearchQuery] = useState('');
   const [filterTable, setFilterTable] = useState('');
   const [filterType, setFilterType] = useState('');
@@ -226,6 +227,11 @@ export default function OrdersPage() {
 
   const showCheckout = (order: Order) => {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
+  };
+
+  const handleNewOrderForTable = (table: any) => {
+    // Navigate to POS page with table pre-selected
+    window.location.href = `/pos?table_id=${table.id}`;
   };
 
   const handleCancelOrder = async () => {
@@ -483,6 +489,28 @@ export default function OrdersPage() {
                       >
                         <Percent size={14} className="mr-1.5" />
                         Discount
+                      </Button>
+                    )}
+                    {!['completed', 'cancelled'].includes(order.status) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setAddItemsOrder(order)}
+                        size="sm"
+                        className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
+                      >
+                        <Plus size={14} className="mr-1.5" />
+                        Add Item
+                      </Button>
+                    )}
+                    {order.status === 'completed' && order.table && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleNewOrderForTable(order.table)}
+                        size="sm"
+                        className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <Plus size={14} className="mr-1.5" />
+                        New Order
                       </Button>
                     )}
                     {!['completed', 'cancelled'].includes(order.status) && (
