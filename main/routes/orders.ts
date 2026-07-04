@@ -67,7 +67,8 @@ router.get('/', (req: Request, res: Response) => {
     query += ' ORDER BY created_at DESC';
 
     if (req.query.per_page) {
-      query += ` LIMIT ${parseInt(req.query.per_page as string)}`;
+      const perPage = Math.min(Math.max(parseInt(req.query.per_page as string) || 50, 1), 500);
+      query += ` LIMIT ${perPage}`;
     }
 
     const orders = db.prepare(query).all(...params);
@@ -368,7 +369,7 @@ router.post('/:id/items', (req: Request, res: Response) => {
 
 router.patch('/:id/status', (req: Request, res: Response) => {
   try {
-    const { status, reason, override_pin } = req.body;
+    const { status, reason, override_pin, free_table } = req.body;
 
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
@@ -457,7 +458,8 @@ router.patch('/:id/status', (req: Request, res: Response) => {
           }
           db.prepare('UPDATE orders SET status = ?, cancelled_at = ?, cancellation_reason = ?, updated_at = ? WHERE id = ?')
             .run(status, nowStr, reason, nowStr, req.params.id);
-          if ((order as any).table_id) {
+          // Only free table if explicitly requested (default: true for backward compatibility)
+          if ((order as any).table_id && free_table !== false) {
             db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?")
               .run(nowStr, (order as any).table_id);
           }
@@ -481,19 +483,10 @@ router.patch('/:id/status', (req: Request, res: Response) => {
 });
 
 router.patch('/:id/loyalty', (req: Request, res: Response) => {
-  try {
-    const db = getDatabase();
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
-    if (!order) {
-      return res.status(404).json({ error: 'Order not found' });
-    }
-
-    const { loyalty_enabled } = req.body;
-
-    res.json({ success: true, loyalty_enabled: !!loyalty_enabled });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
+  // TODO: Implement loyalty toggle with database persistence
+  // For now, return success but don't persist (frontend handles state locally)
+  const { loyalty_enabled } = req.body;
+  res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
 });
 
 router.patch('/:id/discount', (req: Request, res: Response) => {
@@ -502,6 +495,11 @@ router.patch('/:id/discount', (req: Request, res: Response) => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Cannot apply discount to completed or cancelled orders
+    if (['completed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ error: 'Cannot apply discount to a completed or cancelled order' });
     }
 
     const { discount_type, discount_value, discount_reason } = req.body;
@@ -564,6 +562,11 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
+    // Cannot apply discount to completed or cancelled orders
+    if (['completed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ error: 'Cannot apply discount to a completed or cancelled order' });
+    }
+
     const item = db.prepare('SELECT * FROM order_items WHERE id = ? AND order_id = ?').get(req.params.itemId, req.params.id) as any;
     if (!item) {
       return res.status(404).json({ error: 'Item not found' });
@@ -590,15 +593,30 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
     }
     discountAmount = Math.round(discountAmount * 100) / 100;
 
-    // Recalculate item total
+    // Recalculate item subtotal after discount
     const newSubtotal = Math.max(0, (item.unit_price * item.quantity) - discountAmount);
-    const newTotal = newSubtotal + item.tax_amount;
 
-    // Update item (order_items only has discount_amount column)
+    // Recalculate tax on discounted subtotal
+    const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id) as any;
+    const customer = order.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) as any : null;
+    const settings = db.prepare("SELECT * FROM settings WHERE key IN ('country', 'business_type', 'state_code')").all() as any[];
+    const settingsMap = Object.fromEntries(settings.map((s: any) => [s.key, s.value]));
+    const tenantInfo = {
+      country: settingsMap.country || 'IN',
+      business_type: settingsMap.business_type || 'restaurant',
+      state_code: settingsMap.state_code || '',
+    };
+    const taxResult = calculateItemTax(tenantInfo, product, newSubtotal, customer);
+    const newTaxAmount = taxResult.tax_amount;
+    const newTaxBreakdown = taxResult.tax_breakdown;
+
+    const newTotal = newSubtotal + newTaxAmount;
+
+    // Update item with recalculated tax
     db.prepare(`
       UPDATE order_items SET discount_amount = ?,
-        subtotal = ?, total = ?, updated_at = ? WHERE id = ?
-    `).run(discountAmount, newSubtotal, newTotal, now(), req.params.itemId);
+        subtotal = ?, tax_amount = ?, tax_breakdown = ?, total = ?, updated_at = ? WHERE id = ?
+    `).run(discountAmount, newSubtotal, newTaxAmount, JSON.stringify(newTaxBreakdown), newTotal, now(), req.params.itemId);
 
     // Update order totals
     const allItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateBillNumber, now, withTxn } from '../db';
+import { getDatabase, generateBillNumber, now, withTxn, getSettingValue } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
@@ -31,7 +31,8 @@ router.get('/', (req: Request, res: Response) => {
     query += ' ORDER BY created_at DESC';
 
     if (req.query.per_page) {
-      query += ` LIMIT ${parseInt(req.query.per_page as string)}`;
+      const perPage = Math.min(Math.max(parseInt(req.query.per_page as string) || 50, 1), 500);
+      query += ` LIMIT ${perPage}`;
     }
 
     const bills = db.prepare(query).all(...params);
@@ -268,8 +269,8 @@ router.post('/:id/applyDiscount', (req: Request, res: Response) => {
   try {
     const { type, value, reason } = req.body;
 
-    if (!type || !['percentage', 'fixed'].includes(type)) {
-      return res.status(400).json({ error: 'Valid discount type is required (percentage, fixed)' });
+    if (!type || !['percentage', 'amount'].includes(type)) {
+      return res.status(400).json({ error: 'Valid discount type is required (percentage, amount)' });
     }
 
     if (value === undefined || value < 0) {
@@ -284,6 +285,19 @@ router.post('/:id/applyDiscount', (req: Request, res: Response) => {
 
     if (bill.payment_status === 'paid') {
       return res.status(400).json({ error: 'Cannot apply discount to a paid bill' });
+    }
+
+    // Check against limits from settings
+    if (type === 'percentage') {
+      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+      if (value > maxPercentage) {
+        return res.status(400).json({ error: `discount value exceeds maximum percentage of ${maxPercentage}` });
+      }
+    } else {
+      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+      if (value > maxAmount) {
+        return res.status(400).json({ error: `discount value exceeds maximum amount of ${maxAmount}` });
+      }
     }
 
     let discountAmount = 0;
