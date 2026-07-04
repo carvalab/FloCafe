@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -33,6 +33,7 @@ export default function OrdersPage() {
   const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
+  const [loyaltyEnabled, setLoyaltyEnabled] = useState<Record<number, boolean>>({});
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -149,6 +150,16 @@ export default function OrdersPage() {
     }
   };
 
+  const handleLoyaltyToggle = async (orderId: number, enabled: boolean) => {
+    try {
+      await api.patch(`/orders/${orderId}/loyalty`, { loyalty_enabled: enabled });
+      setLoyaltyEnabled(prev => ({ ...prev, [orderId]: enabled }));
+      toast.success(enabled ? 'Loyalty points enabled' : 'Loyalty points disabled');
+    } catch {
+      toast.error('Failed to update loyalty setting');
+    }
+  };
+
   const showCheckout = (order: Order) => {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
   };
@@ -247,6 +258,18 @@ export default function OrdersPage() {
                         <MessageCircle size={14} />
                         Share
                       </button>
+                    )}
+                    {order.customer && (
+                      <label className="flex items-center gap-1 cursor-pointer select-none">
+                        <input
+                          type="checkbox"
+                          checked={loyaltyEnabled[order.id] ?? true}
+                          onChange={(e) => handleLoyaltyToggle(order.id, e.target.checked)}
+                          className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
+                        />
+                        <Star size={14} className="text-yellow-500 fill-yellow-500" />
+                        <span className="text-xs text-gray-600 font-medium">Award points</span>
+                      </label>
                     )}
                     <span className="font-bold text-gray-900">{currency}{Number(order.total).toLocaleString()}</span>
                   </div>
