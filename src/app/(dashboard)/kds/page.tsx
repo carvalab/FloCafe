@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Clock, ChefHat, X, ChevronRight, ChevronLeft, LogOut, Wifi, WifiOff } from 'lucide-react';
+import { Clock, ChefHat, X, ChevronRight, ChevronLeft, LogOut, Wifi, WifiOff, Sparkles } from 'lucide-react';
 import type { Order, OrderItem } from '@/lib/types';
 
 const STATUS_CONFIG = {
@@ -402,9 +402,13 @@ export default function KdsPage() {
               <div className="flex justify-between items-center mb-3">
                 <div>
                   <span className="font-bold text-lg">#{order.order_number}</span>
+                  {order.table && (
+                    <span className="text-sm text-orange-600 font-medium ml-2">
+                      🪑 {order.table.name}
+                    </span>
+                  )}
                   <span className="text-xs text-gray-500 ml-2">
                     {order.type.replace('_', ' ')}
-                    {order.table && ` — ${order.table.name}`}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-gray-400">
@@ -417,6 +421,7 @@ export default function KdsPage() {
                 {order.items?.map((item) => {
                   const itemStatus = (item.status || 'pending') as KitchenStatus;
                   const config = STATUS_CONFIG[itemStatus];
+                  const isNewItem = item.created_at > order.created_at;
 
                   return (
                     <button
@@ -428,6 +433,12 @@ export default function KdsPage() {
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
                         <span className={`font-bold text-sm w-6 shrink-0 ${config.text}`}>{item.quantity}×</span>
                         <span className="text-gray-900 text-sm font-semibold flex-1 truncate">{item.product_name}</span>
+                        {isNewItem && (
+                          <span className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
+                            <Sparkles size={10} />
+                            NEW
+                          </span>
+                        )}
                         <ChevronRight size={14} className="text-gray-400 shrink-0" />
                       </div>
                       {item.addons && item.addons.length > 0 && (
