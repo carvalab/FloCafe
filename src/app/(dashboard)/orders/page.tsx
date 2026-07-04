@@ -22,36 +22,58 @@ const itemStatusConfig: Record<string, { icon: string; color: string; label: str
 
 type FilterType = 'all' | 'active' | 'unpaid';
 
+// Consolidated state types
+interface Filters {
+  search: string;
+  table: string;
+  type: string;
+  status: string;
+}
+
+interface CancelModal {
+  order: Order;
+  reason: string;
+  freeTable: boolean;
+  overridePin: string;
+}
+
+interface DiscountModal {
+  order: Order;
+  type: 'percentage' | 'amount';
+  value: number;
+  reason: string;
+}
+
 export default function OrdersPage() {
   const { currentTenant } = useAuthStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filter, setFilter] = useState<FilterType>('active');
+  const [tabFilter, setTabFilter] = useState<FilterType>('active');
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
+  const [tables, setTables] = useState<any[]>([]);
+
+  // Consolidated filter state
+  const [filters, setFilters] = useState<Filters>({ search: '', table: '', type: '', status: '' });
+
+  // Consolidated cancel modal state
+  const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
+  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+
+  // Consolidated discount modal state
+  const [discountModal, setDiscountModal] = useState<DiscountModal | null>(null);
+
+  // Print states
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
   const [printingBillId, setPrintingBillId] = useState<number | null>(null);
   const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
-  const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
-  const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
-  const [cancelReason, setCancelReason] = useState('');
-  const [cancelFreeTable, setCancelFreeTable] = useState(true);
-  const [cancelOverridePin, setCancelOverridePin] = useState('');
+
+  // Other states
   const [loyaltyEnabled, setLoyaltyEnabled] = useState<Record<number, boolean>>({});
-  const [discountModalOrder, setDiscountModalOrder] = useState<Order | null>(null);
-  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
-  const [discountValue, setDiscountValue] = useState<number>(0);
-  const [discountReason, setDiscountReason] = useState<string>('');
   const [addItemsOrder, setAddItemsOrder] = useState<Order | null>(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [filterTable, setFilterTable] = useState('');
-  const [filterType, setFilterType] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [tables, setTables] = useState<any[]>([]);
   const [printHistoryExpanded, setPrintHistoryExpanded] = useState<Record<number, boolean>>({});
   const [printHistory, setPrintHistory] = useState<Record<number, any[]>>({});
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
-
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 
   const fetchOrders = async () => {
@@ -103,29 +125,29 @@ export default function OrdersPage() {
 
   const filteredOrders = orders.filter((order) => {
     // Tab filter
-    if (filter === 'active' && ['completed', 'cancelled'].includes(order.status)) return false;
-    if (filter === 'unpaid' && !(order.bill && order.bill.payment_status !== 'paid')) return false;
+    if (tabFilter === 'active' && ['completed', 'cancelled'].includes(order.status)) return false;
+    if (tabFilter === 'unpaid' && !(order.bill && order.bill.payment_status !== 'paid')) return false;
 
     // Search by order number
-    if (searchQuery && !order.order_number.toLowerCase().includes(searchQuery.toLowerCase())) {
+    if (filters.search && !order.order_number.toLowerCase().includes(filters.search.toLowerCase())) {
       return false;
     }
     // Filter by table
-    if (filterTable && order.table_id !== filterTable) {
+    if (filters.table && String(order.table_id) !== filters.table) {
       return false;
     }
     // Filter by type
-    if (filterType && order.type !== filterType) {
+    if (filters.type && order.type !== filters.type) {
       return false;
     }
     // Filter by status
-    if (filterStatus === 'active' && ['completed', 'cancelled'].includes(order.status)) {
+    if (filters.status === 'active' && ['completed', 'cancelled'].includes(order.status)) {
       return false;
     }
-    if (filterStatus === 'completed' && order.status !== 'completed') {
+    if (filters.status === 'completed' && order.status !== 'completed') {
       return false;
     }
-    if (filterStatus === 'cancelled' && order.status !== 'cancelled') {
+    if (filters.status === 'cancelled' && order.status !== 'cancelled') {
       return false;
     }
     return true;
@@ -220,22 +242,20 @@ export default function OrdersPage() {
   };
 
   const handleApplyDiscount = async () => {
-    if (!discountModalOrder) return;
+    if (!discountModal) return;
 
     try {
-      await api.patch(`/orders/${discountModalOrder.id}/discount`, {
-        discount_type: discountType,
-        discount_value: discountValue,
-        discount_reason: discountReason || undefined,
+      await api.patch(`/orders/${discountModal.order.id}/discount`, {
+        discount_type: discountModal.type,
+        discount_value: discountModal.value,
+        discount_reason: discountModal.reason || undefined,
       });
       toast.success('Discount applied successfully');
       fetchOrders();
     } catch (err: any) {
       toast.error(err.response?.data?.error || 'Failed to apply discount');
     } finally {
-      setDiscountModalOrder(null);
-      setDiscountValue(0);
-      setDiscountReason('');
+      setDiscountModal(null);
     }
   };
 
@@ -244,20 +264,19 @@ export default function OrdersPage() {
   };
 
   const handleNewOrderForTable = (table: any) => {
-    // Navigate to POS page with table pre-selected
     window.location.href = `/pos?table_id=${table.id}`;
   };
 
   const handleCancelOrder = async () => {
-    if (!cancelModalOrder) return;
+    if (!cancelModal) return;
 
-    setCancellingOrderId(cancelModalOrder.id);
+    setCancellingOrderId(cancelModal.order.id);
     try {
-      await api.patch(`/orders/${cancelModalOrder.id}/status`, {
+      await api.patch(`/orders/${cancelModal.order.id}/status`, {
         status: 'cancelled',
-        reason: cancelReason || undefined,
-        free_table: cancelFreeTable,
-        override_pin: cancelOverridePin || undefined,
+        reason: cancelModal.reason || undefined,
+        free_table: cancelModal.freeTable,
+        override_pin: cancelModal.overridePin || undefined,
       });
       toast.success('Order cancelled successfully');
       fetchOrders();
@@ -265,10 +284,21 @@ export default function OrdersPage() {
       toast.error(err.response?.data?.error || 'Failed to cancel order');
     } finally {
       setCancellingOrderId(null);
-      setCancelModalOrder(null);
-      setCancelReason('');
-      setCancelFreeTable(true);
-      setCancelOverridePin('');
+      setCancelModal(null);
+    }
+  };
+
+  // Helper to update cancel modal state
+  const updateCancelModal = (updates: Partial<Omit<CancelModal, 'order'>>) => {
+    if (cancelModal) {
+      setCancelModal({ ...cancelModal, ...updates });
+    }
+  };
+
+  // Helper to update discount modal state
+  const updateDiscountModal = (updates: Partial<Omit<DiscountModal, 'order'>>) => {
+    if (discountModal) {
+      setDiscountModal({ ...discountModal, ...updates });
     }
   };
 
@@ -281,9 +311,9 @@ export default function OrdersPage() {
           {(['all', 'active', 'unpaid'] as FilterType[]).map((f) => (
             <button
               key={f}
-              onClick={() => setFilter(f)}
+              onClick={() => setTabFilter(f)}
               className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize ${
-                filter === f
+                tabFilter === f
                   ? 'bg-brand text-white'
                   : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
               }`}
@@ -302,16 +332,16 @@ export default function OrdersPage() {
           <input
             type="text"
             placeholder="Search by order number..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
+            value={filters.search}
+            onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand bg-white"
           />
         </div>
 
         {/* Table filter */}
         <select
-          value={filterTable}
-          onChange={(e) => setFilterTable(e.target.value)}
+          value={filters.table}
+          onChange={(e) => setFilters(prev => ({ ...prev, table: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
           <option value="">All Tables</option>
@@ -324,8 +354,8 @@ export default function OrdersPage() {
 
         {/* Type filter */}
         <select
-          value={filterType}
-          onChange={(e) => setFilterType(e.target.value)}
+          value={filters.type}
+          onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
           <option value="">All Types</option>
@@ -337,8 +367,8 @@ export default function OrdersPage() {
 
         {/* Status filter */}
         <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
+          value={filters.status}
+          onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
           <option value="">All Statuses</option>
@@ -525,7 +555,7 @@ export default function OrdersPage() {
                     {showCheckout(order) && (
                       <Button
                         variant="outline"
-                        onClick={() => setDiscountModalOrder(order)}
+                        onClick={() => setDiscountModal({ order, type: 'percentage', value: 0, reason: '' })}
                         size="sm"
                         className="border-purple-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
                       >
@@ -558,7 +588,7 @@ export default function OrdersPage() {
                     {!['completed', 'cancelled'].includes(order.status) && (
                       <Button
                         variant="outline"
-                        onClick={() => setCancelModalOrder(order)}
+                        onClick={() => setCancelModal({ order, reason: '', freeTable: true, overridePin: '' })}
                         disabled={cancellingOrderId === order.id}
                         size="sm"
                         className={
@@ -621,10 +651,10 @@ export default function OrdersPage() {
       )}
 
       {/* Cancel Order Modal */}
-      {cancelModalOrder && (
+      {cancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Cancel Order #{cancelModalOrder.order_number}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Cancel Order #{cancelModal.order.order_number}</h2>
 
             <div className="space-y-4">
               <div>
@@ -634,29 +664,29 @@ export default function OrdersPage() {
                 <input
                   id="cancelReason"
                   type="text"
-                  value={cancelReason}
-                  onChange={(e) => setCancelReason(e.target.value)}
+                  value={cancelModal.reason}
+                  onChange={(e) => updateCancelModal({ reason: e.target.value })}
                   placeholder="Enter reason for cancellation"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
 
-              {cancelModalOrder.type === 'dine_in' && cancelModalOrder.table && (
+              {cancelModal.order.type === 'dine_in' && cancelModal.order.table && (
                 <div className="flex items-center gap-2">
                   <input
                     id="freeTable"
                     type="checkbox"
-                    checked={cancelFreeTable}
-                    onChange={(e) => setCancelFreeTable(e.target.checked)}
+                    checked={cancelModal.freeTable}
+                    onChange={(e) => updateCancelModal({ freeTable: e.target.checked })}
                     className="h-4 w-4 rounded border-gray-300 text-red-600 focus:ring-red-500"
                   />
                   <label htmlFor="freeTable" className="text-sm text-gray-700">
-                    Free table {cancelModalOrder.table.name}
+                    Free table {cancelModal.order.table.name}
                   </label>
                 </div>
               )}
 
-              {cancelModalOrder.status !== 'pending' && (
+              {cancelModal.order.status !== 'pending' && (
                 <div>
                   <label htmlFor="overridePin" className="block text-sm font-medium text-gray-700 mb-1">
                     Override PIN
@@ -664,8 +694,8 @@ export default function OrdersPage() {
                   <input
                     id="overridePin"
                     type="password"
-                    value={cancelOverridePin}
-                    onChange={(e) => setCancelOverridePin(e.target.value)}
+                    value={cancelModal.overridePin}
+                    onChange={(e) => updateCancelModal({ overridePin: e.target.value })}
                     placeholder="Enter manager PIN"
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
@@ -677,17 +707,17 @@ export default function OrdersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => setCancelModalOrder(null)}
+                onClick={() => setCancelModal(null)}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
                 onClick={handleCancelOrder}
-                disabled={cancellingOrderId === cancelModalOrder.id}
+                disabled={cancellingOrderId === cancelModal.order.id}
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
-                {cancellingOrderId === cancelModalOrder.id ? 'Cancelling...' : 'Confirm Cancel'}
+                {cancellingOrderId === cancelModal.order.id ? 'Cancelling...' : 'Confirm Cancel'}
               </Button>
             </div>
           </div>
@@ -695,18 +725,18 @@ export default function OrdersPage() {
       )}
 
       {/* Discount Modal */}
-      {discountModalOrder && (
+      {discountModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Apply Discount - Order #{discountModalOrder.order_number}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Apply Discount - Order #{discountModal.order.order_number}</h2>
 
             <div className="space-y-4">
               {/* Discount Type Toggle */}
               <div className="flex rounded-lg overflow-hidden border border-gray-200">
                 <button
-                  onClick={() => { setDiscountType('percentage'); setDiscountValue(0); }}
+                  onClick={() => updateDiscountModal({ type: 'percentage', value: 0 })}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
-                    discountType === 'percentage'
+                    discountModal.type === 'percentage'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                   }`}
@@ -715,9 +745,9 @@ export default function OrdersPage() {
                   Percentage
                 </button>
                 <button
-                  onClick={() => { setDiscountType('amount'); setDiscountValue(0); }}
+                  onClick={() => updateDiscountModal({ type: 'amount', value: 0 })}
                   className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
-                    discountType === 'amount'
+                    discountModal.type === 'amount'
                       ? 'bg-purple-600 text-white'
                       : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
                   }`}
@@ -730,20 +760,20 @@ export default function OrdersPage() {
               {/* Discount Value */}
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  {discountType === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
+                  {discountModal.type === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
                 </label>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
-                    {discountType === 'percentage' ? '%' : currency}
+                    {discountModal.type === 'percentage' ? '%' : currency}
                   </span>
                   <input
                     type="number"
                     min={0}
-                    max={discountType === 'percentage' ? 100 : Number(discountModalOrder.total)}
-                    step={discountType === 'percentage' ? 1 : 0.01}
-                    value={discountValue || ''}
-                    onChange={(e) => setDiscountValue(Number(e.target.value))}
-                    placeholder={discountType === 'percentage' ? '0' : '0.00'}
+                    max={discountModal.type === 'percentage' ? 100 : Number(discountModal.order.total)}
+                    step={discountModal.type === 'percentage' ? 1 : 0.01}
+                    value={discountModal.value || ''}
+                    onChange={(e) => updateDiscountModal({ value: Number(e.target.value) })}
+                    placeholder={discountModal.type === 'percentage' ? '0' : '0.00'}
                     className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                   />
                 </div>
@@ -756,8 +786,8 @@ export default function OrdersPage() {
                 </label>
                 <input
                   type="text"
-                  value={discountReason}
-                  onChange={(e) => setDiscountReason(e.target.value)}
+                  value={discountModal.reason}
+                  onChange={(e) => updateDiscountModal({ reason: e.target.value })}
                   placeholder="Enter reason for discount"
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
@@ -767,24 +797,24 @@ export default function OrdersPage() {
               <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Subtotal</span>
-                  <span className="text-gray-900">{currency}{Number(discountModalOrder.subtotal).toLocaleString()}</span>
+                  <span className="text-gray-900">{currency}{Number(discountModal.order.subtotal).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-gray-500">Tax</span>
-                  <span className="text-gray-900">{currency}{Number(discountModalOrder.tax_amount || 0).toLocaleString()}</span>
+                  <span className="text-gray-900">{currency}{Number(discountModal.order.tax_amount || 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between text-sm">
                   <span className="text-purple-600">
                     Discount
-                    {discountType === 'percentage' && discountValue > 0 && (
-                      <span className="text-gray-400 ml-1">({discountValue}% on subtotal)</span>
+                    {discountModal.type === 'percentage' && discountModal.value > 0 && (
+                      <span className="text-gray-400 ml-1">({discountModal.value}% on subtotal)</span>
                     )}
                   </span>
                   <span className="text-purple-600">
                     -{currency}{
-                      discountType === 'percentage'
-                        ? (Number(discountModalOrder.subtotal) * discountValue / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : Number(discountValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      discountModal.type === 'percentage'
+                        ? (Number(discountModal.order.subtotal) * discountModal.value / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : Number(discountModal.value).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     }
                   </span>
                 </div>
@@ -792,9 +822,9 @@ export default function OrdersPage() {
                   <span className="text-gray-900">New Total</span>
                   <span className="text-gray-900">
                     {currency}{
-                      discountType === 'percentage'
-                        ? (Number(discountModalOrder.subtotal) * (1 - discountValue / 100) + Number(discountModalOrder.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-                        : (Number(discountModalOrder.subtotal) - Number(discountValue) + Number(discountModalOrder.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                      discountModal.type === 'percentage'
+                        ? (Number(discountModal.order.subtotal) * (1 - discountModal.value / 100) + Number(discountModal.order.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : (Number(discountModal.order.subtotal) - Number(discountModal.value) + Number(discountModal.order.tax_amount || 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
                     }
                   </span>
                 </div>
@@ -805,18 +835,14 @@ export default function OrdersPage() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => {
-                  setDiscountModalOrder(null);
-                  setDiscountValue(0);
-                  setDiscountReason('');
-                }}
+                onClick={() => setDiscountModal(null)}
               >
                 Cancel
               </Button>
               <Button
                 size="sm"
                 onClick={handleApplyDiscount}
-                disabled={discountValue <= 0}
+                disabled={discountModal.value <= 0}
                 className="bg-purple-600 hover:bg-purple-700 text-white"
               >
                 <Percent size={14} className="mr-1.5" />
