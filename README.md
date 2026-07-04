@@ -100,6 +100,20 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 - Customer database
 - Sales reports
 
+### Order Management
+- Cancel orders with status-based rules (pending = free, preparing+ = manager PIN)
+- Loyalty points toggle per order (configurable earn/redeem rates)
+- Discount system (order + item level, percentage + amount)
+- Extra notes per item and order (configurable character limits)
+- Receipt reprinting with print logging
+- Add-on items after order placement
+- Filter bar with search, table, type, and status filters
+
+### Kitchen Display System (KDS)
+- Real-time order updates via WebSocket
+- "NEW" badge for items added after initial order
+- Table name always visible
+
 ## Tech Stack
 
 | Layer | Technology |
