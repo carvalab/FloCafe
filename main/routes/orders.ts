@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn } from '../db';
+import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn, verifyPin } from '../db';
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
@@ -351,7 +351,7 @@ router.post('/:id/items', (req: Request, res: Response) => {
 
 router.patch('/:id/status', (req: Request, res: Response) => {
   try {
-    const { status, reason } = req.body;
+    const { status, reason, override_pin } = req.body;
 
     if (!status) {
       return res.status(400).json({ error: 'Status is required' });
@@ -368,6 +368,26 @@ router.patch('/:id/status', (req: Request, res: Response) => {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    // Override validation: cancelling an order in preparing+ status requires manager PIN
+    const statusOrder = ['pending', 'preparing', 'ready', 'served', 'completed'];
+    const currentStatusIndex = statusOrder.indexOf((order as any).status);
+    const requiresOverride = currentStatusIndex > 0 && status === 'cancelled';
+
+    if (requiresOverride) {
+      if (!override_pin) {
+        return res.status(400).json({ error: 'Manager PIN required to cancel order in progress' });
+      }
+
+      // Validate PIN against users table
+      const user = db.prepare('SELECT * FROM users WHERE pin_hash IS NOT NULL').all().find((u: any) => {
+        return verifyPin(u.pin_hash, override_pin);
+      });
+
+      if (!user) {
+        return res.status(403).json({ error: 'Invalid manager PIN' });
+      }
     }
 
     const nowStr = now();
