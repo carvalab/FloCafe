@@ -1,8 +1,8 @@
 /**
- * Bills Print API Tests
+ * Bills Print API Tests (supertest)
  *
  * Tests the POST /api/bills/:id/print and GET /api/bills/:id/print-history
- * endpoints on the bills router.
+ * endpoints by exercising the actual Express routes via supertest.
  *
  * Usage: ts-node --transpile-only -P tests/tsconfig.json tests/bills-print-api.test.ts
  */
@@ -11,7 +11,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 
-// Mock electron before importing db module
+// Mock electron before importing any app modules
 const Module = require('module');
 const originalLoad = Module._load;
 const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-bills-print-api-'));
@@ -27,8 +27,15 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
   return originalLoad.apply(this, arguments as any);
 };
 
+// Set JWT_SECRET before importing auth modules
+process.env.JWT_SECRET = 'test-secret-for-bills-print-api';
+
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const request = require('supertest');
 const { initDatabase, getDatabase, closeDatabase } = require('../main/db');
-const { printReceipt } = require('../main/services/receipt');
+const { getJWTSecret } = require('../main/routes/auth');
+const { billRoutes } = require('../main/routes/bills');
 
 let passed = 0;
 let failed = 0;
@@ -45,15 +52,14 @@ function assert(condition: boolean, message: string) {
   }
 }
 
+// ── Database setup ──────────────────────────────────────────────────────────
+
 try {
   initDatabase();
 } catch (error: any) {
   console.error('Failed to initialize database:', error.message);
   process.exit(1);
 }
-
-console.log('Bills Print API Tests');
-console.log('='.repeat(50));
 
 const db = getDatabase();
 
@@ -65,6 +71,50 @@ db.exec("INSERT OR IGNORE INTO bills (bill_number, order_id) VALUES ('INV-PRINT-
 
 const testBillId = db.prepare("SELECT id FROM bills WHERE bill_number = 'INV-PRINT-API-0001'").get() as { id: number } | undefined;
 
+// ── Express app for supertest ───────────────────────────────────────────────
+
+// Build a minimal Express app that mirrors the production middleware stack
+// (requireAuth + billRoutes) so supertest hits the real route handlers.
+const app = express();
+app.use(express.json());
+
+// Replicate requireAuth from server.ts — verifies JWT and attaches decoded
+// payload to req.user so downstream handlers can access it without re-verifying.
+const { Request: Req, Response: Res, NextFunction: Next } = require('express');
+app.use((req: any, res: any, next: any) => {
+  if (!req.path.startsWith('/api')) { next(); return; }
+  if (req.path === '/api/health') { next(); return; }
+  if (req.path.startsWith('/api/auth')) { next(); return; }
+
+  const authHeader = req.headers.authorization;
+  if (!authHeader?.startsWith('Bearer ')) {
+    res.status(401).json({ error: 'Authentication required' });
+    return;
+  }
+  try {
+    const payload = jwt.verify(authHeader.split(' ')[1], getJWTSecret());
+    req.user = payload;
+    next();
+  } catch {
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+});
+
+app.use('/api/bills', billRoutes);
+
+// Generate a valid JWT for test requests
+const token = jwt.sign(
+  { userId: 'user-1', email: 'test@flo.local', role: 'cashier' },
+  getJWTSecret(),
+  { expiresIn: '1h' }
+);
+const authHeader = `Bearer ${token}`;
+
+console.log('Bills Print API Tests (supertest)');
+console.log('='.repeat(50));
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
 async function runTests() {
   // ── Test 1: POST /api/bills/:id/print logs print action ────────────
   console.log('\nTest 1: POST /api/bills/:id/print logs print action');
@@ -74,31 +124,30 @@ async function runTests() {
     } else {
       const initialCount = (db.prepare('SELECT COUNT(*) as count FROM print_logs WHERE bill_id = ?').get(testBillId.id) as { count: number }).count;
 
-      try {
-        const result = await printReceipt(testBillId.id, 'user-1', 'receipt');
-        assert(result.success === true, 'POST /print returns success: true');
-        assert(result.printLogId !== undefined, 'POST /print returns printLogId');
+      const res = await request(app)
+        .post(`/api/bills/${testBillId.id}/print`)
+        .set('Authorization', authHeader)
+        .send({ print_type: 'receipt' });
 
-        const finalCount = (db.prepare('SELECT COUNT(*) as count FROM print_logs WHERE bill_id = ?').get(testBillId.id) as { count: number }).count;
-        assert(finalCount === initialCount + 1, 'print_logs entry created for bill');
-      } catch (err: any) {
-        assert(false, `POST /print threw: ${err.message}`);
-      }
+      assert(res.status === 200, `POST /print returns 200 (got ${res.status})`);
+      assert(res.body.success === true, 'POST /print returns success: true');
+      assert(res.body.printLogId !== undefined, 'POST /print returns printLogId');
+
+      const finalCount = (db.prepare('SELECT COUNT(*) as count FROM print_logs WHERE bill_id = ?').get(testBillId.id) as { count: number }).count;
+      assert(finalCount === initialCount + 1, 'print_logs entry created for bill');
     }
   }
 
-  // ── Test 2: POST /api/bills/:id/print with invalid print_type fails ─
-  console.log('\nTest 2: POST /api/bills/:id/print with invalid print_type fails');
+  // ── Test 2: POST /api/bills/:id/print with invalid bill returns 500 ─
+  console.log('\nTest 2: POST /api/bills/:id/print with non-existent bill returns error');
   {
-    // Validate the service throws or rejects for invalid types
-    // The route-level validation happens in the endpoint, but we test the
-    // boundary: calling printReceipt with a non-existent bill should throw
-    try {
-      await printReceipt(999999, 'user-1', 'receipt');
-      assert(false, 'expected error for non-existent bill');
-    } catch (err: any) {
-      assert(err.message.includes('Bill not found'), `throws "Bill not found": ${err.message}`);
-    }
+    const res = await request(app)
+      .post('/api/bills/999999/print')
+      .set('Authorization', authHeader)
+      .send({ print_type: 'receipt' });
+
+    assert(res.status === 500, `returns 500 for non-existent bill (got ${res.status})`);
+    assert(res.body.error !== undefined, 'response includes error message');
   }
 
   // ── Test 3: POST /api/bills/:id/print with reprint type ────────────
@@ -107,42 +156,72 @@ async function runTests() {
     if (!testBillId) {
       assert(false, 'skipped: no test bill found');
     } else {
-      try {
-        const result = await printReceipt(testBillId.id, 'user-2', 'reprint');
-        assert(result.success === true, 'reprint returns success: true');
+      const res = await request(app)
+        .post(`/api/bills/${testBillId.id}/print`)
+        .set('Authorization', authHeader)
+        .send({ print_type: 'reprint' });
 
-        const log = db.prepare('SELECT print_type FROM print_logs WHERE bill_id = ? ORDER BY id DESC LIMIT 1').get(testBillId.id) as { print_type: string } | undefined;
-        assert(log !== undefined, 'print_log row exists after reprint');
-        assert(log!.print_type === 'reprint', 'print_type is "reprint"');
-      } catch (err: any) {
-        assert(false, `reprint threw: ${err.message}`);
-      }
+      assert(res.status === 200, `reprint returns 200 (got ${res.status})`);
+      assert(res.body.success === true, 'reprint returns success: true');
+
+      const log = db.prepare('SELECT print_type FROM print_logs WHERE bill_id = ? ORDER BY id DESC LIMIT 1').get(testBillId.id) as { print_type: string } | undefined;
+      assert(log !== undefined, 'print_log row exists after reprint');
+      assert(log!.print_type === 'reprint', 'print_type is "reprint"');
     }
   }
 
-  // ── Test 4: GET /api/bills/:id/print-history returns print logs ────
-  console.log('\nTest 4: GET /api/bills/:id/print-history returns print logs');
+  // ── Test 4: POST /api/bills/:id/print with missing print_type returns 400 ──
+  console.log('\nTest 4: POST /api/bills/:id/print with missing print_type returns 400');
   {
     if (!testBillId) {
       assert(false, 'skipped: no test bill found');
     } else {
-      // We should have at least 2 print logs (receipt + reprint from tests 1 & 3)
-      const prints = db.prepare(`
-        SELECT pl.*, u.name as user_name
-        FROM print_logs pl
-        LEFT JOIN users u ON pl.user_id = u.id
-        WHERE pl.bill_id = ?
-        ORDER BY pl.printed_at DESC
-      `).all(testBillId.id) as any[];
+      const res = await request(app)
+        .post(`/api/bills/${testBillId.id}/print`)
+        .set('Authorization', authHeader)
+        .send({});
 
-      assert(Array.isArray(prints), 'print-history returns an array');
-      assert(prints.length >= 2, `print-history has at least 2 entries (got ${prints.length})`);
-      assert(prints[0].user_name === 'Cashier Two' || prints[0].user_name === 'Test User', 'print log includes user_name');
+      assert(res.status === 400, `returns 400 for missing print_type (got ${res.status})`);
+      assert(res.body.error !== undefined, 'response includes error message');
     }
   }
 
-  // ── Test 5: GET /api/bills/:id/print-history returns empty for bill with no prints ──
-  console.log('\nTest 5: GET /api/bills/:id/print-history returns empty for new bill');
+  // ── Test 5: POST /api/bills/:id/print without auth returns 401 ────
+  console.log('\nTest 5: POST /api/bills/:id/print without auth returns 401');
+  {
+    if (!testBillId) {
+      assert(false, 'skipped: no test bill found');
+    } else {
+      const res = await request(app)
+        .post(`/api/bills/${testBillId.id}/print`)
+        .send({ print_type: 'receipt' });
+
+      assert(res.status === 401, `returns 401 without auth (got ${res.status})`);
+    }
+  }
+
+  // ── Test 6: GET /api/bills/:id/print-history returns print logs ────
+  console.log('\nTest 6: GET /api/bills/:id/print-history returns print logs');
+  {
+    if (!testBillId) {
+      assert(false, 'skipped: no test bill found');
+    } else {
+      const res = await request(app)
+        .get(`/api/bills/${testBillId.id}/print-history`)
+        .set('Authorization', authHeader);
+
+      assert(res.status === 200, `print-history returns 200 (got ${res.status})`);
+      assert(Array.isArray(res.body.prints), 'print-history returns an array');
+      assert(res.body.prints.length >= 2, `print-history has at least 2 entries (got ${res.body.prints.length})`);
+      assert(
+        res.body.prints[0].user_name === 'Test User' || res.body.prints[0].user_name === 'Cashier Two',
+        'print log includes user_name'
+      );
+    }
+  }
+
+  // ── Test 7: GET /api/bills/:id/print-history returns empty for bill with no prints ──
+  console.log('\nTest 7: GET /api/bills/:id/print-history returns empty for new bill');
   {
     // Create a new bill with no print history
     db.exec("INSERT OR IGNORE INTO orders (order_number, user_id) VALUES ('ORD-PRINT-API-EMPTY', 'user-1')");
@@ -150,20 +229,17 @@ async function runTests() {
     db.exec(`INSERT INTO bills (bill_number, order_id) VALUES ('INV-PRINT-API-EMPTY', ${newOrder.id})`);
     const newBill = db.prepare("SELECT id FROM bills WHERE bill_number = 'INV-PRINT-API-EMPTY'").get() as { id: number };
 
-    const prints = db.prepare(`
-      SELECT pl.*, u.name as user_name
-      FROM print_logs pl
-      LEFT JOIN users u ON pl.user_id = u.id
-      WHERE pl.bill_id = ?
-      ORDER BY pl.printed_at DESC
-    `).all(newBill.id) as any[];
+    const res = await request(app)
+      .get(`/api/bills/${newBill.id}/print-history`)
+      .set('Authorization', authHeader);
 
-    assert(Array.isArray(prints), 'print-history returns an array for bill with no prints');
-    assert(prints.length === 0, 'print-history is empty for bill with no prints');
+    assert(res.status === 200, `print-history returns 200 (got ${res.status})`);
+    assert(Array.isArray(res.body.prints), 'print-history returns an array for bill with no prints');
+    assert(res.body.prints.length === 0, 'print-history is empty for bill with no prints');
   }
 
-  // ── Test 6: POST /api/bills/:id/print updates bill printed_at ──────
-  console.log('\nTest 6: POST /api/bills/:id/print updates bill printed_at');
+  // ── Test 8: POST /api/bills/:id/print updates bill printed_at ──────
+  console.log('\nTest 8: POST /api/bills/:id/print updates bill printed_at');
   {
     if (!testBillId) {
       assert(false, 'skipped: no test bill found');
@@ -173,13 +249,14 @@ async function runTests() {
       const before = db.prepare('SELECT printed_at FROM bills WHERE id = ?').get(testBillId.id) as { printed_at: string | null };
       assert(before.printed_at === null, 'printed_at is null before print');
 
-      try {
-        await printReceipt(testBillId.id, 'user-1', 'receipt');
-        const after = db.prepare('SELECT printed_at FROM bills WHERE id = ?').get(testBillId.id) as { printed_at: string | null };
-        assert(after.printed_at !== null, 'printed_at is set after print');
-      } catch (err: any) {
-        assert(false, `printReceipt threw: ${err.message}`);
-      }
+      const res = await request(app)
+        .post(`/api/bills/${testBillId.id}/print`)
+        .set('Authorization', authHeader)
+        .send({ print_type: 'receipt' });
+
+      assert(res.status === 200, `print returns 200 (got ${res.status})`);
+      const after = db.prepare('SELECT printed_at FROM bills WHERE id = ?').get(testBillId.id) as { printed_at: string | null };
+      assert(after.printed_at !== null, 'printed_at is set after print');
     }
   }
 

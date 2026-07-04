@@ -1,10 +1,8 @@
 import { Router, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import { getDatabase, generateBillNumber, now, withTxn } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
-import { getJWTSecret } from './auth';
 
 const router = Router();
 
@@ -347,17 +345,8 @@ router.post('/:id/print', async (req: Request, res: Response) => {
       return res.status(400).json({ error: 'print_type must be receipt or reprint' });
     }
 
-    // Decode user ID from the JWT token (already verified by auth middleware)
-    let userId = 'unknown';
-    const authHeader = req.headers.authorization;
-    if (authHeader?.startsWith('Bearer ')) {
-      try {
-        const payload = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as any;
-        userId = payload.id || payload.sub || 'unknown';
-      } catch {
-        // Token already verified by middleware; this is a best-effort decode
-      }
-    }
+    // User ID is set by the requireAuth middleware after JWT verification
+    const userId = (req as any).user?.userId || (req as any).user?.id || 'unknown';
 
     const result = await printReceipt(parseInt(req.params.id), userId, print_type);
     res.json(result);
