@@ -5,12 +5,13 @@
  * character limits loaded from the settings table.
  *
  * Uses node:sqlite (built-in) to avoid better-sqlite3 native module issues.
- * The validation functions are replicated here to match main/routes/orders.ts
- * because importing that module pulls in Electron dependencies.
+ * The validation functions are imported from main/routes/orders-validation.ts
+ * which has no Electron or heavy dependencies.
  *
  * Usage: ts-node --transpile-only -P tests/tsconfig.json tests/order-notes-validation.test.ts
  */
 
+import { validateOrderNotes, validateItemNotes } from '../main/routes/orders-validation';
 import { DatabaseSync } from 'node:sqlite';
 import * as path from 'path';
 import * as os from 'os';
@@ -59,25 +60,6 @@ function assertDoesNotThrow(fn: () => void, message: string) {
   } catch (err: any) {
     failed++;
     console.error(`  ✗ ${message} — unexpected error: ${err.message}`);
-  }
-}
-
-// These mirror the logic in main/routes/orders.ts
-function validateOrderNotes(db: TestDb, notes: string | null | undefined): void {
-  if (!notes) return;
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('max_order_notes_length') as { value: string | null } | undefined;
-  const maxLength = parseInt(row?.value || '200', 10);
-  if (notes.length > maxLength) {
-    throw new Error(`Order notes exceed maximum length of ${maxLength} characters`);
-  }
-}
-
-function validateItemNotes(db: TestDb, notes: string | null | undefined): void {
-  if (!notes) return;
-  const row = db.prepare('SELECT value FROM settings WHERE key = ?').get('max_item_notes_length') as { value: string | null } | undefined;
-  const maxLength = parseInt(row?.value || '100', 10);
-  if (notes.length > maxLength) {
-    throw new Error(`Item notes exceed maximum length of ${maxLength} characters`);
   }
 }
 

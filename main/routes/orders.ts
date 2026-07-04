@@ -3,30 +3,7 @@ import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn } from '.
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
-
-export function validateOrderNotes(notes: string | null | undefined): void {
-  if (!notes) return;
-  const db = getDatabase();
-  const maxLength = parseInt(
-    (db.prepare('SELECT value FROM settings WHERE key = ?').get('max_order_notes_length') as any)?.value || '200',
-    10,
-  );
-  if (notes.length > maxLength) {
-    throw new Error(`Order notes exceed maximum length of ${maxLength} characters`);
-  }
-}
-
-export function validateItemNotes(notes: string | null | undefined): void {
-  if (!notes) return;
-  const db = getDatabase();
-  const maxLength = parseInt(
-    (db.prepare('SELECT value FROM settings WHERE key = ?').get('max_item_notes_length') as any)?.value || '100',
-    10,
-  );
-  if (notes.length > maxLength) {
-    throw new Error(`Item notes exceed maximum length of ${maxLength} characters`);
-  }
-}
+import { validateOrderNotes, validateItemNotes } from './orders-validation';
 
 const router = Router();
 
@@ -128,9 +105,13 @@ router.post('/', (req: Request, res: Response) => {
 
     const db = getDatabase();
 
-    validateOrderNotes(special_instructions);
-    for (const item of items) {
-      validateItemNotes(item.special_instructions);
+    try {
+      validateOrderNotes(db, special_instructions);
+      for (const item of items) {
+        validateItemNotes(db, item.special_instructions);
+      }
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
     }
     const orderNumber = generateOrderNumber();
 
@@ -269,8 +250,12 @@ router.post('/:id/items', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'At least one item is required' });
     }
 
-    for (const item of items) {
-      validateItemNotes(item.special_instructions);
+    try {
+      for (const item of items) {
+        validateItemNotes(db, item.special_instructions);
+      }
+    } catch (err: any) {
+      return res.status(400).json({ error: err.message });
     }
 
     // Get settings
