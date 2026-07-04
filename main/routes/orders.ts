@@ -7,6 +7,23 @@ import { validateOrderNotes, validateItemNotes } from './orders-validation';
 
 const router = Router();
 
+// Rate limiting for PIN validation (simple in-memory)
+const pinAttempts = new Map<string, { count: number; resetAt: number }>();
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkPinRateLimit(key: string): boolean {
+  const now = Date.now();
+  const entry = pinAttempts.get(key);
+  if (!entry || now > entry.resetAt) {
+    pinAttempts.set(key, { count: 1, resetAt: now + PIN_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= PIN_MAX_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
+
 function syncCustomerTagCounts(db: any, customerId: string, items: { product_id: string; quantity: number }[]) {
   const row = db.prepare('SELECT tag_counts FROM customers WHERE id = ?').get(customerId) as any;
   if (!row) return;
@@ -198,8 +215,8 @@ router.post('/', (req: Request, res: Response) => {
       }
 
       const preRoundTotal = subtotal + totalTax + (packaging_charge || 0);
-      const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-      const total = Math.round(preRoundTotal) + roundOff;
+      const total = Math.round(preRoundTotal);
+      const roundOff = total - preRoundTotal;
 
       db.prepare(`
         UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, total = ?,
@@ -329,8 +346,8 @@ router.post('/:id/items', (req: Request, res: Response) => {
       }
 
       const preRoundTotal = subtotal + totalTax + ((order as any).packaging_charge || 0);
-      const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-      const total = Math.round(preRoundTotal) + roundOff;
+      const total = Math.round(preRoundTotal);
+      const roundOff = total - preRoundTotal;
 
       db.prepare(`
         UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
@@ -380,10 +397,17 @@ router.patch('/:id/status', (req: Request, res: Response) => {
         return res.status(400).json({ error: 'Manager PIN required to cancel order in progress' });
       }
 
-      // Validate PIN against users table
-      const user = db.prepare('SELECT * FROM users WHERE pin_hash IS NOT NULL').all().find((u: any) => {
-        return verifyPin(u.pin_hash, override_pin);
-      });
+      // Rate limit PIN attempts per IP
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      const rateLimitKey = `pin:${clientIp}:${req.params.id}`;
+      if (!checkPinRateLimit(rateLimitKey)) {
+        return res.status(429).json({ error: 'Too many PIN attempts. Try again in 15 minutes.' });
+      }
+
+      // Validate PIN against owner/manager accounts only
+      const user = db.prepare("SELECT * FROM users WHERE pin_hash IS NOT NULL AND role IN ('owner', 'manager')")
+        .all()
+        .find((u: any) => verifyPin(u.pin_hash, override_pin));
 
       if (!user) {
         return res.status(403).json({ error: 'Invalid manager PIN' });
@@ -516,8 +540,8 @@ router.patch('/:id/discount', (req: Request, res: Response) => {
 
     // Recalculate total from subtotal + tax - discount
     const preRoundTotal = order.subtotal + (order.tax_amount || 0) - discountAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
-    const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-    const newTotal = Math.round(preRoundTotal) + roundOff;
+    const newTotal = Math.round(preRoundTotal);
+    const roundOff = newTotal - preRoundTotal;
 
     db.prepare(`
       UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
@@ -585,8 +609,8 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
       orderTax += i.tax_amount;
     }
     const preRoundTotal = orderSubtotal + orderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
-    const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-    const orderTotal = Math.round(preRoundTotal) + roundOff;
+    const orderTotal = Math.round(preRoundTotal);
+    const roundOff = orderTotal - preRoundTotal;
 
     db.prepare(`
       UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
