@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
+import jwt from 'jsonwebtoken';
 import { getDatabase, generateBillNumber, now, withTxn } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
+import { printReceipt } from '../services/receipt';
+import { getJWTSecret } from './auth';
 
 const router = Router();
 
@@ -330,6 +333,52 @@ router.post('/:id/markPrinted', (req: Request, res: Response) => {
 
     const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
     res.json({ bill: updatedBill });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// POST /api/bills/:id/print - Print or reprint bill
+router.post('/:id/print', async (req: Request, res: Response) => {
+  try {
+    const { print_type } = req.body;
+
+    if (!print_type || !['receipt', 'reprint'].includes(print_type)) {
+      return res.status(400).json({ error: 'print_type must be receipt or reprint' });
+    }
+
+    // Decode user ID from the JWT token (already verified by auth middleware)
+    let userId = 'unknown';
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const payload = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as any;
+        userId = payload.id || payload.sub || 'unknown';
+      } catch {
+        // Token already verified by middleware; this is a best-effort decode
+      }
+    }
+
+    const result = await printReceipt(parseInt(req.params.id), userId, print_type);
+    res.json(result);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// GET /api/bills/:id/print-history - Get print history for bill
+router.get('/:id/print-history', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const prints = db.prepare(`
+      SELECT pl.*, u.name as user_name
+      FROM print_logs pl
+      LEFT JOIN users u ON pl.user_id = u.id
+      WHERE pl.bill_id = ?
+      ORDER BY pl.printed_at DESC
+    `).all(req.params.id);
+
+    res.json({ prints });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

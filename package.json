@@ -35,6 +35,7 @@
     "test:db-audit": "ts-node --transpile-only -P tests/tsconfig.json tests/db-audit.test.ts",
     "test:print-logs": "node tests/run-electron-node-test.cjs tests/print-logs.test.ts",
     "test:receipt-printing": "ts-node --transpile-only -P tests/tsconfig.json tests/receipt-printing.test.ts",
+    "test:bills-print-api": "ts-node --transpile-only -P tests/tsconfig.json tests/bills-print-api.test.ts",
     "repair:payments": "ts-node --transpile-only -P tests/tsconfig.json tests/repair-payment-details.ts"
   },
   "author": {
