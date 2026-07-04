@@ -456,4 +456,20 @@ router.patch('/:id/status', (req: Request, res: Response) => {
   }
 });
 
+router.patch('/:id/loyalty', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const { loyalty_enabled } = req.body;
+
+    res.json({ success: true, loyalty_enabled: !!loyalty_enabled });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 export const orderRoutes = router;

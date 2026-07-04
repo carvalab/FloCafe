@@ -507,6 +507,21 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 6,
+    name: 'add_loyalty_settings',
+    up: () => {
+      insertSettingIfMissing('loyalty_enabled', '1');
+      insertSettingIfMissing('loyalty_points_per_currency', '1');
+      insertSettingIfMissing('loyalty_redemption_rate', '100');
+      insertSettingIfMissing('loyalty_max_balance_enabled', '0');
+      insertSettingIfMissing('loyalty_max_balance_points', '10000');
+      insertSettingIfMissing('loyalty_expiry_enabled', '0');
+      insertSettingIfMissing('loyalty_expiry_months', '6');
+      insertSettingIfMissing('loyalty_min_redemption', '100');
+      insertSettingIfMissing('loyalty_max_redemption_percentage', '50');
+    },
+  },
 ];
 
 function runMigrations(): void {
