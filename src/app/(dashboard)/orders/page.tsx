@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search, Plus } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -44,6 +44,8 @@ export default function OrdersPage() {
   const [filterType, setFilterType] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
   const [tables, setTables] = useState<any[]>([]);
+  const [printHistoryExpanded, setPrintHistoryExpanded] = useState<Record<number, boolean>>({});
+  const [printHistory, setPrintHistory] = useState<Record<number, any[]>>({});
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -77,6 +79,15 @@ export default function OrdersPage() {
     };
     fetchTables();
   }, []);
+
+  const fetchPrintHistory = async (billId: number) => {
+    try {
+      const { data } = await api.get(`/bills/${billId}/print-history`);
+      setPrintHistory(prev => ({ ...prev, [billId]: data.prints || [] }));
+    } catch {
+      // Ignore error
+    }
+  };
 
   const isOrderPaid = (order: Order) => order.bill?.payment_status === 'paid';
 
@@ -452,6 +463,34 @@ export default function OrdersPage() {
                           </button>
                         </div>
                       ))}
+                    </div>
+                  )}
+
+                  {/* Print History */}
+                  {order.bill && (
+                    <div className="mt-3 pt-3 border-t border-gray-100">
+                      <button
+                        onClick={() => {
+                          setPrintHistoryExpanded(prev => ({ ...prev, [order.bill!.id]: !prev[order.bill!.id] }));
+                          if (!printHistory[order.bill!.id]) {
+                            fetchPrintHistory(order.bill!.id);
+                          }
+                        }}
+                        className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
+                      >
+                        {printHistoryExpanded[order.bill!.id] ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
+                        Print History
+                      </button>
+
+                      {printHistoryExpanded[order.bill!.id] && printHistory[order.bill!.id] && (
+                        <div className="mt-2 pl-4 space-y-1">
+                          {printHistory[order.bill!.id].map((print, index) => (
+                            <div key={print.id} className="text-xs text-gray-500">
+                              {index + 1}. {print.print_type === 'reprint' ? 'Reprinted' : 'Printed'} by {print.user_name} at {new Date(print.printed_at).toLocaleString()}
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
