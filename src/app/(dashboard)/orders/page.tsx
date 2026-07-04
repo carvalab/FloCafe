@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -34,6 +34,10 @@ export default function OrdersPage() {
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
   const [cancelModalOrder, setCancelModalOrder] = useState<Order | null>(null);
   const [loyaltyEnabled, setLoyaltyEnabled] = useState<Record<number, boolean>>({});
+  const [discountModalOrder, setDiscountModalOrder] = useState<Order | null>(null);
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [discountValue, setDiscountValue] = useState<number>(0);
+  const [discountReason, setDiscountReason] = useState<string>('');
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
@@ -157,6 +161,26 @@ export default function OrdersPage() {
       toast.success(enabled ? 'Loyalty points enabled' : 'Loyalty points disabled');
     } catch {
       toast.error('Failed to update loyalty setting');
+    }
+  };
+
+  const handleApplyDiscount = async () => {
+    if (!discountModalOrder) return;
+
+    try {
+      await api.patch(`/orders/${discountModalOrder.id}/discount`, {
+        discount_type: discountType,
+        discount_value: discountValue,
+        discount_reason: discountReason || undefined,
+      });
+      toast.success('Discount applied successfully');
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to apply discount');
+    } finally {
+      setDiscountModalOrder(null);
+      setDiscountValue(0);
+      setDiscountReason('');
     }
   };
 
@@ -357,6 +381,17 @@ export default function OrdersPage() {
                         {generatingBill === order.id ? 'Generating...' : 'Checkout'}
                       </Button>
                     )}
+                    {showCheckout(order) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => setDiscountModalOrder(order)}
+                        size="sm"
+                        className="border-purple-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
+                      >
+                        <Percent size={14} className="mr-1.5" />
+                        Discount
+                      </Button>
+                    )}
                     {!['completed', 'cancelled'].includes(order.status) && (
                       <Button
                         variant="outline"
@@ -484,6 +519,135 @@ export default function OrdersPage() {
                 className="bg-red-600 hover:bg-red-700 text-white"
               >
                 {cancellingOrderId === cancelModalOrder.id ? 'Cancelling...' : 'Confirm Cancel'}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Discount Modal */}
+      {discountModalOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Apply Discount - Order #{discountModalOrder.order_number}</h2>
+
+            <div className="space-y-4">
+              {/* Discount Type Toggle */}
+              <div className="flex rounded-lg overflow-hidden border border-gray-200">
+                <button
+                  onClick={() => { setDiscountType('percentage'); setDiscountValue(0); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
+                    discountType === 'percentage'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <Percent size={14} />
+                  Percentage
+                </button>
+                <button
+                  onClick={() => { setDiscountType('amount'); setDiscountValue(0); }}
+                  className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${
+                    discountType === 'amount'
+                      ? 'bg-purple-600 text-white'
+                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100'
+                  }`}
+                >
+                  <DollarSign size={14} />
+                  Amount
+                </button>
+              </div>
+
+              {/* Discount Value */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  {discountType === 'percentage' ? 'Discount Percentage' : 'Discount Amount'}
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                    {discountType === 'percentage' ? '%' : currency}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={discountType === 'percentage' ? 100 : Number(discountModalOrder.total)}
+                    step={discountType === 'percentage' ? 1 : 0.01}
+                    value={discountValue || ''}
+                    onChange={(e) => setDiscountValue(Number(e.target.value))}
+                    placeholder={discountType === 'percentage' ? '0' : '0.00'}
+                    className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  />
+                </div>
+              </div>
+
+              {/* Discount Reason */}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Reason (optional)
+                </label>
+                <input
+                  type="text"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="Enter reason for discount"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+
+              {/* Preview */}
+              <div className="bg-gray-50 rounded-lg p-3 space-y-1.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-gray-500">Subtotal</span>
+                  <span className="text-gray-900">{currency}{Number(discountModalOrder.total).toLocaleString()}</span>
+                </div>
+                <div className="flex justify-between text-sm">
+                  <span className="text-purple-600">
+                    Discount
+                    {discountType === 'percentage' && discountValue > 0 && (
+                      <span className="text-gray-400 ml-1">({discountValue}%)</span>
+                    )}
+                  </span>
+                  <span className="text-purple-600">
+                    -{currency}{
+                      discountType === 'percentage'
+                        ? (Number(discountModalOrder.total) * discountValue / 100).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : Number(discountValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    }
+                  </span>
+                </div>
+                <div className="border-t border-gray-200 pt-1.5 flex justify-between text-sm font-bold">
+                  <span className="text-gray-900">New Total</span>
+                  <span className="text-gray-900">
+                    {currency}{
+                      discountType === 'percentage'
+                        ? (Number(discountModalOrder.total) * (1 - discountValue / 100)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                        : (Number(discountModalOrder.total) - discountValue).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+                    }
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  setDiscountModalOrder(null);
+                  setDiscountValue(0);
+                  setDiscountReason('');
+                }}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleApplyDiscount}
+                disabled={discountValue <= 0}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                <Percent size={14} className="mr-1.5" />
+                Apply Discount
               </Button>
             </div>
           </div>
