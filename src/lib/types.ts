@@ -159,8 +159,6 @@ export interface OrderItem {
   addons: { id?: number; name: string; price?: number }[] | null;
   special_instructions: string | null;
   status: 'pending' | 'preparing' | 'ready' | 'served' | 'cancelled';
-  created_at: string;
-  updated_at: string;
 }
 
 export interface Bill {
@@ -192,7 +190,7 @@ export interface Staff {
   name: string;
   email: string | null;
   role: string;
-  pin: string | null;
+  pin_hash: string | null;
   is_active: number;
   created_at: string;
   updated_at: string;
