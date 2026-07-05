@@ -31,6 +31,7 @@ const {
 
 const { orderRoutes } = require('../main/routes/orders');
 const { billRoutes } = require('../main/routes/bills');
+const { customerRoutes } = require('../main/routes/customers');
 
 async function main() {
   console.log('Integration Test: Payment Integrity');
@@ -48,6 +49,7 @@ async function main() {
   const app = createApp({
     '/api/orders': orderRoutes,
     '/api/bills': billRoutes,
+    '/api/customers': customerRoutes,
   });
   const { baseUrl, server } = await startServer(app);
 
@@ -113,6 +115,8 @@ async function main() {
     // Disable loyalty so cashback isn't credited during payment —
     // this test verifies wallet balance depletion, not loyalty earn
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
+    // Set redemption rate to 1 so 600 points = ₹600
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '1', ?)").run(now());
 
     // Give customer ₹600 wallet balance — enough for first order (₹500 + tax ≈ ₹525)
     // but NOT enough for second order (₹200 + tax ≈ ₹210)
@@ -226,6 +230,123 @@ async function main() {
     });
     assertEqual(payD.status, 200, 'payment accepted');
     assertEqual(payD.data.loyaltyPointsEarned, 0, 'no loyalty points earned (no customer)');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario E: Paying a Fully Paid Bill (Idempotency)
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario E: Paying a Fully Paid Bill ───');
+
+    // Create order and bill, pay it fully
+    const orderE = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: { type: 'takeaway', items: [{ product_id: 'prod-pay-1', quantity: 1 }] },
+      headers: authHeader,
+    });
+    const billE = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderE.data.order.id },
+      headers: authHeader,
+    });
+    const payE1 = await api(baseUrl, `/api/bills/${billE.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: billE.data.bill.total },
+      headers: authHeader,
+    });
+    assertEqual(payE1.status, 200, 'first payment accepted');
+    assertEqual(payE1.data.bill.payment_status, 'paid', 'bill is paid');
+
+    // Try to pay again — should be rejected
+    const payE2 = await api(baseUrl, `/api/bills/${billE.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: 100 },
+      headers: authHeader,
+    });
+    assertEqual(payE2.status, 400, 'second payment rejected (already paid)');
+    assertIncludes(payE2.data.error, 'already paid', 'error mentions already paid');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario F: Missing Payment Method
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario F: Missing Payment Method ───');
+
+    const orderF = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: { type: 'takeaway', items: [{ product_id: 'prod-pay-1', quantity: 1 }] },
+      headers: authHeader,
+    });
+    const billF = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderF.data.order.id },
+      headers: authHeader,
+    });
+
+    // Try to pay without method
+    const payF = await api(baseUrl, `/api/bills/${billF.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { amount: 500 },
+      headers: authHeader,
+    });
+    assertEqual(payF.status, 400, 'missing method rejected (400)');
+    assertIncludes(payF.data.error, 'method', 'error mentions payment method');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario G: Wallet Balance State After Split Payments
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario G: Wallet Balance After Split ───');
+
+    // Keep loyalty disabled, set redemption rate to 100
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '100', ?)").run(now());
+
+    seedCustomer(db, 'cust-split', 'Split Payment Customer', '9999999999');
+    // Give 100000 points (₹1000 at 100:1 — plenty for half of ₹525 bill)
+    seedWalletCredit(db, 'cust-split', 100000);
+
+    // Create order for ₹500 + tax
+    const orderG = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: {
+        type: 'takeaway',
+        customer_id: 'cust-split',
+        items: [{ product_id: 'prod-pay-1', quantity: 1 }],
+      },
+      headers: authHeader,
+    });
+    const billG = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderG.data.order.id },
+      headers: authHeader,
+    });
+    const billGTotal = Number(billG.data.bill.total);
+
+    // Pay half with wallet
+    const walletPayG = Math.floor(billGTotal / 2);
+    const payG1 = await api(baseUrl, `/api/bills/${billG.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'wallet', amount: walletPayG, customer_id: 'cust-split' },
+      headers: authHeader,
+    });
+    assertEqual(payG1.status, 200, 'wallet payment accepted');
+    assertEqual(payG1.data.bill.payment_status, 'partial', 'bill is partially paid');
+
+    // Verify wallet balance decreased by walletPayG × 100 points
+    const walletAfterG1 = await api(baseUrl, '/api/customers/cust-split/wallet', { headers: authHeader });
+    const expectedBalanceG1 = 100000 - (walletPayG * 100);
+    assertEqual(walletAfterG1.data.balance, expectedBalanceG1, `wallet balance = ${expectedBalanceG1} after first wallet payment`);
+
+    // Pay remaining with cash
+    const cashPayG = billGTotal - walletPayG;
+    const payG2 = await api(baseUrl, `/api/bills/${billG.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: cashPayG },
+      headers: authHeader,
+    });
+    assertEqual(payG2.status, 200, 'cash payment accepted');
+    assertEqual(payG2.data.bill.payment_status, 'paid', 'bill is fully paid');
+
+    // Wallet balance should remain the same (cash payment doesn't affect wallet)
+    const walletAfterG2 = await api(baseUrl, '/api/customers/cust-split/wallet', { headers: authHeader });
+    assertEqual(walletAfterG2.data.balance, expectedBalanceG1, 'wallet balance unchanged after cash payment');
 
   } finally {
     server.close();

@@ -186,6 +186,11 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
     // Pre-compute cashback eligibility (safe to read order items outside txn — they don't change)
     let loyaltyCashbackToCredit = 0;
     let loyaltyExpiresAt: string | null = null;
+    // Read redemption rate always — needed for wallet debits even when loyalty earning is disabled
+    const redemptionRateRow = (db.prepare(
+      `SELECT value FROM settings WHERE key = 'loyalty_redemption_rate'`
+    ).get() as any)?.value;
+    let loyaltyRedemptionRate = parseFloat(redemptionRateRow || '100'); // default: 100 points = 1 currency
     {
       const tempBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
       if (tempBill && tempBill.payment_status !== 'paid') {
@@ -297,8 +302,14 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
       }
 
       let walletDebited = false;
+      let walletCurrencyAmount = 0; // Track wallet amount in currency for cashback reduction
+      let actualLoyaltyPointsEarned = 0; // Track actual cashback credited
 
       if (method === 'wallet') {
+        // Convert currency amount to points using redemption rate
+        // e.g., if redemption_rate=100 and customer pays ₹50, debit 5000 points
+        const pointsToDebit = Math.ceil(paidAmount * loyaltyRedemptionRate);
+
         // Check wallet balance INSIDE transaction to prevent double-spend
         const credits = db.prepare(`
           SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
@@ -309,15 +320,17 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
           WHERE customer_id = ? AND type = 'debit'
         `).get(bill.customer_id) as { total: number };
         const walletBalance = Math.max(0, credits.total - debits.total);
-        if (walletBalance < paidAmount) {
-          throw Object.assign(new Error(`Insufficient wallet balance. Available: ${walletBalance}, Required: ${paidAmount}`), { statusCode: 400 });
+        if (walletBalance < pointsToDebit) {
+          const availableCurrency = Math.floor(walletBalance / loyaltyRedemptionRate);
+          throw Object.assign(new Error(`Insufficient wallet balance. Available: ${availableCurrency} (${walletBalance} points), Required: ${paidAmount}`), { statusCode: 400 });
         }
 
         db.prepare(`
           INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, created_at, updated_at)
           VALUES (?, ?, 'debit', ?, ?, ?, ?)
-        `).run(bill.customer_id, bill.id, paidAmount, `Payment for bill ${bill.bill_number}`, now(), now());
+        `).run(bill.customer_id, bill.id, pointsToDebit, `Payment for bill ${bill.bill_number}`, now(), now());
         walletDebited = true;
+        walletCurrencyAmount = paidAmount; // Track for cashback reduction
       }
 
       db.prepare(`
@@ -344,25 +357,39 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
         }
 
         // Credit per-item cashback (idempotent — skip if already credited for this bill)
+        // Reduce cashback proportionally for wallet-paid portion (no cashback on points spent)
         if (loyaltyCashbackToCredit > 0 && effectiveCustomerId) {
           const alreadyCredited = db.prepare(
             `SELECT id FROM loyalty_ledger WHERE bill_id = ? AND type = 'credit'`
           ).get(bill.id);
           if (!alreadyCredited) {
-            db.prepare(`
-              INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, expires_at, created_at, updated_at)
-              VALUES (?, ?, 'credit', ?, ?, ?, ?, ?)
-            `).run(
-              effectiveCustomerId, bill.id, loyaltyCashbackToCredit,
-              `Cashback on bill ${bill.bill_number}`,
-              loyaltyExpiresAt, now(), now()
-            );
+            let finalCashback = loyaltyCashbackToCredit;
+            // Calculate total wallet amount from ALL payments (current + prior)
+            // This handles split payments where wallet was used in an earlier call
+            const totalWalletPaid = existingPayments
+              .filter((p: any) => p.method === 'wallet')
+              .reduce((sum: number, p: any) => sum + (p.amount || 0), 0);
+            if (totalWalletPaid > 0 && bill.total > 0) {
+              const walletProportion = Math.min(1, totalWalletPaid / bill.total);
+              finalCashback = Math.floor(loyaltyCashbackToCredit * (1 - walletProportion));
+            }
+            if (finalCashback > 0) {
+              db.prepare(`
+                INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, expires_at, created_at, updated_at)
+                VALUES (?, ?, 'credit', ?, ?, ?, ?, ?)
+              `).run(
+                effectiveCustomerId, bill.id, finalCashback,
+                `Cashback on bill ${bill.bill_number}`,
+                loyaltyExpiresAt, now(), now()
+              );
+              actualLoyaltyPointsEarned = finalCashback;
+            }
           }
         }
       }
 
       const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
-      return { bill: updatedBill, walletDebited, loyaltyPointsEarned: loyaltyCashbackToCredit };
+      return { bill: updatedBill, walletDebited, loyaltyPointsEarned: actualLoyaltyPointsEarned };
     });
 
     const billStatus = (result.bill as any)?.payment_status;
