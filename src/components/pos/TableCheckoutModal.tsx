@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import type { Table, Order, Bill, OrderItem } from '@/lib/types';
@@ -148,12 +149,12 @@ export default function TableCheckoutModal({
             <span className="text-gray-500">Subtotal</span>
             <span>{currency}{Number(order.subtotal).toLocaleString()}</span>
           </div>
-          {Number(order.tax_amount) > 0 && (
-            <div className="flex justify-between text-sm">
-              <span className="text-gray-500">Tax</span>
-              <span>{currency}{Number(order.tax_amount).toLocaleString()}</span>
-            </div>
-          )}
+          <TaxBreakdown
+            taxAmount={Number(order.tax_amount)}
+            taxBreakdown={order.tax_breakdown}
+            currency={currency}
+            theme="light"
+          />
           <div className="flex justify-between text-lg font-bold">
             <span>Total</span>
             <span className="text-brand">{currency}{Number(order.total).toLocaleString()}</span>
