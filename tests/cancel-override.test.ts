@@ -34,9 +34,14 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
   return originalLoad.apply(this, arguments as any);
 };
 
+// Set JWT_SECRET before importing auth modules
+process.env.JWT_SECRET = 'test-secret-for-cancel-override';
+
 const express = require('express');
 const bcrypt = require('bcryptjs');
+const jwt = require('jsonwebtoken');
 const { initDatabase, getDatabase, closeDatabase, now } = require('../main/db');
+const { getJWTSecret } = require('../main/routes/auth');
 const { orderRoutes } = require('../main/routes/orders');
 
 // ── Test Helpers ──────────────────────────────────────────────────────────────
@@ -80,10 +85,13 @@ async function request(
   urlPath: string,
   options: Record<string, any> = {}
 ): Promise<{ status: number; data: any }> {
-  const response = await (globalThis as any).fetch(baseUrl + urlPath, {
+  const fetchOptions: any = {
     headers: { 'Content-Type': 'application/json', ...(options.headers || {}) },
-    ...options,
-  });
+  };
+  if (options.method) fetchOptions.method = options.method;
+  if (options.body) fetchOptions.body = options.body;
+
+  const response = await (globalThis as any).fetch(baseUrl + urlPath, fetchOptions);
   const data = await response.json();
   return { status: response.status, data };
 }
@@ -191,10 +199,39 @@ async function main() {
   // Start Express server
   const app = express();
   app.use(express.json());
+
+  // Add auth middleware (replicate requireAuth from server.ts)
+  app.use((req: any, res: any, next: any) => {
+    if (!req.path.startsWith('/api')) { next(); return; }
+    if (req.path === '/api/health') { next(); return; }
+    if (req.path.startsWith('/api/auth')) { next(); return; }
+
+    const authHeader = req.headers.authorization;
+    if (!authHeader?.startsWith('Bearer ')) {
+      res.status(401).json({ error: 'Authentication required' });
+      return;
+    }
+    try {
+      const payload = jwt.verify(authHeader.split(' ')[1], getJWTSecret());
+      req.user = payload;
+      next();
+    } catch {
+      res.status(401).json({ error: 'Invalid or expired token' });
+    }
+  });
+
   app.use('/api/orders', orderRoutes);
   const server = await listen(app);
   const addr = server.address() as any;
   const baseUrl = `http://127.0.0.1:${addr.port}`;
+
+  // Generate a valid JWT for test requests (manager role)
+  const token = jwt.sign(
+    { userId: managerUserId, email: 'mgr@test.local', role: 'manager' },
+    getJWTSecret(),
+    { expiresIn: '1h' }
+  );
+  const authHeader = `Bearer ${token}`;
 
   try {
     // ── Test 1: Cancel pending order (no override required) ──────────────
@@ -205,8 +242,10 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-001'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', reason: 'Customer changed mind' }),
       });
+      console.log('  Response:', JSON.stringify(res.data));
       assertEqual(res.status, 200, 'returns 200 for cancelling pending order');
       assertEqual(res.data.order.status, 'cancelled', 'pending order status becomes cancelled');
     }
@@ -218,6 +257,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-002'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled' }),
       });
       assertEqual(res.status, 400, 'returns 400 when PIN is missing');
@@ -231,6 +271,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-002'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', override_pin: WRONG_PIN }),
       });
       assertEqual(res.status, 403, 'returns 403 for invalid PIN');
@@ -244,6 +285,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-002'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', override_pin: MANAGER_PIN, reason: 'Item out of stock' }),
       });
       assertEqual(res.status, 200, 'returns 200 for cancelling with valid PIN');
@@ -257,6 +299,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-003'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', override_pin: MANAGER_PIN }),
       });
       assertEqual(res.status, 200, 'returns 200 for cancelling ready order with valid PIN');
@@ -270,6 +313,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-004'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', override_pin: MANAGER_PIN }),
       });
       assertEqual(res.status, 200, 'returns 200 for cancelling served order with valid PIN');
@@ -281,6 +325,7 @@ async function main() {
     {
       const res = await request(baseUrl, '/api/orders/99999/status', {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'cancelled', override_pin: MANAGER_PIN }),
       });
       assertEqual(res.status, 404, 'returns 404 for non-existent order');
@@ -293,6 +338,7 @@ async function main() {
       const order = db.prepare("SELECT id FROM orders WHERE order_number = 'ORD-TEST-001'").get() as any;
       const res = await request(baseUrl, `/api/orders/${order.id}/status`, {
         method: 'PATCH',
+        headers: { Authorization: authHeader },
         body: JSON.stringify({ status: 'invalid_status' }),
       });
       assertEqual(res.status, 400, 'returns 400 for invalid status');
