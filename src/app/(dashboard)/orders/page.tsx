@@ -571,6 +571,15 @@ export default function OrdersPage() {
                   </div>
                 </div>
 
+                {/* Order notes */}
+                {order.special_instructions && (
+                  <div className="px-4 py-2 bg-amber-50 border-b border-amber-100">
+                    <p className="text-sm text-amber-700 font-medium break-words">
+                      📝 {order.special_instructions}
+                    </p>
+                  </div>
+                )}
+
                 {/* Items */}
                 <div className="px-4 py-3">
                   <div className="space-y-2">

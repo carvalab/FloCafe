@@ -25,6 +25,19 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Handle 401 — token expired or invalid, force re-login
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 401 && typeof window !== 'undefined') {
+      localStorage.removeItem('kds_user');
+      // Force page reload to reset state and show login form
+      window.location.reload();
+    }
+    return Promise.reject(error);
+  }
+);
+
 const STATUS_CONFIG = {
   pending: { label: 'Waiting', color: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-yellow-700', bg: 'bg-yellow-50', btnBg: 'bg-yellow-500 hover:bg-yellow-600' },
   preparing: { label: 'Preparing', color: 'bg-blue-500', border: 'border-blue-300', text: 'text-blue-700', bg: 'bg-blue-50', btnBg: 'bg-blue-500 hover:bg-blue-600' },
@@ -127,7 +140,12 @@ export default function KdsStandalonePage() {
       });
       setCounts(calcCounts);
       setConnected(true);
-    } catch {
+    } catch (error) {
+      if (axios.isAxiosError(error) && error.response?.status === 401) {
+        // Token expired/invalid — interceptor handles reload, just stop polling
+        stopRestPolling();
+        return;
+      }
       setConnected(false);
     }
   }, []);
