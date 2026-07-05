@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, X, Search, UserPlus } from 'lucide-react';
-import type { Table, Customer } from '@/lib/types';
+import type { Table, Customer, Order } from '@/lib/types';
 import { usePosSettingsStore } from '@/store/pos-settings';
 
 const statusColors: Record<string, string> = {
@@ -162,12 +162,34 @@ function ReserveModal({ table, onClose, onDone }: ReserveModalProps) {
   );
 }
 
+const itemStatusColors: Record<string, { bg: string; text: string; dot: string }> = {
+  pending: { bg: 'bg-yellow-50', text: 'text-yellow-700', dot: 'bg-yellow-400' },
+  preparing: { bg: 'bg-blue-50', text: 'text-blue-700', dot: 'bg-blue-500' },
+  ready: { bg: 'bg-green-50', text: 'text-green-700', dot: 'bg-green-500' },
+  served: { bg: 'bg-purple-50', text: 'text-purple-700', dot: 'bg-purple-500' },
+  cancelled: { bg: 'bg-red-50', text: 'text-red-500', dot: 'bg-red-400' },
+};
+
 export default function TablesPage() {
   const [tables, setTables] = useState<Table[]>([]);
+  const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [reservingTable, setReservingTable] = useState<Table | null>(null);
   const [form, setForm] = useState({ name: '', capacity: '4', floor: 'Ground', section: '' });
+  const [showDetails, setShowDetails] = useState(() => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem('tables_showDetails');
+      return stored !== null ? stored === 'true' : true;
+    }
+    return true;
+  });
+
+  const toggleDetails = () => {
+    const next = !showDetails;
+    setShowDetails(next);
+    localStorage.setItem('tables_showDetails', String(next));
+  };
 
   const fetchTables = async () => {
     try {
@@ -185,6 +207,35 @@ export default function TablesPage() {
     const interval = setInterval(fetchTables, 10000);
     return () => clearInterval(interval);
   }, []);
+
+  useEffect(() => {
+    if (!showDetails) {
+      setOrders([]);
+      return;
+    }
+    const fetchOrders = async () => {
+      try {
+        const { data } = await api.get('/orders', { params: { status: 'pending,preparing,ready,served' } });
+        setOrders(data.orders || []);
+      } catch {
+        // silently fail — tables still show
+      }
+    };
+    fetchOrders();
+    const interval = setInterval(fetchOrders, 10000);
+    return () => clearInterval(interval);
+  }, [showDetails]);
+
+  // Group active orders by table_id
+  const ordersByTable = new Map<number, Order[]>();
+  if (showDetails) {
+    for (const order of orders) {
+      if (!order.table_id) continue;
+      const existing = ordersByTable.get(order.table_id);
+      if (existing) existing.push(order);
+      else ordersByTable.set(order.table_id, [order]);
+    }
+  }
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -220,42 +271,137 @@ export default function TablesPage() {
     <div>
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-900">Tables</h1>
-        <Button onClick={() => setShowForm(true)}>
-          <Plus size={16} className="mr-1" /> Add Table
-        </Button>
+        <div className="flex items-center gap-3">
+          <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showDetails}
+              onChange={toggleDetails}
+              className="w-4 h-4 rounded border-gray-300 text-brand focus:ring-brand"
+            />
+            Show Order Details
+          </label>
+          <Button onClick={() => setShowForm(true)}>
+            <Plus size={16} className="mr-1" /> Add Table
+          </Button>
+        </div>
       </div>
 
-      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
-        {tables.map((table) => (
-          <div key={table.id}
-            className="bg-white rounded-xl p-5 border border-gray-100 text-center hover:shadow-md transition-shadow">
-            <div className={`w-3 h-3 rounded-full ${statusColors[table.status]} mx-auto mb-3`} />
-            <h3 className="font-bold text-lg text-gray-900">{table.name}</h3>
-            <p className="text-sm text-gray-500">{table.capacity} seats</p>
-            <p className="text-xs text-gray-400 capitalize mt-1">{table.status}</p>
-            {table.floor && <p className="text-xs text-gray-400">{table.floor}</p>}
-            {table.status === 'reserved' && table.reservation_customer_name && (
-              <p className="text-xs text-yellow-700 font-medium mt-1 truncate">{table.reservation_customer_name}</p>
-            )}
-            {table.status === 'reserved' && table.reservation_customer_phone && (
-              <p className="text-xs text-yellow-600 mt-0.5">{table.reservation_customer_phone}</p>
-            )}
+      {showDetails ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {tables.map((table) => {
+            const tableOrders = ordersByTable.get(table.id) || [];
+            const hasOrders = tableOrders.length > 0;
 
-            {(table.status === 'occupied' || table.status === 'reserved') && (
-              <button onClick={() => updateStatus(table.id, 'available')}
-                className="mt-3 text-xs text-brand hover:text-brand-hover font-medium">
-                Mark Available
-              </button>
-            )}
-            {table.status === 'available' && (
-              <button onClick={() => setReservingTable(table)}
-                className="mt-3 text-xs text-yellow-600 hover:text-yellow-700 font-medium">
-                Reserve
-              </button>
-            )}
-          </div>
-        ))}
-      </div>
+            return (
+              <div key={table.id}
+                className={`bg-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow ${
+                  hasOrders ? 'border-l-4 border-l-brand' : ''
+                }`}>
+                {/* Table header */}
+                <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${statusColors[table.status]}`} />
+                    <h3 className="font-bold text-gray-900">{table.name}</h3>
+                    <span className="text-xs text-gray-400">· {table.capacity} seats</span>
+                  </div>
+                  <span className="text-xs text-gray-400 capitalize">{table.status}</span>
+                </div>
+
+                {/* Orders section */}
+                {hasOrders ? (
+                  <div className="px-4 py-3 space-y-3">
+                    {tableOrders.map((order) => (
+                      <div key={order.id} className="bg-gray-50 rounded-lg p-3">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-semibold text-gray-800">#{order.order_number}</span>
+                          <span className={`text-xs px-2 py-0.5 rounded-full ${
+                            order.status === 'pending' ? 'bg-yellow-100 text-yellow-700' :
+                            order.status === 'preparing' ? 'bg-blue-100 text-blue-700' :
+                            order.status === 'ready' ? 'bg-green-100 text-green-700' :
+                            order.status === 'served' ? 'bg-purple-100 text-purple-700' :
+                            'bg-gray-100 text-gray-600'
+                          }`}>
+                            {order.status}
+                          </span>
+                        </div>
+                        {order.customer?.name && (
+                          <p className="text-xs text-gray-500 mb-1.5">{order.customer.name}</p>
+                        )}
+                        <div className="space-y-1">
+                          {order.items?.filter(i => i.status !== 'cancelled').map((item) => {
+                            const sc = itemStatusColors[item.status] || itemStatusColors.pending;
+                            return (
+                              <div key={item.id} className={`flex items-center gap-2 px-2 py-1 rounded text-xs ${sc.bg}`}>
+                                <div className={`w-1.5 h-1.5 rounded-full ${sc.dot} flex-shrink-0`} />
+                                <span className="flex-1 truncate text-gray-700">{item.product_name}</span>
+                                <span className="text-gray-500">×{item.quantity}</span>
+                                <span className={`font-medium capitalize ${sc.text}`}>{item.status}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="px-4 py-4 text-center text-xs text-gray-400">
+                    No active orders
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="px-4 py-2 border-t border-gray-50 flex justify-end gap-2">
+                  {(table.status === 'occupied' || table.status === 'reserved') && (
+                    <button onClick={() => updateStatus(table.id, 'available')}
+                      className="text-xs text-brand hover:text-brand-hover font-medium">
+                      Mark Available
+                    </button>
+                  )}
+                  {table.status === 'available' && (
+                    <button onClick={() => setReservingTable(table)}
+                      className="text-xs text-yellow-600 hover:text-yellow-700 font-medium">
+                      Reserve
+                    </button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
+          {tables.map((table) => (
+            <div key={table.id}
+              className="bg-white rounded-xl p-5 border border-gray-100 text-center hover:shadow-md transition-shadow">
+              <div className={`w-3 h-3 rounded-full ${statusColors[table.status]} mx-auto mb-3`} />
+              <h3 className="font-bold text-lg text-gray-900">{table.name}</h3>
+              <p className="text-sm text-gray-500">{table.capacity} seats</p>
+              <p className="text-xs text-gray-400 capitalize mt-1">{table.status}</p>
+              {table.floor && <p className="text-xs text-gray-400">{table.floor}</p>}
+              {table.status === 'reserved' && table.reservation_customer_name && (
+                <p className="text-xs text-yellow-700 font-medium mt-1 truncate">{table.reservation_customer_name}</p>
+              )}
+              {table.status === 'reserved' && table.reservation_customer_phone && (
+                <p className="text-xs text-yellow-600 mt-0.5">{table.reservation_customer_phone}</p>
+              )}
+
+              {(table.status === 'occupied' || table.status === 'reserved') && (
+                <button onClick={() => updateStatus(table.id, 'available')}
+                  className="mt-3 text-xs text-brand hover:text-brand-hover font-medium">
+                  Mark Available
+                </button>
+              )}
+              {table.status === 'available' && (
+                <button onClick={() => setReservingTable(table)}
+                  className="mt-3 text-xs text-yellow-600 hover:text-yellow-700 font-medium">
+                  Reserve
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
 
       {tables.length === 0 && (
         <p className="text-center text-gray-500 py-12">No tables yet. Add your first table!</p>
