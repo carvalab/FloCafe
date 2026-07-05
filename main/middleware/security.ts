@@ -76,7 +76,7 @@ export function authRateLimit() {
  * Must be used after requireAuth.
  */
 export function requireRole(...roles: string[]) {
-  return (req: Request, res: Response, next: Function) => {
+  return (req: Request, res: Response, next: () => void) => {
     const user = (req as any).user;
     if (!user) {
       return res.status(401).json({ error: 'Authentication required' });

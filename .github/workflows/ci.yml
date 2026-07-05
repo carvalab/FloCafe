@@ -2,8 +2,8 @@
 # FloCafe — CI Validation
 #
 # Trigger: Push to main, pull requests to main.
-# Runs: Tests, type checks, frontend lint, and build validation
-# on all 3 platforms (Linux, macOS, Windows).
+# Runs: Tests (all 3 platforms), type checks, backend lint,
+# frontend lint + build, dependency audit, and packaging.
 # Uploads build artifacts for manual testing (7-day retention).
 #
 # Cost: $0 — GitHub Actions is unlimited for public repos.
@@ -18,9 +18,13 @@ on:
     branches: [main]
 
 jobs:
-  # ── Job 1: Unit Tests (Linux only, fast) ──────────────────────
+  # ── Job 1: Unit Tests (all platforms) ────────────────────────
   test:
-    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout repository and submodules
         uses: actions/checkout@v4
@@ -63,7 +67,28 @@ jobs:
       - name: Compile TypeScript
         run: npx tsc --noEmit
 
-  # ── Job 3: Frontend lint + build ────────────────────────────
+  # ── Job 3: Backend lint ──────────────────────────────────────
+  backend-lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint backend
+        run: npm run lint:backend
+
+  # ── Job 4: Frontend lint + build ────────────────────────────
   frontend-lint:
     runs-on: ubuntu-latest
     steps:
@@ -98,9 +123,30 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: 1
 
-  # ── Job 4: Build validation on all 3 platforms ───────────────
+  # ── Job 5: Dependency audit (advisory) ──────────────────────
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository and submodules
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Set up Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Audit dependencies
+        run: npm audit --audit-level=high || true
+
+  # ── Job 6: Build validation on all 3 platforms ───────────────
   build:
-    needs: [test, typecheck]
+    needs: [test, typecheck, frontend-lint]
     strategy:
       fail-fast: false
       matrix:
@@ -134,19 +180,6 @@ jobs:
         run: npm ci
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
-
-      - name: Cache frontend node_modules
-        uses: actions/cache@v4
-        with:
-          path: frontend/node_modules
-          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-frontend-
-
-      - name: Build frontend
-        run: npm run build:frontend
-        env:
-          NEXT_TELEMETRY_DISABLED: 1
 
       - name: Compile main process
         run: npm run build
