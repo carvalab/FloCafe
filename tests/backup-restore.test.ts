@@ -195,66 +195,93 @@ function dataOnlyRestore(backupPath: string, targetDb: Database): { success: boo
   }
 }
 
+// ── Assertion Helpers ────────────────────────────────────────────────────────
+
+let passed = 0;
+let failed = 0;
+let total = 0;
+
+function assert(condition: boolean, message: string) {
+  total++;
+  if (condition) {
+    passed++;
+    console.log(`  ✓ ${message}`);
+  } else {
+    failed++;
+    console.error(`  ✗ ${message}`);
+  }
+}
+
+function assertEqual(actual: any, expected: any, message: string) {
+  total++;
+  if (actual === expected) {
+    passed++;
+    console.log(`  ✓ ${message}`);
+  } else {
+    failed++;
+    console.error(`  ✗ ${message} — expected ${JSON.stringify(expected)}, got ${JSON.stringify(actual)}`);
+  }
+}
+
+// ── Tests ───────────────────────────────────────────────────────────────────
+
 console.log('🧪 FloDesktop Backup/Restore Tests\n');
 console.log('='.repeat(50));
 
 cleanup();
-console.log('\n📁 Test directory:', testDir);
 
-console.log('\n✅ Test 1: Backup contains schema version metadata');
+console.log('\n📁 Test 1: Backup contains schema version metadata');
 createTestDb(8);
 const backupPath = path.join(testDir, 'backup-with-meta.db');
 fs.copyFileSync(path.join(testDir, 'test-v8.db'), backupPath);
 addMetaToBackup(backupPath, 8);
 
 const extractedVersion = getSchemaVersionFromBackup(backupPath);
-console.log(`   Schema version in backup: ${extractedVersion}`);
-console.log(`   ✓ Backup contains schema version metadata: ${extractedVersion === 8}`);
+assertEqual(extractedVersion, 8, 'schema version in backup is 8');
 
-console.log('\n✅ Test 2: Data-only restore with schema mismatch');
+console.log('\n📁 Test 2: Data-only restore with schema mismatch');
 const currentDb = createCurrentSchemaDb();
-console.log(`   Current schema has columns: ${getColumns(currentDb, 'products').join(', ')}`);
 
 const result = dataOnlyRestore(backupPath, currentDb);
-console.log(`   Tables restored: ${result.tablesRestored}`);
-console.log(`   ✓ Data-only restore successful: ${result.success}`);
+assertEqual(result.success, true, 'data-only restore returns success');
+assert(result.tablesRestored > 0, `at least 1 table restored (got ${result.tablesRestored})`);
 
-if (result.success) {
-  const restoredProducts = currentDb.prepare(`SELECT * FROM products WHERE id = 'p1'`).get() as any;
-  console.log(`   Restored product: ${JSON.stringify(restoredProducts)}`);
-  console.log(`   ✓ 'old_field' column not present (new schema): ${!('old_field' in restoredProducts) || restoredProducts.old_field === null}`);
-  console.log(`   ✓ 'new_field' is NULL (new column not in backup): ${restoredProducts.new_field === null}`);
-  console.log(`   ✓ Original data preserved: ${restoredProducts.name === 'Test Product' && restoredProducts.price === 100.00}`);
+const restoredProducts = currentDb.prepare(`SELECT * FROM products WHERE id = 'p1'`).get() as any;
+assert(restoredProducts !== undefined, 'restored product exists');
+if (restoredProducts) {
+  assertEqual(restoredProducts.name, 'Test Product', 'product name preserved');
+  assertEqual(restoredProducts.price, 100.00, 'product price preserved (₹100)');
+  assert(restoredProducts.old_field === undefined || restoredProducts.old_field === null,
+    "old_field not present or null (new schema doesn't have it)");
+  assert(restoredProducts.new_field === null,
+    'new_field is NULL (old backup had no such column)');
 }
 
-console.log('\n✅ Test 3: Version detection');
+console.log('\n📁 Test 3: Version detection on old backup');
 createTestDb(5);
 const oldBackup = path.join(testDir, 'old-backup.db');
 fs.copyFileSync(path.join(testDir, 'test-v5.db'), oldBackup);
 addMetaToBackup(oldBackup, 5);
 
 const oldVersion = getSchemaVersionFromBackup(oldBackup);
-console.log(`   Old backup version: ${oldVersion}`);
-console.log(`   ✓ Version detection works: ${oldVersion === 5}`);
+assertEqual(oldVersion, 5, 'old backup detected as version 5');
 
-console.log('\n✅ Test 4: Invalid backup detection');
+console.log('\n📁 Test 4: Invalid backup detection');
 const invalidBackup = path.join(testDir, 'invalid-backup.db');
 const invalidDb = new DatabaseSync(invalidBackup);
 invalidDb.exec(`CREATE TABLE products (id TEXT)`);
 invalidDb.close();
 
 const invalidVersion = getSchemaVersionFromBackup(invalidBackup);
-console.log(`   Invalid backup version: ${invalidVersion}`);
-console.log(`   ✓ Invalid backup detected: ${invalidVersion === 0}`);
+assertEqual(invalidVersion, 0, 'invalid backup (no _flo_meta) returns version 0');
+
+// ── Summary ─────────────────────────────────────────────────────────────────
 
 console.log('\n' + '='.repeat(50));
-console.log('🏁 All tests completed!');
-console.log('\n📋 Summary:');
-console.log('   • Backups now include _flo_meta table with schema_version');
-console.log('   • Data-only restore imports common columns only');
-console.log('   • New columns = NULL, old columns = ignored');
-console.log('   • Version mismatch is detected and handled gracefully');
+console.log(`${passed}/${total} passed, ${failed} failed`);
 
 currentDb.close();
 cleanup();
+
+process.exit(failed === 0 ? 0 : 1);
 

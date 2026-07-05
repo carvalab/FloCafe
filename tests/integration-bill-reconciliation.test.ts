@@ -169,13 +169,7 @@ async function main() {
 
     // Verify the bill reflects the added items
     const syncedBill = billAfterAdd.data.bill;
-    if (syncedBill.total === orderAfterAdd.total) {
-      assert(true, `bill synced: ₹${syncedBill.total} matches order total`);
-    } else {
-      // Known issue: add-items doesn't sync bill totals
-      console.log(`  ⚠ KNOWN ISSUE: bill total ₹${syncedBill.total} ≠ order total ₹${orderAfterAdd.total}`);
-      assert(true, `documented: bill not synced after adding items (bill=₹${syncedBill.total}, order=₹${orderAfterAdd.total})`);
-    }
+    assertEqual(syncedBill.total, orderAfterAdd.total, `bill total (₹${syncedBill.total}) matches order total (₹${orderAfterAdd.total}) after adding items`);
 
   } finally {
     server.close();

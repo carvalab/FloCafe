@@ -100,15 +100,25 @@ async function main() {
     assertEqual(billRes.data.bill.tax_amount, discountedTax, `bill tax = ₹${discountedTax}`);
     assertEqual(billRes.data.bill.total, discountedTotal, `bill total = ₹${discountedTotal}`);
 
-    // ── Step 4: Verify tax breakdown structure ──────────────────────
+    // ── Step 4: Verify tax breakdown structure (CGST + SGST) ─────────
     console.log('\n4. Verify tax breakdown (CGST + SGST)');
-    const taxBreakdown = createRes.data.order.tax_breakdown;
-    if (taxBreakdown) {
-      const breakdown = typeof taxBreakdown === 'string' ? JSON.parse(taxBreakdown) : taxBreakdown;
-      // India GST splits into CGST + SGST for intra-state
-      assert(breakdown !== null, 'tax breakdown exists');
-    } else {
-      assert(true, 'tax breakdown not stored (acceptable for basic tax)');
+    // Check the initial order's tax breakdown (before discount, which has the per-item breakdown)
+    const rawBreakdown = createRes.data.order.tax_breakdown;
+    assert(rawBreakdown !== null && rawBreakdown !== undefined, 'tax breakdown exists on order');
+    if (rawBreakdown) {
+      const parsed = typeof rawBreakdown === 'string' ? JSON.parse(rawBreakdown) : rawBreakdown;
+      // tax_breakdown is stored as array of per-item breakdowns: [[{title, rate, amount}, ...], ...]
+      // Flatten to get all entries
+      const allEntries = Array.isArray(parsed[0]) ? parsed.flat() : parsed;
+      const cgstEntry = allEntries.find((b: any) => b.title === 'CGST');
+      const sgstEntry = allEntries.find((b: any) => b.title === 'SGST');
+      assert(cgstEntry !== undefined, 'breakdown contains CGST entry');
+      assert(sgstEntry !== undefined, 'breakdown contains SGST entry');
+      // CGST + SGST should equal initial tax (₹50 on ₹1000)
+      if (cgstEntry && sgstEntry) {
+        const totalBreakdownTax = Math.round((cgstEntry.amount + sgstEntry.amount) * 100) / 100;
+        assertEqual(totalBreakdownTax, initialTax, `CGST (₹${cgstEntry.amount}) + SGST (₹${sgstEntry.amount}) = ₹${initialTax}`);
+      }
     }
 
   } finally {

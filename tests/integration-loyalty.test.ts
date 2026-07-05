@@ -127,7 +127,7 @@ async function main() {
       "SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger WHERE customer_id = 'cust-loyal' AND type = 'debit'"
     ).get() as any;
     const walletBalance = Math.max(0, credits.total - debits.total);
-    assert(walletBalance > 0, `wallet balance > 0 (got ₹${walletBalance})`);
+    assertEqual(walletBalance, 50, `wallet balance = ₹50 (5% cashback on ₹1000)`);
 
   } finally {
     server.close();

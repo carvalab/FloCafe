@@ -75,7 +75,8 @@ async function main() {
     const orderSubtotal = createRes.data.order.subtotal;
     const orderTotal = createRes.data.order.total;
     assertEqual(orderSubtotal, 800, 'order subtotal = 800 (500 + 300)');
-    assert(orderTotal >= 800, `order total >= 800 (got ${orderTotal})`);
+    // Total should be either 800 (no tax) or 840 (5% GST) — nothing else
+    assert(orderTotal === 800 || orderTotal === 840, `order total = 800 or 840 (got ${orderTotal})`);
     assertEqual(createRes.data.order.status, 'pending', 'order status is pending');
 
     // ── Step 2: Apply 10% discount ───────────────────────────────────
@@ -91,9 +92,9 @@ async function main() {
     assertEqual(discountRes.data.order.discount_amount, 80, 'discount amount = 80 (10% of 800)');
 
     // Verify total is recalculated (subtotal - discount + tax)
-    const discountedSubtotal = 800 - 80; // 720
+    // discounted subtotal = 720, tax = 5% of 720 = 36, total = 756 (or no tax → 720)
     const discountedTotal = discountRes.data.order.total;
-    assert(discountedTotal >= discountedSubtotal, `total >= ${discountedSubtotal} (got ${discountedTotal})`);
+    assert(discountedTotal === 720 || discountedTotal === 756, `discounted total = 720 (no tax) or 756 (5% GST), got ${discountedTotal}`);
 
     // ── Step 3: Generate bill ────────────────────────────────────────
     console.log('\n3. Generate bill');

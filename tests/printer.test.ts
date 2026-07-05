@@ -304,7 +304,7 @@ console.log('\n✅ Test 9: Detect connected printers (hardware discovery)');
     assert('detectConnectedPrinters returns an array', Array.isArray(printers));
     if (printers.length === 0) {
       console.log('   ℹ Skipping hardware assertion (no printer drivers installed on this host)');
-      passed++;
+      assert('no printers found (skipped, not a failure)', true);
     } else {
       assert('host has at least one printer installed', printers.length > 0);
     }
