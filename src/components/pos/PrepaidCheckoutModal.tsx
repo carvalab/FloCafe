@@ -68,10 +68,10 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   }, [selectedMethod]);
 
   const cashGivenNum = parseFloat(cashGiven) || 0;
-  const change = selectedMethod === 'cash' && cashGivenNum > total
-    ? parseFloat((cashGivenNum - total).toFixed(2))
+  const change = selectedMethod === 'cash' && cashGivenNum > displayTotal
+    ? parseFloat((cashGivenNum - displayTotal).toFixed(2))
     : 0;
-  const isCashValid = selectedMethod !== 'cash' || cashGivenNum >= total;
+  const isCashValid = selectedMethod !== 'cash' || cashGivenNum >= displayTotal;
 
   const fmtExpiry = (d: string) => {
     try { return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
@@ -221,7 +221,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     type="number"
                     value={cashGiven}
                     onChange={(e) => setCashGiven(e.target.value)}
-                    placeholder={fmt(total)}
+                    placeholder={fmt(displayTotal)}
                     className="flex-1 text-base font-bold text-gray-900 outline-none bg-transparent placeholder:text-gray-300"
                     step="1"
                     min="0"
@@ -237,7 +237,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 </div>
                 {cashGiven && !isCashValid && (
                   <p className="text-xs text-red-500 px-0.5">
-                    Cash given must be at least {currency}{fmt(total)}
+                    Cash given must be at least {currency}{fmt(displayTotal)}
                   </p>
                 )}
               </div>
