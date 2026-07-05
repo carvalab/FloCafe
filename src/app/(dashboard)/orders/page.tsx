@@ -8,7 +8,7 @@ import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, 
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
-import type { OrderItem } from '@/lib/types';
+import type { OrderItem, Table, Product } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 
@@ -59,7 +59,7 @@ export default function OrdersPage() {
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
-  const [tables, setTables] = useState<any[]>([]);
+  const [tables, setTables] = useState<Table[]>([]);
 
   // Consolidated filter state
   const [filters, setFilters] = useState<Filters>({ search: '', table: '', type: '', status: '' });
@@ -79,10 +79,10 @@ export default function OrdersPage() {
   // Other states
   const [addItemsOrder, setAddItemsOrder] = useState<Order | null>(null);
   const [printHistoryExpanded, setPrintHistoryExpanded] = useState<Record<number, boolean>>({});
-  const [printHistory, setPrintHistory] = useState<Record<number, any[]>>({});
+  const [printHistory, setPrintHistory] = useState<Record<number, { id: number; print_type: string; user_name: string; printed_at: string }[]>>({});
 
   // Add Item modal states
-  const [products, setProducts] = useState<any[]>([]);
+  const [products, setProducts] = useState<Product[]>([]);
   const [productSearch, setProductSearch] = useState('');
   const [selectedItems, setSelectedItems] = useState<{ product_id: number; product_name: string; quantity: number; special_instructions: string }[]>([]);
   const [addingItems, setAddingItems] = useState(false);
@@ -96,7 +96,7 @@ export default function OrdersPage() {
       const orders = data.orders || [];
       setOrders(orders);
       // Eagerly fetch print history for all bills
-      orders.forEach((order: any) => {
+      orders.forEach((order: Order) => {
         if (order.bill?.id && !printHistory[order.bill.id]) {
           fetchPrintHistory(order.bill.id);
         }
@@ -268,8 +268,9 @@ export default function OrdersPage() {
       await api.patch(`/orders/${orderId}/items/${itemId}/cancel`, { reason: 'Removed by manager' });
       toast.success('Item removed');
       fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to remove item');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to remove item');
     }
   };
 
@@ -279,8 +280,9 @@ export default function OrdersPage() {
       await api.patch(`/orders/${orderId}/items/${itemId}/restore`);
       toast.success('Item restored');
       fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to restore item');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to restore item');
     }
   };
 
@@ -316,8 +318,9 @@ export default function OrdersPage() {
       });
       toast.success('Discount applied successfully');
       fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to apply discount');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to apply discount');
     } finally {
       setDiscountModal(null);
     }
@@ -327,7 +330,7 @@ export default function OrdersPage() {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
   };
 
-  const handleNewOrderForTable = (table: any) => {
+  const handleNewOrderForTable = (table: Table) => {
     window.location.href = `/pos?table_id=${table.id}`;
   };
 
@@ -347,7 +350,7 @@ export default function OrdersPage() {
     setProductSearch('');
   }, [addItemsOrder]);
 
-  const handleAddItemToSelection = (product: any) => {
+  const handleAddItemToSelection = (product: Product) => {
     setSelectedItems(prev => {
       const existing = prev.find(i => i.product_id === product.id);
       if (existing) {
@@ -384,8 +387,9 @@ export default function OrdersPage() {
       toast.success(`Added ${selectedItems.length} item(s) to order`);
       setAddItemsOrder(null);
       fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to add items');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to add items');
     } finally {
       setAddingItems(false);
     }
@@ -404,8 +408,9 @@ export default function OrdersPage() {
       });
       toast.success('Order cancelled successfully');
       fetchOrders();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Failed to cancel order');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to cancel order');
     } finally {
       setCancellingOrderId(null);
       setCancelModal(null);
@@ -469,7 +474,7 @@ export default function OrdersPage() {
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
           <option value="">All Tables</option>
-          {tables.map((table: any) => (
+          {tables.map((table: Table) => (
             <option key={table.id} value={String(table.id)}>
               {table.name}
             </option>
@@ -685,7 +690,7 @@ export default function OrdersPage() {
                     {order.status === 'completed' && order.table && (
                       <Button
                         variant="outline"
-                        onClick={() => handleNewOrderForTable(order.table)}
+                        onClick={() => handleNewOrderForTable(order.table!)}
                         size="sm"
                         className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                       >
@@ -984,7 +989,7 @@ export default function OrdersPage() {
             <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg mb-3 max-h-48">
               {products
                 .filter(p => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
-                .map((product: any) => (
+                .map((product: Product) => (
                   <button
                     key={product.id}
                     onClick={() => handleAddItemToSelection(product)}

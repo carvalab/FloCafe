@@ -151,8 +151,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       if (data.bill && onBillUpdate) {
         onBillUpdate(data.bill);
       }
-    } catch (err: any) {
-      const msg = err.response?.data?.error || err.response?.data?.message || 'Failed to update discount';
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string; message?: string } } };
+      const msg = axiosErr.response?.data?.error || axiosErr.response?.data?.message || 'Failed to update discount';
       toast.error(msg);
     }
   };
@@ -185,8 +186,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         toast.success('Payment recorded!');
       }
       onPaid();
-    } catch (err: any) {
-      toast.error(err.response?.data?.error || 'Payment failed');
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Payment failed');
     } finally {
       setProcessing(false);
     }
@@ -258,16 +260,16 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   <span>{currency}{fmt(Number(bill.delivery_charge))}</span>
                 </div>
               )}
-              {Number((bill as any).packaging_charge) > 0 && (
+              {Number(bill.packaging_charge) > 0 && (
                 <div className="flex justify-between text-slate-300">
                   <span>Packaging</span>
-                  <span>{currency}{fmt(Number((bill as any).packaging_charge))}</span>
+                  <span>{currency}{fmt(Number(bill.packaging_charge))}</span>
                 </div>
               )}
-              {Number((bill as any).round_off) !== 0 && (
+              {Number(bill.round_off) !== 0 && (
                 <div className="flex justify-between text-slate-300">
                   <span>Round off</span>
-                  <span>{Number((bill as any).round_off) > 0 ? '+' : ''}{currency}{fmt(Number((bill as any).round_off))}</span>
+                  <span>{Number(bill.round_off) > 0 ? '+' : ''}{currency}{fmt(Number(bill.round_off))}</span>
                 </div>
               )}
               <div className="flex justify-between text-white font-semibold border-t border-white/10 pt-1.5 mt-1">
