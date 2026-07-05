@@ -208,11 +208,17 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
           const orderDiscount = order?.discount_amount || 0;
           const orderSubtotal = order?.subtotal || 0;
 
+          // Read global earning rate — used as fallback when product cb_percent is 0
+          const pointsPerCurrencyRow = (db.prepare(
+            `SELECT value FROM settings WHERE key = 'loyalty_points_per_currency'`
+          ).get() as any)?.value;
+          const globalPointsPerCurrency = parseFloat(pointsPerCurrencyRow || '1');
+
           const items = db.prepare(`
             SELECT oi.subtotal, p.cb_percent
             FROM order_items oi
             JOIN products p ON p.id = oi.product_id
-            WHERE oi.order_id = ? AND p.cb_percent > 0 AND oi.status != 'cancelled'
+            WHERE oi.order_id = ? AND oi.status != 'cancelled'
           `).all(tempBill.order_id) as { subtotal: number; cb_percent: number }[];
           for (const item of items) {
             let effectiveSubtotal = item.subtotal;
@@ -221,7 +227,12 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
               const itemDiscountShare = orderDiscount * (item.subtotal / orderSubtotal);
               effectiveSubtotal = Math.max(0, item.subtotal - itemDiscountShare);
             }
-            loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * item.cb_percent / 100);
+            // Use per-product cb_percent if set, otherwise fall back to global earning rate
+            if (item.cb_percent > 0) {
+              loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * item.cb_percent / 100);
+            } else {
+              loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * globalPointsPerCurrency);
+            }
           }
         }
       }
