@@ -125,7 +125,7 @@ export default function POSPage() {
             : null,
           special_instructions: item.special_instructions || null,
         }));
-        const { data } = await api.post(`/orders/${pendingOrder.id}/items`, { items: newItems });
+        const { data } = await api.post(`/orders/${pendingOrder.id}/items`, { items: newItems, special_instructions: cart.orderNotes || undefined });
         toast.success(`Items added to order #${pendingOrder.order_number}`);
         orderForKot = data.order as Order;
         setPendingOrder(null);
@@ -243,7 +243,7 @@ export default function POSPage() {
   const handleSelectHeldTable = (tableId: number) => {
     const held = heldOrders.restoreOrder(tableId);
     if (held) {
-      cart.loadItems(held.items, tableId, held.customerId, held.guestCount);
+      cart.loadItems(held.items, tableId, held.customerId, held.guestCount, held.orderNotes);
       cart.setOrderType('dine_in');
     }
     setShowTablePicker(false);
@@ -253,6 +253,7 @@ export default function POSPage() {
     setCheckoutTable(null);
     cart.setTableId(table.id);
     cart.setOrderType('dine_in');
+    cart.setOrderNotes(order.special_instructions || '');
     setPendingOrder(order);
     toast(`Adding items to order #${order.order_number}. Place order when ready.`, { icon: 'ℹ️' });
   };
@@ -274,6 +275,7 @@ export default function POSPage() {
             : null,
           special_instructions: item.special_instructions || null,
         })),
+        special_instructions: order.special_instructions || undefined,
       });
       toast.success(`Items added to order #${order.order_number}`);
       cart.clearCart();

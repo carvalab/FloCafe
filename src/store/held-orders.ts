@@ -7,12 +7,13 @@ interface HeldOrder {
   items: CartItem[];
   customerId: number | string | null;
   guestCount: number;
+  orderNotes: string;
   heldAt: string;
 }
 
 interface HeldOrdersState {
   orders: Record<number, HeldOrder>;
-  holdOrder: (tableId: number, items: CartItem[], customerId: number | string | null, guestCount: number) => void;
+  holdOrder: (tableId: number, items: CartItem[], customerId: number | string | null, guestCount: number, orderNotes?: string) => void;
   restoreOrder: (tableId: number) => HeldOrder | null;
   removeHeldOrder: (tableId: number) => void;
   hasHeldOrder: (tableId: number) => boolean;
@@ -24,11 +25,11 @@ export const useHeldOrdersStore = create<HeldOrdersState>()(
     (set, get) => ({
       orders: {},
 
-      holdOrder: (tableId, items, customerId, guestCount) => {
+      holdOrder: (tableId, items, customerId, guestCount, orderNotes = '') => {
         set((state) => ({
           orders: {
             ...state.orders,
-            [tableId]: { tableId, items, customerId, guestCount, heldAt: new Date().toISOString() },
+            [tableId]: { tableId, items, customerId, guestCount, orderNotes, heldAt: new Date().toISOString() },
           },
         }));
       },

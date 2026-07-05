@@ -15,7 +15,7 @@ interface CartState {
   removeItem: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, quantity: number) => void;
   clearCart: () => void;
-  loadItems: (items: CartItem[], tableId: number | null, customerId: number | string | null, guestCount: number) => void;
+  loadItems: (items: CartItem[], tableId: number | null, customerId: number | string | null, guestCount: number, orderNotes?: string) => void;
   setOrderType: (type: CartState['orderType']) => void;
   setTableId: (id: number | null) => void;
   setCustomerId: (id: number | string | null) => void;
@@ -87,8 +87,8 @@ export const useCartStore = create<CartState>((set, get) => ({
     set({ items: [], tableId: null, customerId: null, customer: null, guestCount: 1, deliveryAddress: '', orderNotes: '' });
   },
 
-  loadItems: (items, tableId, customerId, guestCount) => {
-    set({ items, tableId, customerId, guestCount });
+  loadItems: (items, tableId, customerId, guestCount, orderNotes) => {
+    set({ items, tableId, customerId, guestCount, orderNotes: orderNotes || '' });
   },
 
   setOrderType: (type) => set({ orderType: type, deliveryAddress: type !== 'delivery' ? '' : undefined }),
