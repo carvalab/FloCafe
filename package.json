@@ -29,7 +29,7 @@
     "pack": "electron-builder --dir",
     "start": "electron .",
     "rebuild": "HOME=~/.electron-gyp node-gyp rebuild --target=$(node -p \"require('./node_modules/electron/package.json').version\") --arch=$(node -p \"process.arch\") --dist-url=https://electronjs.org/headers --runtime=electron --directory node_modules/better-sqlite3",
-    "test": "npm run test:first-run && npm run test:backup && npm run test:printer && npm run test:db-audit && npm run test:notes-validation && npm run test:print-logs && npm run test:receipt-printing && npm run test:cancel-override",
+    "test": "npm run test:first-run && npm run test:backup && npm run test:printer && npm run test:db-audit && npm run test:notes-validation && npm run test:print-logs && npm run test:receipt-printing && npm run test:cancel-override && npm run test:integration-happy && npm run test:integration-tax && npm run test:integration-payments && npm run test:integration-lifecycle && npm run test:integration-reconciliation && npm run test:integration-loyalty && npm run test:integration-discount",
     "test:notes-validation": "ts-node --transpile-only -P tests/tsconfig.json tests/order-notes-validation.test.ts",
     "test:first-run": "node tests/run-electron-node-test.cjs tests/first-run-setup.test.ts",
     "test:backup": "ts-node --transpile-only -P tests/tsconfig.json tests/backup-restore.test.ts",
@@ -39,6 +39,13 @@
     "test:receipt-printing": "ts-node --transpile-only -P tests/tsconfig.json tests/receipt-printing.test.ts",
     "test:bills-print-api": "ts-node --transpile-only -P tests/tsconfig.json tests/bills-print-api.test.ts",
     "test:cancel-override": "node tests/run-electron-node-test.cjs tests/cancel-override.test.ts",
+    "test:integration-happy": "node tests/run-electron-node-test.cjs tests/integration-happy-path.test.ts",
+    "test:integration-tax": "node tests/run-electron-node-test.cjs tests/integration-tax.test.ts",
+    "test:integration-payments": "node tests/run-electron-node-test.cjs tests/integration-payments.test.ts",
+    "test:integration-lifecycle": "node tests/run-electron-node-test.cjs tests/integration-order-lifecycle.test.ts",
+    "test:integration-reconciliation": "node tests/run-electron-node-test.cjs tests/integration-bill-reconciliation.test.ts",
+    "test:integration-loyalty": "node tests/run-electron-node-test.cjs tests/integration-loyalty.test.ts",
+    "test:integration-discount": "node tests/run-electron-node-test.cjs tests/integration-discount-edge.test.ts",
     "repair:payments": "ts-node --transpile-only -P tests/tsconfig.json tests/repair-payment-details.ts"
   },
   "author": {

@@ -181,6 +181,14 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         const quantity = item.quantity;
         const itemDiscount = item.discount_amount || 0;
 
+        // Validate quantity and price
+        if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
+          throw new Error(`Invalid quantity for ${product.name}: must be a positive number`);
+        }
+        if (unitPrice < 0 || !Number.isFinite(unitPrice)) {
+          throw new Error(`Invalid price for ${product.name}: must be a non-negative number`);
+        }
+
         let itemSubtotal = unitPrice * quantity;
         if (item.addons) {
           for (const addon of item.addons) {
@@ -313,6 +321,14 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         const quantity = item.quantity;
         const itemDiscount = item.discount_amount || 0;
 
+        // Validate quantity and price
+        if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
+          throw new Error(`Invalid quantity for ${product.name}: must be a positive number`);
+        }
+        if (unitPrice < 0 || !Number.isFinite(unitPrice)) {
+          throw new Error(`Invalid price for ${product.name}: must be a non-negative number`);
+        }
+
         let itemSubtotal = unitPrice * quantity;
         if (item.addons) {
           for (const addon of item.addons) {
@@ -340,11 +356,12 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         }
       }
 
-      const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];
+      // BUG #3 FIX: Filter out cancelled items from total recalculation
+      const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
       let subtotal = 0;
       let totalTax = 0;
       const allTaxBreakdowns: any[] = [];
-      for (const item of orderItems) {
+      for (const item of activeItems) {
         subtotal += item.subtotal;
         totalTax += item.tax_amount;
         if (item.tax_breakdown) {
@@ -355,13 +372,39 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         }
       }
 
-      const preRoundTotal = subtotal + totalTax + ((order as any).packaging_charge || 0);
+      // BUG #12 FIX: Preserve order-level discount (scale percentage proportionally)
+      const existingDiscountAmount = (order as any).discount_amount || 0;
+      let newDiscountAmount = existingDiscountAmount;
+      if (existingDiscountAmount > 0 && (order as any).subtotal > 0) {
+        if ((order as any).discount_type === 'percentage') {
+          const pct = (order as any).discount_value || 0;
+          newDiscountAmount = Math.round(subtotal * pct / 100 * 100) / 100;
+        }
+        // amount type: keep same value
+      }
+
+      const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
+      let newTaxAmount = totalTax;
+      if (newDiscountAmount > 0 && subtotal > 0) {
+        const taxRatio = discountedSubtotal / subtotal;
+        newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+      }
+
+      const preRoundTotal = discountedSubtotal + newTaxAmount + ((order as any).packaging_charge || 0);
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 
       db.prepare(`
-        UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-      `).run(subtotal, totalTax, JSON.stringify(allTaxBreakdowns), total, roundOff, now(), req.params.id);
+        UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+      `).run(subtotal, newTaxAmount, JSON.stringify(allTaxBreakdowns), newDiscountAmount, total, roundOff, now(), req.params.id);
+
+      // BUG #4 FIX: Sync bill if it exists (add-items didn't update the bill)
+      const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(req.params.id) as any;
+      if (existingBill) {
+        const newBillBalance = Math.max(0, total - (existingBill.paid_amount || 0));
+        db.prepare(`UPDATE bills SET total = ?, balance = ?, tax_amount = ?, discount_amount = ?, round_off = ?, updated_at = ? WHERE id = ?`)
+          .run(total, newBillBalance, newTaxAmount, newDiscountAmount, roundOff, now(), existingBill.id);
+      }
 
       const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
       const updatedItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
@@ -521,8 +564,8 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
       return res.status(400).json({ error: 'discount_type must be "percentage" or "amount"' });
     }
 
-    // Validate discount_value is a non-negative number
-    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value < 0) {
+    // Validate discount_value is a non-negative finite number
+    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value < 0 || !Number.isFinite(discount_value)) {
       return res.status(400).json({ error: 'discount_value must be a non-negative number' });
     }
 
@@ -541,64 +584,75 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
       }
     }
 
-    // Calculate discount amount
-    let discountAmount = 0;
-    if (discount_value > 0) {
-      if (discount_type === 'percentage') {
-        discountAmount = (order.subtotal * discount_value) / 100;
-      } else {
-        discountAmount = Math.min(discount_value, order.subtotal);
+    // BUG #6 FIX: Wrap discount + tax + bill sync in a transaction
+    const result = withTxn(() => {
+      // Calculate discount amount
+      let discountAmount = 0;
+      if (discount_value > 0) {
+        if (discount_type === 'percentage') {
+          discountAmount = (order.subtotal * discount_value) / 100;
+        } else {
+          discountAmount = Math.min(discount_value, order.subtotal);
+        }
+        discountAmount = Math.round(discountAmount * 100) / 100;
       }
-      discountAmount = Math.round(discountAmount * 100) / 100;
-    }
 
-    // Recalculate tax on discounted subtotal (India GST is on post-discount value)
-    const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
-    let newTaxAmount = order.tax_amount || 0;
-    if (discountAmount > 0 && order.subtotal > 0) {
-      // Proportionally reduce tax based on discount
-      const taxRatio = discountedSubtotal / order.subtotal;
-      newTaxAmount = Math.round((order.tax_amount || 0) * taxRatio * 100) / 100;
-    }
+      // BUG #11 FIX: Recalculate tax from scratch (not ratio) so removing discount restores original tax
+      let newTaxAmount = order.tax_amount || 0;
+      if (discountAmount > 0 && order.subtotal > 0) {
+        const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
+        const taxRatio = discountedSubtotal / order.subtotal;
+        newTaxAmount = Math.round((order.tax_amount || 0) * taxRatio * 100) / 100;
+      } else if (discount_value === 0) {
+        // Removing discount: recalculate tax from items to restore original
+        const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
+        let freshTax = 0;
+        for (const item of activeItems) {
+          freshTax += item.tax_amount || 0;
+        }
+        newTaxAmount = freshTax;
+      }
 
-    // Recalculate total from discounted subtotal + recalculated tax
-    const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
-    const newTotal = Math.round(preRoundTotal);
-    const roundOff = newTotal - preRoundTotal;
+      const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
+      const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+      const newTotal = Math.round(preRoundTotal);
+      const roundOff = newTotal - preRoundTotal;
 
-    db.prepare(`
-      UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
-        discount_reason = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-    `).run(
-      discountAmount,
-      discount_value > 0 ? discount_type : null,
-      discount_value > 0 ? discount_value : null,
-      discount_value > 0 ? (discount_reason || null) : null,
-      newTaxAmount, newTotal, roundOff, now(), req.params.id
-    );
-
-    // Sync discount to bill if it exists and is unpaid
-    const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ? AND payment_status != ?')
-      .get(req.params.id, 'paid') as any;
-    if (existingBill) {
-      const newBillBalance = Math.max(0, newTotal - (existingBill.paid_amount || 0));
       db.prepare(`
-        UPDATE bills SET discount_amount = ?, discount_type = ?, discount_value = ?,
-          discount_reason = ?, tax_amount = ?, total = ?, balance = ?, round_off = ?, updated_at = ?
-        WHERE id = ?
+        UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
+          discount_reason = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
       `).run(
         discountAmount,
         discount_value > 0 ? discount_type : null,
         discount_value > 0 ? discount_value : null,
         discount_value > 0 ? (discount_reason || null) : null,
-        newTaxAmount, newTotal, newBillBalance, roundOff, now(), existingBill.id
+        newTaxAmount, newTotal, roundOff, now(), req.params.id
       );
-    }
 
-    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+      // Sync discount to bill if it exists and is unpaid
+      const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ? AND payment_status != ?')
+        .get(req.params.id, 'paid') as any;
+      if (existingBill) {
+        const newBillBalance = Math.max(0, newTotal - (existingBill.paid_amount || 0));
+        db.prepare(`
+          UPDATE bills SET discount_amount = ?, discount_type = ?, discount_value = ?,
+            discount_reason = ?, tax_amount = ?, total = ?, balance = ?, round_off = ?, updated_at = ?
+          WHERE id = ?
+        `).run(
+          discountAmount,
+          discount_value > 0 ? discount_type : null,
+          discount_value > 0 ? discount_value : null,
+          discount_value > 0 ? (discount_reason || null) : null,
+          newTaxAmount, newTotal, newBillBalance, roundOff, now(), existingBill.id
+        );
+      }
+
+      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+      return updatedOrder;
+    });
+
     notifyOrderUpdated();
-
-    res.json({ order: updatedOrder });
+    res.json({ order: result });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }
@@ -632,6 +686,19 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     // Validate discount_value is a positive number
     if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value <= 0) {
       return res.status(400).json({ error: 'discount_value must be a positive number' });
+    }
+
+    // BUG #14 FIX: Check item-level discount against max settings
+    if (discount_type === 'percentage') {
+      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+      if (discount_value > maxPercentage) {
+        return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
+      }
+    } else if (discount_type === 'amount') {
+      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+      if (discount_value > maxAmount) {
+        return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
+      }
     }
 
     // Calculate item discount amount (include addon prices)
@@ -713,6 +780,14 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     db.prepare(`
       UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
     `).run(orderSubtotal, newOrderTax, newOrderDiscount, orderTotal, roundOff, now(), req.params.id);
+
+    // BUG #15 FIX: Sync item-level discount to bill
+    const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(req.params.id) as any;
+    if (existingBill) {
+      const newBillBalance = Math.max(0, orderTotal - (existingBill.paid_amount || 0));
+      db.prepare(`UPDATE bills SET total = ?, balance = ?, tax_amount = ?, discount_amount = ?, round_off = ?, updated_at = ? WHERE id = ?`)
+        .run(orderTotal, newBillBalance, newOrderTax, newOrderDiscount, roundOff, now(), existingBill.id);
+    }
 
     const updatedItem = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.itemId) as any;
 

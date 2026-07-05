@@ -182,71 +182,109 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
     }
 
     const db = getDatabase();
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
-    if (!bill) {
-      return res.status(404).json({ error: 'Bill not found' });
-    }
 
-    if (bill.payment_status === 'paid') {
-      return res.status(400).json({ error: 'Bill is already paid' });
-    }
-
-    const paidAmount = amount !== undefined && amount !== null ? parseFloat(amount) : bill.total;
-
-    const newPaidAmount = bill.paid_amount + paidAmount;
-    const newBalance = Math.max(0, bill.total - newPaidAmount);
-    const paymentStatus = newBalance <= 0.01 ? 'paid' : 'partial';
-
-    const existingPayments: any[] = (() => {
-      if (!bill.payment_details) return [];
-      try {
-        const parsed = JSON.parse(bill.payment_details);
-        return Array.isArray(parsed) ? parsed : [parsed];
-      } catch {
-        return [];
-      }
-    })();
-    existingPayments.push({ method, amount: paidAmount, transaction_id, notes, timestamp: now() });
-
-    const effectiveCustomerId = bill.customer_id || (bodyCustomerId ? String(bodyCustomerId) : null);
-
-    // Pre-compute per-item cashback (only when this payment will fully settle the bill)
+    // Pre-compute cashback eligibility (safe to read order items outside txn — they don't change)
     let loyaltyCashbackToCredit = 0;
     let loyaltyExpiresAt: string | null = null;
-    if (paymentStatus === 'paid' && effectiveCustomerId) {
-      const loyaltySetting = (db.prepare(
-        `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
-      ).get() as any)?.value;
-      if (loyaltySetting === 'true' || loyaltySetting === '1') {
-        const expiryRow = (db.prepare(
-          `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
+    {
+      const tempBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
+      if (tempBill && tempBill.payment_status !== 'paid') {
+        const effectiveCustomerId = tempBill.customer_id || (bodyCustomerId ? String(bodyCustomerId) : null);
+        const loyaltySetting = (db.prepare(
+          `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
         ).get() as any)?.value;
-        const expiryMonths = parseInt(expiryRow || '6');
-        const expiryDays = expiryMonths * 30;
-        const expires = new Date();
-        expires.setDate(expires.getDate() + expiryDays);
-        loyaltyExpiresAt = expires.toISOString().slice(0, 19).replace('T', ' ');
+        if (loyaltySetting === 'true' || loyaltySetting === '1') {
+          const expiryRow = (db.prepare(
+            `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
+          ).get() as any)?.value;
+          const expiryMonths = parseInt(expiryRow || '6');
+          const expiryDays = expiryMonths * 30;
+          const expires = new Date();
+          expires.setDate(expires.getDate() + expiryDays);
+          loyaltyExpiresAt = expires.toISOString().slice(0, 19).replace('T', ' ');
 
-        const items = db.prepare(`
-          SELECT oi.subtotal, p.cb_percent
-          FROM order_items oi
-          JOIN products p ON p.id = oi.product_id
-          WHERE oi.order_id = ? AND p.cb_percent > 0
-        `).all(bill.order_id) as { subtotal: number; cb_percent: number }[];
-        for (const item of items) {
-          loyaltyCashbackToCredit += Math.floor(item.subtotal * item.cb_percent / 100);
+          // BUG #20 FIX: Calculate cashback on discounted subtotal (proportional)
+          const order = db.prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?').get(tempBill.order_id) as any;
+          const orderDiscount = order?.discount_amount || 0;
+          const orderSubtotal = order?.subtotal || 0;
+
+          const items = db.prepare(`
+            SELECT oi.subtotal, p.cb_percent
+            FROM order_items oi
+            JOIN products p ON p.id = oi.product_id
+            WHERE oi.order_id = ? AND p.cb_percent > 0 AND oi.status != 'cancelled'
+          `).all(tempBill.order_id) as { subtotal: number; cb_percent: number }[];
+          for (const item of items) {
+            let effectiveSubtotal = item.subtotal;
+            // Apply proportional discount to each item's subtotal
+            if (orderDiscount > 0 && orderSubtotal > 0) {
+              const itemDiscountShare = orderDiscount * (item.subtotal / orderSubtotal);
+              effectiveSubtotal = Math.max(0, item.subtotal - itemDiscountShare);
+            }
+            loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * item.cb_percent / 100);
+          }
         }
       }
     }
 
-    // Update bill's customer_id if it was missing and one was provided
-    if (!bill.customer_id && effectiveCustomerId) {
-      db.prepare('UPDATE bills SET customer_id = ?, updated_at = ? WHERE id = ?')
-        .run(effectiveCustomerId, now(), req.params.id);
-      bill.customer_id = effectiveCustomerId;
-    }
-
+    // BUG #2 FIX: Entire payment logic inside transaction to prevent race conditions
     const result = withTxn(() => {
+      // Re-read bill inside transaction — gets current state even under concurrent access
+      const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
+      if (!bill) {
+        throw Object.assign(new Error('Bill not found'), { statusCode: 404 });
+      }
+
+      if (bill.payment_status === 'paid') {
+        throw Object.assign(new Error('Bill is already paid'), { statusCode: 400 });
+      }
+
+      // BUG #8 FIX: Default to remaining balance (not full total)
+      const remainingBalance = Math.max(0, bill.total - bill.paid_amount);
+
+      // BUG #1 + #7 FIX: Validate amount is a finite positive number
+      let paidAmount: number;
+      if (amount !== undefined && amount !== null) {
+        const parsed = parseFloat(amount);
+        if (!Number.isFinite(parsed) || parsed <= 0) {
+          throw Object.assign(new Error('Payment amount must be a finite number greater than zero'), { statusCode: 400 });
+        }
+        // BUG #9 FIX: Cap at remaining balance (prevents overpayment)
+        paidAmount = Math.min(parsed, remainingBalance);
+      } else {
+        // No amount specified — pay the remaining balance
+        paidAmount = remainingBalance;
+      }
+
+      if (paidAmount <= 0) {
+        throw Object.assign(new Error('Bill is already fully paid'), { statusCode: 400 });
+      }
+
+      const newPaidAmount = bill.paid_amount + paidAmount;
+      const newBalance = Math.max(0, bill.total - newPaidAmount);
+      const paymentStatus = newBalance <= 0.01 ? 'paid' : 'partial';
+
+      // BUG #10 FIX: Handle malformed payment_details gracefully
+      const existingPayments: any[] = (() => {
+        if (!bill.payment_details) return [];
+        try {
+          const parsed = JSON.parse(bill.payment_details);
+          return Array.isArray(parsed) ? parsed : [parsed];
+        } catch {
+          return [];
+        }
+      })();
+      existingPayments.push({ method, amount: paidAmount, transaction_id, notes, timestamp: now() });
+
+      const effectiveCustomerId = bill.customer_id || (bodyCustomerId ? String(bodyCustomerId) : null);
+
+      // Update bill's customer_id if it was missing and one was provided
+      if (!bill.customer_id && effectiveCustomerId) {
+        db.prepare('UPDATE bills SET customer_id = ?, updated_at = ? WHERE id = ?')
+          .run(effectiveCustomerId, now(), req.params.id);
+        bill.customer_id = effectiveCustomerId;
+      }
+
       let walletDebited = false;
 
       if (method === 'wallet') {
@@ -261,7 +299,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
         `).get(bill.customer_id) as { total: number };
         const walletBalance = Math.max(0, credits.total - debits.total);
         if (walletBalance < paidAmount) {
-          throw new Error(`Insufficient wallet balance. Available: ${walletBalance}, Required: ${paidAmount}`);
+          throw Object.assign(new Error(`Insufficient wallet balance. Available: ${walletBalance}, Required: ${paidAmount}`), { statusCode: 400 });
         }
 
         db.prepare(`
@@ -316,16 +354,16 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
       return { bill: updatedBill, walletDebited, loyaltyPointsEarned: loyaltyCashbackToCredit };
     });
 
-    if (paymentStatus === 'paid') notifyKdsUpdate();
+    const billStatus = (result.bill as any)?.payment_status;
+    if (billStatus === 'paid') notifyKdsUpdate();
     notifyOrderUpdated();
-    if (paymentStatus === 'paid' && (result.bill as any)?.id) {
+    if (billStatus === 'paid' && (result.bill as any)?.id) {
       cloudSync.recordBillPaid((result.bill as any).id);
     }
 
     res.json(result);
   } catch (error: any) {
-    // Return 400 for wallet balance errors, 500 for everything else
-    const statusCode = error.message?.startsWith('Insufficient wallet balance') ? 400 : 500;
+    const statusCode = error.statusCode || 500;
     res.status(statusCode).json({ error: error.message });
   }
 });

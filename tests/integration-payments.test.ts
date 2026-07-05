@@ -1,0 +1,209 @@
+/**
+ * Integration Test: Payment Integrity
+ *
+ * Tests payment edge cases that protect against money bugs:
+ * A) Split payments (cash + UPI)
+ * B) Wallet double-spend prevention
+ * C) Zero-amount rejection
+ *
+ * Usage: node tests/run-electron-node-test.cjs tests/integration-payments.test.ts
+ */
+
+// ── Electron Mock ────────────────────────────────────────────────────────────
+const Module = require('module');
+const originalLoad = Module._load;
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const testDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-payments-'));
+Module._load = function (request: string, parent: unknown, isMain: boolean) {
+  if (request === 'electron') return { app: { isPackaged: true, getPath: () => testDir, getVersion: () => 'test' } };
+  return originalLoad.apply(this, arguments as any);
+};
+
+const {
+  initTestDb, createApp, startServer,
+  seedOwnerUser, seedCategory, seedProduct, seedCustomer, seedWalletCredit,
+  api, assert, assertEqual, assertIncludes,
+  getResults, closeDatabase, getDatabase, now,
+} = require('./helpers/test-setup');
+
+const { orderRoutes } = require('../main/routes/orders');
+const { billRoutes } = require('../main/routes/bills');
+
+async function main() {
+  console.log('Integration Test: Payment Integrity');
+  console.log('='.repeat(50));
+
+  const db = initTestDb();
+
+  // Seed base data
+  const { authHeader } = seedOwnerUser(db);
+  seedCategory(db, 'cat-pay', 'Payment Test Menu');
+  seedProduct(db, 'prod-pay-1', 'cat-pay', 'Burger', 500);
+  seedProduct(db, 'prod-pay-2', 'cat-pay', 'Fries', 200);
+  seedCustomer(db, 'cust-wallet', 'Wallet User', '9876543210');
+
+  const app = createApp({
+    '/api/orders': orderRoutes,
+    '/api/bills': billRoutes,
+  });
+  const { baseUrl, server } = await startServer(app);
+
+  try {
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario A: Split Payment (cash + UPI)
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario A: Split Payment ───');
+
+    // Create order
+    const orderA = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: { type: 'takeaway', items: [{ product_id: 'prod-pay-1', quantity: 2 }] },
+      headers: authHeader,
+    });
+    assertEqual(orderA.status, 201, 'order A created');
+    const orderAId = orderA.data.order.id;
+    const orderATotal = orderA.data.order.total;
+
+    // Generate bill
+    const billA = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderAId },
+      headers: authHeader,
+    });
+    assertEqual(billA.status, 201, 'bill A created');
+    const billAId = billA.data.bill.id;
+    const billATotal = billA.data.bill.total;
+
+    // First payment: 60% with cash
+    const partialAmount = Math.floor(billATotal * 0.6);
+    const pay1 = await api(baseUrl, `/api/bills/${billAId}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: partialAmount },
+      headers: authHeader,
+    });
+    assertEqual(pay1.status, 200, 'first payment accepted');
+    assertEqual(pay1.data.bill.payment_status, 'partial', 'status = partial after first payment');
+    assertEqual(pay1.data.bill.balance, billATotal - partialAmount, `balance = ${billATotal - partialAmount}`);
+
+    // Second payment: remaining with UPI
+    const remainingAmount = billATotal - partialAmount;
+    const pay2 = await api(baseUrl, `/api/bills/${billAId}/payment`, {
+      method: 'POST',
+      body: { method: 'upi', amount: remainingAmount },
+      headers: authHeader,
+    });
+    assertEqual(pay2.status, 200, 'second payment accepted');
+    assertEqual(pay2.data.bill.payment_status, 'paid', 'status = paid after second payment');
+    assertEqual(pay2.data.bill.balance, 0, 'balance = 0');
+
+    // Verify both payments recorded
+    const payments = JSON.parse(pay2.data.bill.payment_details);
+    assertEqual(payments.length, 2, 'two payments recorded');
+    assertEqual(payments[0].method, 'cash', 'first payment is cash');
+    assertEqual(payments[1].method, 'upi', 'second payment is UPI');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario B: Wallet Double-Spend Prevention
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario B: Wallet Double-Spend ───');
+
+    // Give customer ₹600 wallet balance — enough for first order (₹500 + tax ≈ ₹525)
+    // but NOT enough for second order (₹200 + tax ≈ ₹210)
+    seedWalletCredit(db, 'cust-wallet', 600);
+
+    // Create first order (₹500)
+    const orderB1 = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: {
+        type: 'takeaway',
+        customer_id: 'cust-wallet',
+        items: [{ product_id: 'prod-pay-1', quantity: 1 }],
+      },
+      headers: authHeader,
+    });
+    assertEqual(orderB1.status, 201, 'order B1 created');
+    const orderB1Total = orderB1.data.order.total;
+
+    // Generate bill and pay with wallet
+    const billB1 = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderB1.data.order.id },
+      headers: authHeader,
+    });
+    const payB1 = await api(baseUrl, `/api/bills/${billB1.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'wallet', amount: billB1.data.bill.total, customer_id: 'cust-wallet' },
+      headers: authHeader,
+    });
+    assertEqual(payB1.status, 200, 'wallet payment B1 succeeded');
+
+    // Create second order
+    const orderB2 = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: {
+        type: 'takeaway',
+        customer_id: 'cust-wallet',
+        items: [{ product_id: 'prod-pay-2', quantity: 1 }],
+      },
+      headers: authHeader,
+    });
+    assertEqual(orderB2.status, 201, 'order B2 created');
+
+    // Generate bill and try to pay with wallet (should fail — balance depleted)
+    const billB2 = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderB2.data.order.id },
+      headers: authHeader,
+    });
+    const payB2 = await api(baseUrl, `/api/bills/${billB2.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'wallet', amount: billB2.data.bill.total, customer_id: 'cust-wallet' },
+      headers: authHeader,
+    });
+    assertEqual(payB2.status, 400, 'wallet payment B2 rejected (400)');
+    assertIncludes(payB2.data.error, 'Insufficient', 'error mentions insufficient balance');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario C: Zero-Amount Rejection
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario C: Zero-Amount Rejection ───');
+
+    // Create order and bill
+    const orderC = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: { type: 'takeaway', items: [{ product_id: 'prod-pay-1', quantity: 1 }] },
+      headers: authHeader,
+    });
+    const billC = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderC.data.order.id },
+      headers: authHeader,
+    });
+
+    // Try to pay ₹0 — should be rejected, not treated as "pay full amount"
+    const payC = await api(baseUrl, `/api/bills/${billC.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: 0 },
+      headers: authHeader,
+    });
+    assertEqual(payC.status, 400, 'amount=0 rejected with 400');
+    assertIncludes(payC.data.error, 'greater than zero', 'error mentions amount must be positive');
+
+  } finally {
+    server.close();
+    closeDatabase();
+    try { fs.rmSync(testDir, { recursive: true, force: true }); } catch {}
+  }
+
+  const { passed, failed, total } = getResults();
+  console.log('\n' + '='.repeat(50));
+  console.log(`${passed}/${total} passed, ${failed} failed`);
+  process.exit(failed === 0 ? 0 : 1);
+}
+
+main().catch((err: any) => {
+  console.error('Test runner error:', err);
+  process.exit(1);
+});

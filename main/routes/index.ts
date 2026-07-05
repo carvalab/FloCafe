@@ -18,7 +18,7 @@ import { kdsInfoRoutes } from './kds-info';
 import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
 import { menuCsvRoutes } from './menu-csv';
-import { getDatabase, now, parseItemJson } from '../db';
+import { getDatabase, now, parseItemJson, withTxn } from '../db';
 import { cloudSync } from '../services/cloud-sync';
 
 export function registerRoutes(app: Express): void {
@@ -134,32 +134,64 @@ export function registerRoutes(app: Express): void {
         return res.status(404).json({ error: 'Item not found in this order' });
       }
 
-      // Soft delete - mark as cancelled
-      db.prepare("UPDATE order_items SET status = 'cancelled', updated_at = ? WHERE id = ?")
-        .run(now(), itemId);
+      // BUG #17 FIX: Wrap cancel + total recalc in transaction
+      const result = withTxn(() => {
+        // Soft delete - mark as cancelled
+        db.prepare("UPDATE order_items SET status = 'cancelled', updated_at = ? WHERE id = ?")
+          .run(now(), itemId);
 
-      // Recalculate order totals excluding cancelled items
-      const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
-        .all(orderId) as any[];
-      let subtotal = 0;
-      let totalTax = 0;
-      for (const i of activeItems) {
-        subtotal += i.subtotal || 0;
-        totalTax += i.tax_amount || 0;
-      }
-      const preRoundTotal = subtotal + totalTax + (order.packaging_charge || 0);
-      const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-      const total = Math.round(preRoundTotal) + roundOff;
+        // Recalculate order totals excluding cancelled items
+        const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
+          .all(orderId) as any[];
+        let subtotal = 0;
+        let totalTax = 0;
+        for (const i of activeItems) {
+          subtotal += i.subtotal || 0;
+          totalTax += i.tax_amount || 0;
+        }
 
-      db.prepare(`
-        UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-      `).run(subtotal, totalTax, total, roundOff, now(), orderId);
+        // BUG #13 FIX: Preserve order-level discount (scale percentage proportionally)
+        const existingDiscountAmount = order.discount_amount || 0;
+        let newDiscountAmount = existingDiscountAmount;
+        if (existingDiscountAmount > 0 && order.subtotal > 0) {
+          if (order.discount_type === 'percentage') {
+            const pct = order.discount_value || 0;
+            newDiscountAmount = Math.round(subtotal * pct / 100 * 100) / 100;
+          }
+          // amount type: keep same value
+        }
 
-      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
+        let newTaxAmount = totalTax;
+        if (newDiscountAmount > 0 && subtotal > 0) {
+          const taxRatio = discountedSubtotal / subtotal;
+          newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+        }
+
+        // BUG #5 FIX: Correct round-off formula
+        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0);
+        const roundOff = Math.round(preRoundTotal) - preRoundTotal;
+        const total = Math.round(preRoundTotal);
+
+        db.prepare(`
+          UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+        `).run(subtotal, newTaxAmount, newDiscountAmount, total, roundOff, now(), orderId);
+
+        // Sync bill if it exists
+        const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(orderId) as any;
+        if (existingBill) {
+          const newBillBalance = Math.max(0, total - (existingBill.paid_amount || 0));
+          db.prepare(`UPDATE bills SET total = ?, balance = ?, tax_amount = ?, discount_amount = ?, round_off = ?, updated_at = ? WHERE id = ?`)
+            .run(total, newBillBalance, newTaxAmount, newDiscountAmount, roundOff, now(), existingBill.id);
+        }
+
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        return { updatedOrder, items };
+      });
+
       cloudSync.recordOrderChanged(orderId, 'order.item_cancelled');
-
-      res.json({ order: { ...updatedOrder, items } });
+      res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Cancel item error:', error);
       res.status(500).json({ error: error.message });
@@ -195,32 +227,64 @@ export function registerRoutes(app: Express): void {
         return res.status(404).json({ error: 'Item not found in this order' });
       }
 
-      // Restore - mark as pending
-      db.prepare("UPDATE order_items SET status = 'pending', updated_at = ? WHERE id = ?")
-        .run(now(), itemId);
+      // BUG #17 FIX: Wrap restore + total recalc in transaction
+      const result = withTxn(() => {
+        // Restore - mark as pending
+        db.prepare("UPDATE order_items SET status = 'pending', updated_at = ? WHERE id = ?")
+          .run(now(), itemId);
 
-      // Recalculate order totals
-      const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
-        .all(orderId) as any[];
-      let subtotal = 0;
-      let totalTax = 0;
-      for (const i of activeItems) {
-        subtotal += i.subtotal || 0;
-        totalTax += i.tax_amount || 0;
-      }
-      const preRoundTotal = subtotal + totalTax + (order.packaging_charge || 0);
-      const roundOff = Math.round(preRoundTotal) - preRoundTotal;
-      const total = Math.round(preRoundTotal) + roundOff;
+        // Recalculate order totals
+        const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'")
+          .all(orderId) as any[];
+        let subtotal = 0;
+        let totalTax = 0;
+        for (const i of activeItems) {
+          subtotal += i.subtotal || 0;
+          totalTax += i.tax_amount || 0;
+        }
 
-      db.prepare(`
-        UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-      `).run(subtotal, totalTax, total, roundOff, now(), orderId);
+        // BUG #13 FIX: Preserve order-level discount (scale percentage proportionally)
+        const existingDiscountAmount = order.discount_amount || 0;
+        let newDiscountAmount = existingDiscountAmount;
+        if (existingDiscountAmount > 0 && order.subtotal > 0) {
+          if (order.discount_type === 'percentage') {
+            const pct = order.discount_value || 0;
+            newDiscountAmount = Math.round(subtotal * pct / 100 * 100) / 100;
+          }
+          // amount type: keep same value
+        }
 
-      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
+        let newTaxAmount = totalTax;
+        if (newDiscountAmount > 0 && subtotal > 0) {
+          const taxRatio = discountedSubtotal / subtotal;
+          newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+        }
+
+        // BUG #5 FIX: Correct round-off formula
+        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0);
+        const roundOff = Math.round(preRoundTotal) - preRoundTotal;
+        const total = Math.round(preRoundTotal);
+
+        db.prepare(`
+          UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+        `).run(subtotal, newTaxAmount, newDiscountAmount, total, roundOff, now(), orderId);
+
+        // Sync bill if it exists
+        const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(orderId) as any;
+        if (existingBill) {
+          const newBillBalance = Math.max(0, total - (existingBill.paid_amount || 0));
+          db.prepare(`UPDATE bills SET total = ?, balance = ?, tax_amount = ?, discount_amount = ?, round_off = ?, updated_at = ? WHERE id = ?`)
+            .run(total, newBillBalance, newTaxAmount, newDiscountAmount, roundOff, now(), existingBill.id);
+        }
+
+        const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        return { updatedOrder, items };
+      });
+
       cloudSync.recordOrderChanged(orderId, 'order.item_restored');
-
-      res.json({ order: { ...updatedOrder, items } });
+      res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Restore item error:', error);
       res.status(500).json({ error: error.message });

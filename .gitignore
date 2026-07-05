@@ -8,6 +8,8 @@ release/
 .env.local
 .DS_Store
 .claude/
+docs/superpowers/
+.superpowers
 
 # Apple signing assets — NEVER commit
 xcode/

@@ -973,8 +973,9 @@ function getNextSequence(name: string, date: string): number {
     }
   }
 
-  return db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
-    .get(name, date) as number;
+  const row = db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
+    .get(name, date) as any;
+  return row?.current_value ?? 0;
 }
 
 export function generateOrderNumber(): string {
