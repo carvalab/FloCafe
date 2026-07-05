@@ -289,7 +289,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 )}
               </div>
             </div>
-                  {/* Discount */}
+          )}
+
+          {/* Discount */}
           <div className="space-y-2">
             <label className="flex items-center gap-2 cursor-pointer">
               <input
