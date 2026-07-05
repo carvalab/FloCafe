@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, CreditCard, Banknote, Smartphone, Wallet, Plus, Trash2, ArrowLeftRight, CheckCircle2, Sparkles, User } from 'lucide-react';
+import { X, CreditCard, Banknote, Smartphone, Wallet, Plus, Trash2, ArrowLeftRight, CheckCircle2, Sparkles, User, Percent } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
@@ -13,6 +13,7 @@ interface Props {
   currency: string;
   onClose: () => void;
   onPaid: () => void;
+  onBillUpdate?: (bill: Bill) => void;
 }
 
 const methods = [
@@ -26,7 +27,7 @@ interface Payment {
   amount: string;
 }
 
-export default function PaymentModal({ bill, currency, onClose, onPaid }: Props) {
+export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUpdate }: Props) {
   const remaining = Number(bill.balance);
   const cartCustomerId = useCartStore((s) => s.customerId);
   const cartCustomer = useCartStore((s) => s.customer);
@@ -38,11 +39,51 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletAmount, setWalletAmount] = useState('');
   const [nextExpiry, setNextExpiry] = useState<string | null>(null);
+
+  // Discount state
+  const [showDiscount, setShowDiscount] = useState(false);
+  const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
+  const [discountValue, setDiscountValue] = useState('');
+  const [discountReason, setDiscountReason] = useState('');
+  const [discountApplied, setDiscountApplied] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<{
     loyalty_enabled: boolean;
-    loyalty_points_per_rs: number;
-    loyalty_redeem_value: number;
+    loyalty_points_per_currency: number;
+    loyalty_redemption_rate: number;
   } | null>(null);
+
+  // Sync state with active bill discount on load or update
+  useEffect(() => {
+    if (bill && Number(bill.discount_amount) > 0) {
+      setDiscountType((bill.discount_type as 'percentage' | 'amount') || 'percentage');
+      setDiscountValue(String(bill.discount_value || ''));
+      setDiscountReason(bill.discount_reason || '');
+      setShowDiscount(true);
+    } else {
+      setDiscountType('percentage');
+      setDiscountValue('');
+      setDiscountReason('');
+      setShowDiscount(false);
+    }
+  }, [bill]);
+
+  // Dynamically update payment inputs when remaining balance changes
+  useEffect(() => {
+    if (payments.length === 1) {
+      setPayments([{ ...payments[0], amount: remaining.toString() }]);
+    } else {
+      const totalAllocated = payments.reduce((sum, p) => sum + (parseFloat(p.amount) || 0), 0);
+      if (totalAllocated > 0) {
+        setPayments(payments.map(p => {
+          const ratio = (parseFloat(p.amount) || 0) / totalAllocated;
+          return { ...p, amount: (remaining * ratio).toFixed(2) };
+        }));
+      } else {
+        const perSplit = remaining / payments.length;
+        setPayments(payments.map(p => ({ ...p, amount: perSplit.toFixed(2) })));
+      }
+    }
+  }, [remaining]);
 
   useEffect(() => {
     const custId = bill.customer_id || cartCustomerId;
@@ -64,9 +105,10 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
   };
 
   const addSplit = () => {
-    const allocated = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-    const rest = Math.max(0, remaining - allocated);
-    setPayments([...payments, { method: 'card', amount: rest.toFixed(2) }]);
+    const newPayments = [...payments, { method: 'card' as const, amount: '0' }];
+    // Split amount equally among all splits
+    const perSplit = remaining / newPayments.length;
+    setPayments(newPayments.map(p => ({ ...p, amount: perSplit.toFixed(2) })));
   };
 
   const removeSplit = (idx: number) => {
@@ -86,6 +128,35 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
   const fmt = (n: number) =>
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+  const handleApplyDiscount = async (customVal?: number) => {
+    const val = customVal !== undefined ? customVal : parseFloat(discountValue);
+    if (customVal === undefined && (isNaN(val) || val < 0)) {
+      toast.error('Please enter a valid discount value');
+      return;
+    }
+    try {
+      const res = await api.patch(`/orders/${bill.order_id}/discount`, {
+        discount_type: discountType,
+        discount_value: val,
+        discount_reason: val > 0 ? discountReason || undefined : undefined,
+      });
+      toast.success(val === 0 ? 'Discount removed' : 'Discount updated');
+      if (val === 0) {
+        setShowDiscount(false);
+        setDiscountValue('');
+        setDiscountReason('');
+      }
+      // Refresh bill without closing modal
+      const { data } = await api.get(`/bills/order/${bill.order_id}`);
+      if (data.bill && onBillUpdate) {
+        onBillUpdate(data.bill);
+      }
+    } catch (err: any) {
+      const msg = err.response?.data?.error || err.response?.data?.message || 'Failed to update discount';
+      toast.error(msg);
+    }
+  };
+
   const handlePay = async () => {
     if (totalPayment < remaining - 0.01) {
       toast.error('Payment amount is less than balance');
@@ -100,7 +171,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
       let pointsEarned = 0;
       for (const p of payments) {
         const amt = parseFloat(p.amount);
-        if (amt <= 0) continue;
+        if (!amt || amt <= 0 || isNaN(amt)) continue;
         const res = await api.post(`/bills/${bill.id}/payment`, { amount: amt, method: p.method, customer_id: effectiveCustomerId });
         if (res.data?.loyaltyPointsEarned > 0) pointsEarned = res.data.loyaltyPointsEarned;
       }
@@ -114,8 +185,8 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
         toast.success('Payment recorded!');
       }
       onPaid();
-    } catch {
-      toast.error('Payment failed');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Payment failed');
     } finally {
       setProcessing(false);
     }
@@ -187,16 +258,16 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
                   <span>{currency}{fmt(Number(bill.delivery_charge))}</span>
                 </div>
               )}
-              {Number(bill.packaging_charge) > 0 && (
+              {Number((bill as any).packaging_charge) > 0 && (
                 <div className="flex justify-between text-slate-300">
                   <span>Packaging</span>
-                  <span>{currency}{fmt(Number(bill.packaging_charge))}</span>
+                  <span>{currency}{fmt(Number((bill as any).packaging_charge))}</span>
                 </div>
               )}
-              {Number(bill.round_off) !== 0 && (
+              {Number((bill as any).round_off) !== 0 && (
                 <div className="flex justify-between text-slate-300">
                   <span>Round off</span>
-                  <span>{Number(bill.round_off) > 0 ? '+' : ''}{currency}{fmt(Number(bill.round_off))}</span>
+                  <span>{Number((bill as any).round_off) > 0 ? '+' : ''}{currency}{fmt(Number((bill as any).round_off))}</span>
                 </div>
               )}
               <div className="flex justify-between text-white font-semibold border-t border-white/10 pt-1.5 mt-1">
@@ -218,40 +289,114 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
                 )}
               </div>
             </div>
-          )}
+                  {/* Discount */}
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={showDiscount || Number(bill.discount_amount) > 0}
+                onChange={(e) => {
+                  const checked = e.target.checked;
+                  if (!checked && Number(bill.discount_amount) > 0) {
+                    if (confirm('Are you sure you want to remove the discount?')) {
+                      handleApplyDiscount(0);
+                    }
+                  } else {
+                    setShowDiscount(checked);
+                  }
+                }}
+                className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
+              />
+              <span className="text-sm font-medium text-gray-700">
+                {Number(bill.discount_amount) > 0 
+                  ? `Discount: -${currency}${fmt(Number(bill.discount_amount))}` 
+                  : 'Apply Discount'}
+              </span>
+            </label>
+
+            {showDiscount && (
+              <div className="bg-purple-50 border border-purple-200 rounded-xl p-3 space-y-2 ml-6">
+                <div className="flex rounded-lg overflow-hidden border border-purple-200">
+                  <button
+                    onClick={() => { setDiscountType('percentage'); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'percentage' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    <Percent size={14} />
+                    Percentage
+                  </button>
+                  <button
+                    onClick={() => { setDiscountType('amount'); }}
+                    className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'amount' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
+                  >
+                    Flat Amount
+                  </button>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 text-sm">
+                    {discountType === 'percentage' ? '%' : currency}
+                  </span>
+                  <input
+                    type="number"
+                    value={discountValue}
+                    onChange={(e) => setDiscountValue(e.target.value)}
+                    placeholder={discountType === 'percentage' ? '0' : '0.00'}
+                    min="0"
+                    max={discountType === 'percentage' ? 100 : Number(bill.subtotal)}
+                    step={discountType === 'percentage' ? 1 : 0.01}
+                    className="w-full pl-8 pr-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                  />
+                </div>
+                <input
+                  type="text"
+                  value={discountReason}
+                  onChange={(e) => setDiscountReason(e.target.value)}
+                  placeholder="Reason (optional)"
+                  className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                />
+                <Button 
+                  size="sm" 
+                  onClick={() => handleApplyDiscount()} 
+                  disabled={discountValue === '' || isNaN(parseFloat(discountValue))} 
+                  className="w-full bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {Number(bill.discount_amount) > 0 ? 'Update Discount' : 'Apply Discount'}
+                </Button>
+              </div>
+            )}
+          </div>
 
           {payments.map((p, idx) => (
-            <div key={idx} className="space-y-2 bg-gray-50 rounded-xl p-3">
-              <div className="flex gap-1.5">
+            <div key={idx} className="bg-gray-50 rounded-xl p-2.5 space-y-1.5">
+              <div className="flex gap-1">
                 {methods.map((m) => {
                   const Icon = m.icon;
                   return (
                     <button
                       key={m.key}
                       onClick={() => updatePayment(idx, 'method', m.key)}
-                      className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg text-xs font-medium transition-colors ${
+                      className={`flex-1 flex items-center justify-center gap-1 py-1.5 rounded-md text-xs font-medium transition-colors ${
                         p.method === m.key ? 'bg-brand text-white' : 'bg-white text-gray-600 border border-gray-200 hover:border-brand/40'
                       }`}
                     >
-                      <Icon size={16} />
+                      <Icon size={14} />
                       {m.label}
                     </button>
                   );
                 })}
               </div>
-              <div className="flex items-center gap-2">
-                <span className="text-gray-400 text-sm">{currency}</span>
+              <div className="flex items-center gap-1.5">
+                <span className="text-gray-400 text-xs">{currency}</span>
                 <input
                   type="number"
                   value={p.amount}
                   onChange={(e) => updatePayment(idx, 'amount', e.target.value)}
-                  className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                  className="flex-1 px-2 py-1.5 text-sm border border-gray-200 rounded-md outline-none focus:ring-2 focus:ring-brand"
                   step="0.01"
                   min="0"
                 />
                 {payments.length > 1 && (
-                  <button onClick={() => removeSplit(idx)} className="text-red-400 hover:text-red-600">
-                    <Trash2 size={16} />
+                  <button onClick={() => removeSplit(idx)} className="text-red-400 hover:text-red-600 p-1">
+                    <Trash2 size={14} />
                   </button>
                 )}
               </div>
