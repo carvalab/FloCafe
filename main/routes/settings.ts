@@ -80,9 +80,9 @@ function taxShape(s: Record<string, string>) {
     tax_scheme: s.tax_scheme || 'regular',
     country: s.country || 'IN',
     loyalty_enabled: s.loyalty_enabled === 'true',
-    loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
-    loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
-    loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
+    loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
+    loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
+    loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
   };
 }
 
@@ -141,9 +141,13 @@ router.get('/loyalty', (req: Request, res: Response) => {
     const s = getAllSettings(getDatabase());
     res.json({
       loyalty_enabled: s.loyalty_enabled === 'true',
-      loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
-      loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
-      loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
+      loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
+      loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
+      loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
+      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === '1',
+      loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
+      loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
+      loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -152,15 +156,37 @@ router.get('/loyalty', (req: Request, res: Response) => {
 
 router.put('/loyalty', (req: Request, res: Response) => {
   try {
-    const { loyalty_enabled, loyalty_expiry_days, loyalty_points_per_rs, loyalty_redeem_value } = req.body;
+    const {
+      loyalty_enabled,
+      loyalty_expiry_months,
+      loyalty_points_per_currency,
+      loyalty_redemption_rate,
+      loyalty_max_balance_enabled,
+      loyalty_max_balance_points,
+      loyalty_min_redemption,
+      loyalty_max_redemption_percentage,
+    } = req.body;
     const db = getDatabase();
-    upsertSettings(db, { loyalty_enabled, loyalty_expiry_days, loyalty_points_per_rs, loyalty_redeem_value });
+    upsertSettings(db, {
+      loyalty_enabled,
+      loyalty_expiry_months,
+      loyalty_points_per_currency,
+      loyalty_redemption_rate,
+      loyalty_max_balance_enabled,
+      loyalty_max_balance_points,
+      loyalty_min_redemption,
+      loyalty_max_redemption_percentage,
+    });
     const s = getAllSettings(db);
     res.json({
       loyalty_enabled: s.loyalty_enabled === 'true',
-      loyalty_expiry_days: parseInt(s.loyalty_expiry_days || '365'),
-      loyalty_points_per_rs: parseFloat(s.loyalty_points_per_rs || '1'),
-      loyalty_redeem_value: parseFloat(s.loyalty_redeem_value || '0.25'),
+      loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
+      loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
+      loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
+      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === '1',
+      loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
+      loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
+      loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -245,7 +271,8 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'billing_type', 'bill_show_name', 'bill_show_address',
   'bill_show_phone', 'bill_show_gstn',
   'tax_scheme',
-  'loyalty_expiry_days', 'loyalty_points_per_rs', 'loyalty_redeem_value',
+  'loyalty_enabled', 'loyalty_expiry_months', 'loyalty_points_per_currency', 'loyalty_redemption_rate',
+  'loyalty_max_balance_enabled', 'loyalty_max_balance_points', 'loyalty_min_redemption', 'loyalty_max_redemption_percentage',
   'printer_method', 'paper_size', 'bill_template',
 ]);
 

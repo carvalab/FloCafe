@@ -483,6 +483,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
     });
 
     cloudSync.recordOrderChanged(req.params.id, `order.${status}`);
+    notifyKdsUpdate();
 
     res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table }) });
   } catch (error: any) {

@@ -109,9 +109,17 @@ export function registerRoutes(app: Express): void {
   app.patch('/api/orders/:orderId/items/:itemId/cancel', (req, res) => {
     try {
       const { orderId, itemId } = req.params;
-      const userRole = req.headers['x-user-role'] as string;
 
-      if (!userRole || !['owner', 'manager'].includes(userRole.toLowerCase())) {
+      // Verify JWT token and check role
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      const jwt = require('jsonwebtoken');
+      const { getJWTSecret } = require('./auth');
+      const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as { role?: string };
+      const userRole = decoded.role;
+      if (!userRole || !['owner', 'manager'].includes(userRole)) {
         return res.status(403).json({ error: 'Only owner or manager can cancel items' });
       }
 
@@ -162,9 +170,17 @@ export function registerRoutes(app: Express): void {
   app.patch('/api/orders/:orderId/items/:itemId/restore', (req, res) => {
     try {
       const { orderId, itemId } = req.params;
-      const userRole = req.headers['x-user-role'] as string;
 
-      if (!userRole || !['owner', 'manager'].includes(userRole.toLowerCase())) {
+      // Verify JWT token and check role
+      const authHeader = req.headers.authorization;
+      if (!authHeader?.startsWith('Bearer ')) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+      const jwt = require('jsonwebtoken');
+      const { getJWTSecret } = require('./auth');
+      const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as { role?: string };
+      const userRole = decoded.role;
+      if (!userRole || !['owner', 'manager'].includes(userRole)) {
         return res.status(403).json({ error: 'Only owner or manager can restore items' });
       }
 

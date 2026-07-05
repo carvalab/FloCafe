@@ -12,7 +12,8 @@ const ALLOWED_IPC_KEYS = new Set([
   'billing_type', 'bill_show_name', 'bill_show_address',
   'bill_show_phone', 'bill_show_gstn',
   'tax_scheme',
-  'loyalty_expiry_days', 'loyalty_points_per_rs', 'loyalty_redeem_value',
+  'loyalty_enabled', 'loyalty_expiry_months', 'loyalty_points_per_currency', 'loyalty_redemption_rate',
+  'loyalty_max_balance_enabled', 'loyalty_max_balance_points', 'loyalty_min_redemption', 'loyalty_max_redemption_percentage',
   'printer_method', 'paper_size', 'bill_template',
 ]);
 
