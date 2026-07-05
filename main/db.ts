@@ -347,7 +347,7 @@ export function restoreBackup(backupPath: string, forceDirect: boolean = false):
 }
 
 /** Return true only if the string is a safe SQL identifier (letters, digits, underscore). */
-function isSafeIdentifier(name: string): boolean {
+export function isSafeIdentifier(name: string): boolean {
   return /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(name);
 }
 

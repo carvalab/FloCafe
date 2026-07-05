@@ -1,12 +1,13 @@
 import { Router, Request, Response } from 'express';
 import Database from 'better-sqlite3';
-import { getDatabase, getDbPath, createBackup, getCurrentSchemaVersion } from '../db';
+import { getDatabase, getDbPath, createBackup, getCurrentSchemaVersion, isSafeIdentifier } from '../db';
+import { requireRole } from '../middleware/security';
 import * as fs from 'fs';
 import * as path from 'path';
 
 const router = Router();
 
-router.get('/export', (req: Request, res: Response) => {
+router.get('/export', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     
@@ -38,7 +39,7 @@ router.get('/export', (req: Request, res: Response) => {
   }
 });
 
-router.post('/import', async (req: Request, res: Response) => {
+router.post('/import', requireRole('owner'), async (req: Request, res: Response) => {
   try {
     const { data, overwrite } = req.body;
 
@@ -71,13 +72,20 @@ router.post('/import', async (req: Request, res: Response) => {
     
     try {
       for (const tableName of importedTables) {
+        // Validate table name to prevent SQL injection
+        if (!isSafeIdentifier(tableName)) {
+          console.warn(`[DB Import] Skipping unsafe table name: ${tableName}`);
+          continue;
+        }
+
         const rows = importData[tableName];
         if (!rows || !Array.isArray(rows) || rows.length === 0) continue;
 
         const currentCols = getTableColumns(db, tableName);
-        const importCols = Object.keys(rows[0]);
-        const commonCols = hasVersionMismatch 
-          ? importCols.filter(c => currentCols.includes(c))
+        // Validate and filter column names to prevent SQL injection
+        const importCols = Object.keys(rows[0]).filter(isSafeIdentifier);
+        const commonCols = hasVersionMismatch
+          ? importCols.filter(c => currentCols.includes(c) && isSafeIdentifier(c))
           : importCols;
 
         if (commonCols.length === 0) continue;
@@ -144,7 +152,7 @@ router.get('/backup', async (req: Request, res: Response) => {
   }
 });
 
-router.get('/download', (req: Request, res: Response) => {
+router.get('/download', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const dbPath = getDbPath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

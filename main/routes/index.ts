@@ -1,5 +1,7 @@
 import { Express } from 'express';
+import { randomBytes } from 'crypto';
 import { authRoutes } from './auth';
+import { requireRole } from '../middleware/security';
 import { categoryRoutes } from './categories';
 import { productRoutes } from './products';
 import { addonGroupRoutes } from './addon-groups';
@@ -52,11 +54,11 @@ export function registerRoutes(app: Express): void {
     calculateTaxPreview(req, res);
   });
 
-  // Mobile pairing code — simple stub (rotates daily)
-  app.get('/api/mobile/pairing-code', (req, res) => {
-    const today = new Date().toISOString().slice(0, 10).replace(/-/g, '');
+  // Mobile pairing code — cryptographically random, owner-only
+  app.get('/api/mobile/pairing-code', requireRole('owner'), (req, res) => {
+    const pairingCode = randomBytes(4).toString('hex'); // 8-char random code
     res.json({
-      pairing_code: today,
+      pairing_code: pairingCode,
       rotated_at: new Date().toISOString(),
     });
   });

@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now, withTxn } from '../db';
 import { randomUUID } from 'crypto';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -35,7 +36,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, description, is_required, min_selection, max_selection, sort_order, addons } = req.body;
 
@@ -72,7 +73,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const group = db.prepare('SELECT * FROM addon_groups WHERE id = ?').get(req.params.id);
@@ -111,7 +112,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const group = db.prepare('SELECT * FROM addon_groups WHERE id = ?').get(req.params.id);
@@ -132,7 +133,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // Addon management within a group
-router.post('/:groupId/addons', (req: Request, res: Response) => {
+router.post('/:groupId/addons', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, price, is_active, sort_order } = req.body;
 
@@ -157,7 +158,7 @@ router.post('/:groupId/addons', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:groupId/addons/:addonId', (req: Request, res: Response) => {
+router.put('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, price, is_active, sort_order } = req.body;
 
@@ -180,7 +181,7 @@ router.put('/:groupId/addons/:addonId', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:groupId/addons/:addonId', (req: Request, res: Response) => {
+router.delete('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const addon = db.prepare('SELECT * FROM addons WHERE id = ? AND addon_group_id = ?').get(req.params.addonId, req.params.groupId);

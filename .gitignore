@@ -10,6 +10,7 @@ release/
 .claude/
 docs/superpowers/
 .superpowers
+.gstack
 
 # Apple signing assets — NEVER commit
 xcode/

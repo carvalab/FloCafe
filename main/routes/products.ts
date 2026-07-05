@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now, generateShortId } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -85,7 +86,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
       category_id, name, sku, description, price, cost_price,
@@ -127,7 +128,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const product = db.prepare('SELECT * FROM products WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -185,7 +186,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const product = db.prepare('SELECT * FROM products WHERE id = ? AND deleted_at IS NULL').get(req.params.id);
@@ -200,7 +201,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/stock', (req: Request, res: Response) => {
+router.post('/:id/stock', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { action, quantity } = req.body;
 

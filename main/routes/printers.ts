@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { printViaNetwork, printViaUSB, buildTestPage, printReceipt, printKOT, detectConnectedPrinters } from '../printers/thermal';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -44,7 +45,7 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/printers — create
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, connection_type, ip_address, port, usb_device_path, paper_width, is_default } = req.body;
 
@@ -93,7 +94,7 @@ router.post('/', (req: Request, res: Response) => {
 });
 
 // PUT /api/printers/:id — update
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const existing = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id) as any;
@@ -139,7 +140,7 @@ router.put('/:id', (req: Request, res: Response) => {
 });
 
 // DELETE /api/printers/:id
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
@@ -153,7 +154,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 });
 
 // POST /api/printers/:id/set-default
-router.post('/:id/set-default', (req: Request, res: Response) => {
+router.post('/:id/set-default', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
@@ -169,7 +170,7 @@ router.post('/:id/set-default', (req: Request, res: Response) => {
 });
 
 // POST /api/printers/:id/test — send a test print job
-router.post('/:id/test', async (req: Request, res: Response) => {
+router.post('/:id/test', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id) as any;
@@ -202,7 +203,7 @@ router.post('/:id/test', async (req: Request, res: Response) => {
 });
 
 // POST /api/printers/print-bill — print bill via backend (desktop app)
-router.post('/print-bill', async (req: Request, res: Response) => {
+router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
   try {
     const { billId, orderId, useUnicode = false } = req.body;
     console.log('[Print Bill] Request:', { billId, orderId, useUnicode });
@@ -288,7 +289,7 @@ router.post('/print-bill', async (req: Request, res: Response) => {
 });
 
 // POST /api/printers/print-kot — print KOT via backend (desktop app)
-router.post('/print-kot', async (req: Request, res: Response) => {
+router.post('/print-kot', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
   try {
     const { orderId, stationName, items, useUnicode = false } = req.body;
     

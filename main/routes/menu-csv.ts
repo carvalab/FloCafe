@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now, generateShortId } from '../db';
 import { v4 as uuidv4 } from 'uuid';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -98,7 +99,7 @@ const TEMPLATES: Record<string, string> = {
   ].join('\n'),
 };
 
-router.get('/template/:type', (req: Request, res: Response) => {
+router.get('/template/:type', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   const { type } = req.params;
   const csv = TEMPLATES[type];
   if (!csv) return res.status(404).json({ error: 'Unknown template type' });
@@ -109,7 +110,7 @@ router.get('/template/:type', (req: Request, res: Response) => {
 
 // ─── Export ──────────────────────────────────────────────────────────────────
 
-router.get('/export/categories', (_req: Request, res: Response) => {
+router.get('/export/categories', requireRole('owner', 'manager'), (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const rows = db
@@ -126,7 +127,7 @@ router.get('/export/categories', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/export/products', (_req: Request, res: Response) => {
+router.get('/export/products', requireRole('owner', 'manager'), (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const rows = db
@@ -158,7 +159,7 @@ router.get('/export/products', (_req: Request, res: Response) => {
   }
 });
 
-router.get('/export/addons', (_req: Request, res: Response) => {
+router.get('/export/addons', requireRole('owner', 'manager'), (_req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const groups = db
@@ -182,7 +183,7 @@ router.get('/export/addons', (_req: Request, res: Response) => {
 
 // ─── Import ──────────────────────────────────────────────────────────────────
 
-router.post('/import/categories', (req: Request, res: Response) => {
+router.post('/import/categories', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { csv } = req.body as { csv: string };
     if (!csv) return res.status(400).json({ error: 'No CSV data provided' });
@@ -218,7 +219,7 @@ router.post('/import/categories', (req: Request, res: Response) => {
   }
 });
 
-router.post('/import/products', (req: Request, res: Response) => {
+router.post('/import/products', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { csv } = req.body as { csv: string };
     if (!csv) return res.status(400).json({ error: 'No CSV data provided' });
@@ -306,7 +307,7 @@ router.post('/import/products', (req: Request, res: Response) => {
   }
 });
 
-router.post('/import/addons', (req: Request, res: Response) => {
+router.post('/import/addons', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { csv } = req.body as { csv: string };
     if (!csv) return res.status(400).json({ error: 'No CSV data provided' });

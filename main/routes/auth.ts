@@ -40,10 +40,11 @@ export function getJWTSecret(): string {
         .run(_jwtSecret, now());
       console.log('[Auth] Generated new JWT secret for this install');
     }
-  } catch {
-    // Database not ready yet (e.g., during setup). Fall back to env or default.
-    _jwtSecret = process.env.JWT_SECRET || 'flo-local-secret-change-in-production';
-    console.warn('[Auth] Using fallback JWT secret — database not ready');
+  } catch (err) {
+    // Database not ready — refuse to operate with a static secret.
+    // JWT operations will fail until the database is accessible.
+    console.error('[Auth] Database not ready — JWT secret unavailable:', err);
+    throw new Error('Database not ready — authentication unavailable');
   }
 
   return _jwtSecret;
@@ -470,11 +471,15 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
 router.post('/setup/seed', (req: Request, res: Response) => {
   try {
-    const { business_type, business_name } = req.body;
+    const { business_type, business_name, password } = req.body;
     const normalizedBusinessType = String(business_type || 'restaurant').trim();
 
     if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
       return res.status(400).json({ error: 'Invalid business type' });
+    }
+
+    if (!password || String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     const db = getDatabase();
@@ -492,7 +497,7 @@ router.post('/setup/seed', (req: Request, res: Response) => {
     db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', ?, ?)`).run(normalizedBusinessType, now());
     db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)`).run(now());
 
-    const hashedPassword = bcrypt.hashSync('admin123', 10);
+    const hashedPassword = bcrypt.hashSync(String(password), 10);
     const ownerId = uuidv4();
     db.prepare(`
       INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)

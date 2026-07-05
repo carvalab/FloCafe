@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -37,7 +38,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, description, category_ids, printer_ip, printer_port, printer_name, sort_order } = req.body;
 
@@ -63,7 +64,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, description, category_ids, printer_ip, printer_port, printer_name, sort_order, is_active } = req.body;
     const db = getDatabase();
@@ -99,7 +100,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const station = db.prepare('SELECT * FROM kitchen_stations WHERE id = ?').get(req.params.id);

@@ -8,6 +8,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase, now } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -66,7 +67,7 @@ router.get('/:id', (req: Request, res: Response) => {
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, email, password, role, pin } = req.body;
 
@@ -110,7 +111,7 @@ router.post('/', (req: Request, res: Response) => {
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { name, email, password, role, pin, is_active } = req.body;
     const db = getDatabase();
@@ -124,6 +125,10 @@ router.put('/:id', (req: Request, res: Response) => {
       const validRoles = ['owner', 'manager', 'cashier', 'waiter', 'chef'];
       if (!validRoles.includes(role)) {
         return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+      }
+      // Only owners can assign or change roles
+      if ((req as any).user.role !== 'owner') {
+        return res.status(403).json({ error: 'Only owners can change roles' });
       }
     }
 
@@ -168,7 +173,7 @@ router.put('/:id', (req: Request, res: Response) => {
 
 // ── Delete ────────────────────────────────────────────────────────────────────
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const member = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
@@ -193,7 +198,7 @@ router.delete('/:id', (req: Request, res: Response) => {
 
 // ── Activate / Deactivate ─────────────────────────────────────────────────────
 
-router.post('/:id/deactivate', (req: Request, res: Response) => {
+router.post('/:id/deactivate', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const member = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
@@ -210,7 +215,7 @@ router.post('/:id/deactivate', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/reactivate', (req: Request, res: Response) => {
+router.post('/:id/reactivate', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const member = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;

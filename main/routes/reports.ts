@@ -1,9 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
-router.get('/daily-stats', (req: Request, res: Response) => {
+router.get('/daily-stats', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const today = new Date().toISOString().slice(0, 10);
@@ -36,7 +37,7 @@ router.get('/daily-stats', (req: Request, res: Response) => {
   }
 });
 
-router.get('/summary', (req: Request, res: Response) => {
+router.get('/summary', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const date = req.query.date as string || new Date().toISOString().slice(0, 10);
@@ -80,7 +81,7 @@ router.get('/summary', (req: Request, res: Response) => {
   }
 });
 
-router.get('/sales', (req: Request, res: Response) => {
+router.get('/sales', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const startDate = req.query.start_date as string || new Date().toISOString().slice(0, 10);
@@ -124,7 +125,7 @@ router.get('/sales', (req: Request, res: Response) => {
   }
 });
 
-router.get('/topProducts', (req: Request, res: Response) => {
+router.get('/topProducts', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const startDate = req.query.start_date as string || new Date().toISOString().slice(0, 10);
@@ -150,7 +151,7 @@ router.get('/topProducts', (req: Request, res: Response) => {
   }
 });
 
-router.get('/recentOrders', (req: Request, res: Response) => {
+router.get('/recentOrders', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const limit = parseInt(req.query.limit as string) || 20;
@@ -175,7 +176,7 @@ router.get('/recentOrders', (req: Request, res: Response) => {
   }
 });
 
-router.get('/tables', (req: Request, res: Response) => {
+router.get('/tables', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
 

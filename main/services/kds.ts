@@ -90,38 +90,36 @@ function handleMessage(ws: WebSocket, message: any): void {
 }
 
 function handleAuth(ws: WebSocket, client: KdsClient, message: any): void {
-  const { token, email, password } = message;
+  const { token } = message;
 
-  // Login with email/password
-  if (email && password) {
+  // JWT-only authentication — plaintext password auth removed for security
+  if (!token) {
+    ws.send(JSON.stringify({ type: 'auth_error', message: 'Token required' }));
+    return;
+  }
+
+  try {
+    const decoded = jwt.verify(token, getJWTSecret()) as any;
     const db = getDatabase();
-    const user = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email) as any;
+    const user = db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(decoded.userId) as any;
 
     if (!user) {
       ws.send(JSON.stringify({ type: 'auth_error', message: 'User not found' }));
       return;
     }
 
-    // Check password (bcrypt)
-    const bcrypt = require('bcryptjs');
-    if (!bcrypt.compareSync(password, user.password)) {
-      ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid password' }));
-      return;
-    }
-
-    // Check if user is chef role
     if (user.role !== 'chef' && user.role !== 'owner' && user.role !== 'manager') {
       ws.send(JSON.stringify({ type: 'auth_error', message: 'Only kitchen staff can access KDS' }));
       return;
     }
 
-    // Parse category_ids
     const categoryIds = user.category_ids ? JSON.parse(user.category_ids) : [];
 
     client.userId = user.id;
     client.userName = user.name;
     client.role = user.role;
     client.categoryIds = categoryIds;
+    client.token = token;
 
     ws.send(JSON.stringify({
       type: 'auth_success',
@@ -134,53 +132,9 @@ function handleAuth(ws: WebSocket, client: KdsClient, message: any): void {
     }));
 
     sendActiveOrders(ws, client.categoryIds);
-    return;
+  } catch (err) {
+    ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
   }
-
-  // Validate JWT token
-  if (token) {
-    try {
-      const decoded = jwt.verify(token, getJWTSecret()) as any;
-      const db = getDatabase();
-      const user = db.prepare('SELECT * FROM users WHERE id = ? AND is_active = 1').get(decoded.userId) as any;
-
-      if (!user) {
-        ws.send(JSON.stringify({ type: 'auth_error', message: 'User not found' }));
-        return;
-      }
-
-      if (user.role !== 'chef' && user.role !== 'owner' && user.role !== 'manager') {
-        ws.send(JSON.stringify({ type: 'auth_error', message: 'Only kitchen staff can access KDS' }));
-        return;
-      }
-
-      const categoryIds = user.category_ids ? JSON.parse(user.category_ids) : [];
-
-      client.userId = user.id;
-      client.userName = user.name;
-      client.role = user.role;
-      client.categoryIds = categoryIds;
-      client.token = token;
-
-      ws.send(JSON.stringify({
-        type: 'auth_success',
-        user: {
-          id: user.id,
-          name: user.name,
-          role: user.role,
-          categoryIds: categoryIds,
-        },
-      }));
-
-      sendActiveOrders(ws, client.categoryIds);
-      return;
-    } catch (err) {
-      ws.send(JSON.stringify({ type: 'auth_error', message: 'Invalid token' }));
-      return;
-    }
-  }
-
-  ws.send(JSON.stringify({ type: 'auth_error', message: 'Email/password or token required' }));
 }
 
 function handleStatusUpdate(client: KdsClient, message: any): void {
@@ -193,6 +147,13 @@ function handleStatusUpdate(client: KdsClient, message: any): void {
 
   if (!order_item_id || !status) {
     client.ws.send(JSON.stringify({ type: 'error', message: 'order_item_id and status required' }));
+    return;
+  }
+
+  // Validate status against allowed values
+  const validStatuses = ['pending', 'preparing', 'ready', 'served'];
+  if (!validStatuses.includes(status)) {
+    client.ws.send(JSON.stringify({ type: 'error', message: `Invalid status. Use: ${validStatuses.join(', ')}` }));
     return;
   }
 

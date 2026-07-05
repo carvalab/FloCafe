@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -57,7 +58,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     // Accept `number` (schema column) or `name` (legacy frontend field)
     const { number, name, capacity, floor, section, position_x, position_y, kitchen_station_id } = req.body;
@@ -83,7 +84,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { number, name, capacity, floor, section, position_x, position_y, kitchen_station_id } = req.body;
     const tableNumber = number || name;
@@ -114,7 +115,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
@@ -136,7 +137,7 @@ router.delete('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/status', (req: Request, res: Response) => {
+router.patch('/:id/status', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { status } = req.body;
 

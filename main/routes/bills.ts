@@ -7,7 +7,7 @@ import { requireRole } from '../middleware/security';
 
 const router = Router();
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     let query = 'SELECT * FROM bills WHERE 1=1';
@@ -43,7 +43,7 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
@@ -61,7 +61,7 @@ router.get('/:id', (req: Request, res: Response) => {
 });
 
 // Get bill by order ID
-router.get('/order/:orderId', (req: Request, res: Response) => {
+router.get('/order/:orderId', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const bill = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.orderId);
@@ -485,7 +485,7 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
   }
 });
 
-router.post('/:id/markPrinted', (req: Request, res: Response) => {
+router.post('/:id/markPrinted', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
@@ -525,7 +525,7 @@ router.post('/:id/print', requireRole('owner', 'manager', 'cashier'), async (req
 });
 
 // GET /api/bills/:id/print-history - Get print history for bill
-router.get('/:id/print-history', (req: Request, res: Response) => {
+router.get('/:id/print-history', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const prints = db.prepare(`
