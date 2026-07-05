@@ -335,10 +335,6 @@ export default function OrdersPage() {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
   };
 
-  const handleNewOrderForTable = (table: Table) => {
-    window.location.href = `/pos?table_id=${table.id}`;
-  };
-
   // Add Item modal: fetch products when modal opens
   useEffect(() => {
     if (!addItemsOrder) return;
@@ -698,17 +694,6 @@ export default function OrdersPage() {
                       >
                         <Plus size={14} className="mr-1.5" />
                         Add Item
-                      </Button>
-                    )}
-                    {order.status === 'completed' && order.table && (
-                      <Button
-                        variant="outline"
-                        onClick={() => handleNewOrderForTable(order.table!)}
-                        size="sm"
-                        className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
-                      >
-                        <Plus size={14} className="mr-1.5" />
-                        New Order
                       </Button>
                     )}
                     {!['completed', 'cancelled'].includes(order.status) && (
