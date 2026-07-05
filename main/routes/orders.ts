@@ -50,8 +50,14 @@ router.get('/', (req: Request, res: Response) => {
     const params: any[] = [];
 
     if (req.query.status) {
-      query += ' AND status = ?';
-      params.push(req.query.status);
+      const statuses = (req.query.status as string).split(',');
+      if (statuses.length === 1) {
+        query += ' AND status = ?';
+        params.push(statuses[0]);
+      } else {
+        query += ` AND status IN (${statuses.map(() => '?').join(',')})`;
+        params.push(...statuses);
+      }
     }
     if (req.query.type) {
       query += ' AND type = ?';
