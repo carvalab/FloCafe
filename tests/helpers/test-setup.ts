@@ -88,6 +88,12 @@ function getResults() {
   return { passed, failed, total };
 }
 
+function resetCounters() {
+  passed = 0;
+  failed = 0;
+  total = 0;
+}
+
 // ── ABI Mismatch Check ───────────────────────────────────────────────────────
 
 function isNativeAbiMismatch(error: any): boolean {
@@ -285,6 +291,7 @@ module.exports = {
   assertIncludes,
   assertGreaterThan,
   getResults,
+  resetCounters,
 
   // Database
   initTestDb,
