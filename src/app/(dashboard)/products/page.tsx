@@ -9,6 +9,7 @@ import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Down
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
 import { getCurrencySymbol } from '@/lib/countries';
+import { useConfirm } from '@/hooks/use-confirm';
 
 const PRESET_TAGS = [
   { key: 'veg', label: 'Veg' },
@@ -59,6 +60,7 @@ export default function ProductsPage() {
   const [showForm, setShowForm] = useState(false);
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
+  const { confirm, ConfirmDialog } = useConfirm();
   const [editingAddonGroup, setEditingAddonGroup] = useState<AddonGroup | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', color: '', is_active: true });
   const [addonForm, setAddonForm] = useState({ name: '', description: '', is_required: false, min_selection: 0, max_selection: 10 });
@@ -212,7 +214,7 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!confirm('Delete this product?')) return;
+    if (!await confirm('Delete this product?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/products/${id}`);
       toast.success('Product deleted');
@@ -251,7 +253,7 @@ export default function ProductsPage() {
   };
 
   const handleCategoryDelete = async (id: number) => {
-    if (!confirm('Delete this category?')) return;
+    if (!await confirm('Delete this category?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/categories/${id}`);
       toast.success('Category deleted');
@@ -290,7 +292,7 @@ export default function ProductsPage() {
   };
 
   const handleAddonGroupDelete = async (id: number) => {
-    if (!confirm('Delete this addon group?')) return;
+    if (!await confirm('Delete this addon group?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/addon-groups/${id}`);
       toast.success('Addon group deleted');
@@ -890,6 +892,7 @@ export default function ProductsPage() {
           </div>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   );
 }

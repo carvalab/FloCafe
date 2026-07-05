@@ -8,6 +8,7 @@ import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, 
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
+import { useConfirm } from '@/hooks/use-confirm';
 import type { OrderItem, Table, Product } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
@@ -60,6 +61,7 @@ export default function OrdersPage() {
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
   const [paymentBill, setPaymentBill] = useState<Bill | null>(null);
   const [tables, setTables] = useState<Table[]>([]);
+  const { confirm, ConfirmDialog } = useConfirm();
 
   // Consolidated filter state
   const [filters, setFilters] = useState<Filters>({ search: '', table: '', type: '', status: '' });
@@ -266,7 +268,7 @@ export default function OrdersPage() {
       toast.error('Only owners and managers can remove items');
       return;
     }
-    if (!confirm('Remove this item?')) return;
+    if (!await confirm('Remove this item?', { destructive: true, confirmLabel: 'Remove' })) return;
     try {
       await api.patch(`/orders/${orderId}/items/${itemId}/cancel`, { reason: 'Removed by manager' });
       toast.success('Item removed');
@@ -1081,6 +1083,7 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   );
 }

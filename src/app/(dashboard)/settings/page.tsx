@@ -6,9 +6,12 @@ import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
 import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { COUNTRIES } from '@/lib/countries';
+import { useConfirm } from '@/hooks/use-confirm';
 
 const CLASSIC_PREVIEW = `  [STORE NAME]
   Table: T1
@@ -86,6 +89,7 @@ export default function SettingsPage() {
   const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
   usePrinterStatusSync();
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
   const [loyaltyExpiryMonths, setLoyaltyExpiryMonths] = useState(6);
@@ -96,6 +100,10 @@ export default function SettingsPage() {
   const [loyaltyMinRedemption, setLoyaltyMinRedemption] = useState(100);
   const [loyaltyMaxRedemptionPct, setLoyaltyMaxRedemptionPct] = useState(50);
   const [savingLoyalty, setSavingLoyalty] = useState(false);
+
+  // Table info dialog
+  const [tableInfoOpen, setTableInfoOpen] = useState(false);
+  const [tableInfo, setTableInfo] = useState<{ name: string; rows: number }[]>([]);
 
   // ── KDS pairing ──────────────────────────────────────────────────────────
   const [kdsInfo, setKdsInfo] = useState<{ mdns_url: string; ip_url: string; qr_url: string; qr_data_url: string | null } | null>(null);
@@ -265,7 +273,7 @@ export default function SettingsPage() {
   };
 
   const deletePrinterHw = async (id: string) => {
-    if (!confirm('Delete this printer?')) return;
+    if (!await confirm('Delete this printer?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/printers/${id}`);
       toast.success('Printer deleted');
@@ -1566,8 +1574,8 @@ export default function SettingsPage() {
                         return;
                       }
 
-                      const overwrite = confirm('Do you want to replace ALL existing data? Click Cancel to merge instead.');
-                      
+                      const overwrite = await confirm('Do you want to replace ALL existing data? Click Cancel to merge instead.', { confirmLabel: 'Replace All' });
+
                       const response = await api.post('/db/import', { data, overwrite });
                       if (response.data.success) {
                         toast.success(response.data.message);
@@ -1601,8 +1609,8 @@ export default function SettingsPage() {
                   try {
                     const response = await api.get('/db/tables');
                     const { tables } = response.data;
-                    const info = tables.map((t: { name: string; rows: number }) => `${t.name}: ${t.rows} rows`).join('\n');
-                    alert(`Database Tables:\n\n${info}`);
+                    setTableInfo(tables);
+                    setTableInfoOpen(true);
                   } catch {
                     toast.error('Failed to fetch table info');
                   }
@@ -1806,6 +1814,28 @@ export default function SettingsPage() {
         </TabsContent>
 
       </Tabs>
+      {ConfirmDialog}
+
+      {/* Table Info Dialog */}
+      <Dialog open={tableInfoOpen} onOpenChange={setTableInfoOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Database Tables</DialogTitle>
+            <DialogDescription>Row counts for all tables</DialogDescription>
+          </DialogHeader>
+          <div className="max-h-60 overflow-y-auto space-y-1.5">
+            {tableInfo.map((t) => (
+              <div key={t.name} className="flex justify-between text-sm">
+                <span className="text-gray-700 font-mono">{t.name}</span>
+                <span className="text-gray-500">{t.rows.toLocaleString()} rows</span>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTableInfoOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

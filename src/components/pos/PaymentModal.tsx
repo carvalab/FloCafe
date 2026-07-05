@@ -7,6 +7,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import type { Bill } from '@/lib/types';
 import { useCartStore } from '@/store/cart';
+import { useConfirm } from '@/hooks/use-confirm';
 
 interface Props {
   bill: Bill;
@@ -32,6 +33,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const cartCustomerId = useCartStore((s) => s.customerId);
   const cartCustomer = useCartStore((s) => s.customer);
   const effectiveCustomerId = bill.customer_id || cartCustomerId || null;
+  const { confirm, ConfirmDialog } = useConfirm();
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: remaining.toString() },
   ]);
@@ -299,10 +301,10 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
               <input
                 type="checkbox"
                 checked={showDiscount || Number(bill.discount_amount) > 0}
-                onChange={(e) => {
+                onChange={async (e) => {
                   const checked = e.target.checked;
                   if (!checked && Number(bill.discount_amount) > 0) {
-                    if (confirm('Are you sure you want to remove the discount?')) {
+                    if (await confirm('Are you sure you want to remove this discount?', { destructive: true, confirmLabel: 'Remove' })) {
                       handleApplyDiscount(0);
                     }
                   } else {
@@ -490,6 +492,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
           </Button>
         </div>
       </div>
+      {ConfirmDialog}
     </div>
   );
 }

@@ -6,6 +6,7 @@
  */
 
 import type { Bill, Tenant } from '@/lib/types';
+import toast from 'react-hot-toast';
 
 export type PaperSize = 'a4' | 'a5' | 'thermal58' | 'thermal80';
 
@@ -36,7 +37,7 @@ export function printWebBill(
   // Create a new window with the bill HTML
   const printWindow = window.open('', '_blank', 'width=800,height=600');
   if (!printWindow) {
-    alert('Please allow popups to print bills');
+    toast.error('Please allow popups to print bills');
     return;
   }
 

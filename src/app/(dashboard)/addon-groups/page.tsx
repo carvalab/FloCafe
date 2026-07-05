@@ -8,11 +8,13 @@ import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, ChevronDown, ChevronRight } from 'lucide-react';
 import type { AddonGroup, Addon } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
+import { useConfirm } from '@/hooks/use-confirm';
 
 export default function AddonGroupsPage() {
   const { currentTenant } = useAuthStore();
   const [groups, setGroups] = useState<AddonGroup[]>([]);
   const [loading, setLoading] = useState(true);
+  const { confirm, ConfirmDialog } = useConfirm();
   const [showForm, setShowForm] = useState(false);
   const [editingGroup, setEditingGroup] = useState<AddonGroup | null>(null);
   const [expandedGroup, setExpandedGroup] = useState<number | null>(null);
@@ -88,7 +90,7 @@ export default function AddonGroupsPage() {
   };
 
   const handleDeleteGroup = async (id: number) => {
-    if (!confirm('Delete this addon group and all its addons?')) return;
+    if (!await confirm('Delete this addon group and all its addons?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/addon-groups/${id}`);
       toast.success('Group deleted');
@@ -132,7 +134,7 @@ export default function AddonGroupsPage() {
   };
 
   const handleDeleteAddon = async (groupId: number, addonId: number) => {
-    if (!confirm('Delete this addon?')) return;
+    if (!await confirm('Delete this addon?', { destructive: true, confirmLabel: 'Delete' })) return;
     try {
       await api.delete(`/addon-groups/${groupId}/addons/${addonId}`);
       toast.success('Addon deleted');
@@ -307,6 +309,7 @@ export default function AddonGroupsPage() {
           </div>
         </div>
       )}
+      {ConfirmDialog}
     </div>
   );
 }
