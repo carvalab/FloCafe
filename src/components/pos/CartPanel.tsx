@@ -46,7 +46,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
       return;
     }
     const tableName = tables.find((t) => t.id === cart.tableId)?.name || cart.tableId;
-    heldOrders.holdOrder(cart.tableId, cart.items, cart.customerId, cart.guestCount);
+    heldOrders.holdOrder(cart.tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
     cart.clearCart();
     toast.success(`Order held for ${tableName}`);
   };
@@ -192,7 +192,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
           <span className="font-medium">{cart.itemCount()}</span>
         </div>
         <div className="flex justify-between mb-4 text-lg">
-          <span className="font-semibold text-gray-900">Total</span>
+          <span className="font-semibold text-gray-900">Subtotal</span>
           <span className="font-bold text-brand">
             {currency}{cart.subtotal().toLocaleString()}
           </span>
