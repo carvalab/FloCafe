@@ -5,6 +5,8 @@ import { X, Banknote, CreditCard, Smartphone, Sparkles, ArrowLeftRight, CheckCir
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
+import { useTaxPreview } from '@/hooks/use-tax-preview';
+import TaxBreakdown from '@/components/pos/TaxBreakdown';
 
 interface LoyaltySettings {
   loyalty_enabled: boolean;
@@ -26,6 +28,8 @@ const PAYMENT_METHODS = [
 export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: Props) {
   const cart = useCartStore();
   const total = cart.subtotal();
+  const { tax, loading: taxLoading } = useTaxPreview(cart.items, cart.customerId);
+  const displayTotal = tax ? tax.total : total;
   const customer = cart.customer;
 
   const [selectedMethod, setSelectedMethod] = useState<string>('cash');
@@ -102,14 +106,40 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
           {/* Amount + Customer Card */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl px-5 py-4 text-white">
             <div className="flex items-start justify-between">
-              <div>
-                <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Total Due</p>
-                <p className="text-4xl font-bold mt-1 tracking-tight">
-                  {currency}{fmt(total)}
+              <div className="flex-1">
+                <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">
+                  {taxLoading ? 'Subtotal' : 'Total Due'}
                 </p>
+                {taxLoading ? (
+                  <div className="h-10 w-32 bg-white/10 rounded animate-pulse mt-1" />
+                ) : (
+                  <p className="text-4xl font-bold mt-1 tracking-tight">
+                    {currency}{fmt(displayTotal)}
+                  </p>
+                )}
                 <p className="text-xs text-slate-400 mt-1.5">
                   {cart.itemCount()} item{cart.itemCount() !== 1 ? 's' : ''}
                 </p>
+                {/* Tax breakdown */}
+                {!taxLoading && tax && tax.tax_amount > 0 && (
+                  <div className="mt-2 space-y-1">
+                    <div className="flex justify-between text-xs text-slate-300">
+                      <span>Subtotal</span>
+                      <span>{currency}{fmt(tax.subtotal)}</span>
+                    </div>
+                    <TaxBreakdown
+                      taxAmount={tax.tax_amount}
+                      taxBreakdown={tax.tax_breakdown}
+                      currency={currency}
+                    />
+                    {tax.round_off !== 0 && (
+                      <div className="flex justify-between text-xs text-slate-300">
+                        <span>Round off</span>
+                        <span>{tax.round_off > 0 ? '+' : ''}{currency}{fmt(tax.round_off)}</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               {customer && (
                 <div className="text-right ml-4 shrink-0">
@@ -246,12 +276,12 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         {/* Pay Button */}
         <div className="px-5 pb-6 pt-3 border-t border-gray-100">
           <Button
-            onClick={() => onConfirm(selectedMethod, total)}
-            disabled={!isCashValid}
+            onClick={() => onConfirm(selectedMethod, displayTotal)}
+            disabled={!isCashValid || taxLoading}
             className="w-full h-12 text-base font-semibold rounded-xl"
             size="lg"
           >
-            Confirm Payment · {currency}{fmt(total)}
+            {taxLoading ? 'Calculating tax...' : `Confirm Payment · ${currency}${fmt(displayTotal)}`}
           </Button>
         </div>
       </div>
