@@ -122,7 +122,9 @@ async function main() {
     assertEqual(payRes.data.bill.balance, 0, 'balance = 0');
 
     // Verify payment_details has one cash entry
-    const payments = JSON.parse(payRes.data.bill.payment_details);
+    const payments = Array.isArray(payRes.data.bill.payment_details)
+      ? payRes.data.bill.payment_details
+      : JSON.parse(payRes.data.bill.payment_details);
     assertEqual(payments.length, 1, 'one payment recorded');
     assertEqual(payments[0].method, 'cash', 'payment method is cash');
     assertEqual(payments[0].amount, discountedTotal, `payment amount = ${discountedTotal}`);

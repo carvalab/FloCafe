@@ -102,7 +102,9 @@ async function main() {
     assertEqual(pay2.data.bill.balance, 0, 'balance = 0');
 
     // Verify both payments recorded
-    const payments = JSON.parse(pay2.data.bill.payment_details);
+    const payments = Array.isArray(pay2.data.bill.payment_details)
+      ? pay2.data.bill.payment_details
+      : JSON.parse(pay2.data.bill.payment_details);
     assertEqual(payments.length, 2, 'two payments recorded');
     assertEqual(payments[0].method, 'cash', 'first payment is cash');
     assertEqual(payments[1].method, 'upi', 'second payment is UPI');
