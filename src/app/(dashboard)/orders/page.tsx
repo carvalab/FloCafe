@@ -252,6 +252,7 @@ export default function OrdersPage() {
     try {
       await api.post(`/bills/${billId}/print`, { print_type: 'receipt' });
       toast.success('Receipt printed successfully');
+      fetchPrintHistory(billId);
     } catch {
       toast.error('Failed to print receipt');
     } finally {
