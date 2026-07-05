@@ -664,8 +664,7 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Footer with actions */}
-                {(showCheckout(order) || order.bill || !['completed', 'cancelled'].includes(order.status)) && (
-                  <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+                <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
                     {order.bill && (
                       <Button
                         variant="outline"
@@ -730,7 +729,6 @@ export default function OrdersPage() {
                       </Button>
                     )}
                   </div>
-                )}
               </div>
             );
           })}
