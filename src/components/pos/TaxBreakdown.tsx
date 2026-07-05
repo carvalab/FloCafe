@@ -18,7 +18,8 @@ interface Props {
 
 export default function TaxBreakdown({ taxAmount, taxBreakdown, currency, theme = 'dark' }: Props) {
   const [expanded, setExpanded] = useState(false);
-  const hasBreakdown = taxBreakdown && taxBreakdown.length > 0;
+  const breakdownArray = Array.isArray(taxBreakdown) ? taxBreakdown : [];
+  const hasBreakdown = breakdownArray.length > 0;
 
   if (!taxAmount || taxAmount <= 0) return null;
 
@@ -42,7 +43,7 @@ export default function TaxBreakdown({ taxAmount, taxBreakdown, currency, theme 
       </button>
       {expanded && hasBreakdown && (
         <div className="ml-4 mt-1 space-y-0.5">
-          {taxBreakdown.map((line, i) => (
+          {breakdownArray.map((line, i) => (
             <div key={i} className={`flex justify-between text-xs ${theme === 'light' ? 'text-gray-400' : 'text-slate-400'}`}>
               <span>{line.title} @{line.rate}%</span>
               <span>{currency}{fmt(line.amount)}</span>
