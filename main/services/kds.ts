@@ -301,3 +301,12 @@ function broadcastOrderUpdate(): void {
 export function notifyKdsUpdate(): void {
   broadcastOrderUpdate();
 }
+
+export function notifyOrderUpdated(): void {
+  const msg = JSON.stringify({ type: 'order_updated' });
+  clients.forEach((client) => {
+    if (client.ws.readyState === WebSocket.OPEN) {
+      client.ws.send(msg);
+    }
+  });
+}

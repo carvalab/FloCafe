@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, generateBillNumber, now, withTxn, getSettingValue } from '../db';
-import { notifyKdsUpdate } from '../services/kds';
+import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
 import { requireRole } from '../middleware/security';
@@ -166,6 +166,7 @@ router.post('/generate', (req: Request, res: Response) => {
     );
 
     const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid);
+    notifyOrderUpdated();
     res.status(201).json({ bill });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -322,6 +323,7 @@ router.post('/:id/payment', (req: Request, res: Response) => {
     });
 
     if (paymentStatus === 'paid') notifyKdsUpdate();
+    notifyOrderUpdated();
     if (paymentStatus === 'paid' && (result.bill as any)?.id) {
       cloudSync.recordBillPaid((result.bill as any).id);
     }
@@ -332,7 +334,7 @@ router.post('/:id/payment', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.post('/:id/applyDiscount', (req: Request, res: Response) => {
   try {
     const { type, value, reason } = req.body;
 
@@ -395,6 +397,7 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
       return db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
     });
 
+    notifyOrderUpdated();
     res.json({ bill: updatedBill });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

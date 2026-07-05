@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn, verifyPin, getSettingValue } from '../db';
 import { calculateItemTax } from '../services/tax';
-import { notifyKdsUpdate } from '../services/kds';
+import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { validateOrderNotes, validateItemNotes } from './orders-validation';
 import { requireRole } from '../middleware/security';
@@ -235,6 +235,7 @@ router.post('/', (req: Request, res: Response) => {
     });
 
     notifyKdsUpdate();
+    notifyOrderUpdated();
     cloudSync.recordOrderChanged(order.id, 'order.created');
 
     if (customer_id) {
@@ -368,6 +369,7 @@ router.post('/:id/items', (req: Request, res: Response) => {
     });
 
     cloudSync.recordOrderChanged(req.params.id, 'order.updated');
+    notifyOrderUpdated();
 
     res.json({ order: Object.assign({}, updatedOrder, { items: updatedItems }) });
   } catch (error: any) {
@@ -484,6 +486,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
 
     cloudSync.recordOrderChanged(req.params.id, `order.${status}`);
     notifyKdsUpdate();
+    notifyOrderUpdated();
 
     res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table }) });
   } catch (error: any) {
@@ -498,7 +501,7 @@ router.patch('/:id/loyalty', (req: Request, res: Response) => {
   res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
 });
 
-router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.patch('/:id/discount', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
@@ -514,36 +517,40 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
     const { discount_type, discount_value, discount_reason } = req.body;
 
     // Validate discount_type
-    if (!discount_type || !['percentage', 'amount'].includes(discount_type)) {
+    if (discount_value !== 0 && (!discount_type || !['percentage', 'amount'].includes(discount_type))) {
       return res.status(400).json({ error: 'discount_type must be "percentage" or "amount"' });
     }
 
-    // Validate discount_value is a positive number
-    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value <= 0) {
-      return res.status(400).json({ error: 'discount_value must be a positive number' });
+    // Validate discount_value is a non-negative number
+    if (discount_value === undefined || discount_value === null || typeof discount_value !== 'number' || discount_value < 0) {
+      return res.status(400).json({ error: 'discount_value must be a non-negative number' });
     }
 
     // Check against limits from settings
-    if (discount_type === 'percentage') {
-      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
-      if (discount_value > maxPercentage) {
-        return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
-      }
-    } else if (discount_type === 'amount') {
-      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
-      if (discount_value > maxAmount) {
-        return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
+    if (discount_value > 0) {
+      if (discount_type === 'percentage') {
+        const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+        if (discount_value > maxPercentage) {
+          return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
+        }
+      } else if (discount_type === 'amount') {
+        const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+        if (discount_value > maxAmount) {
+          return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
+        }
       }
     }
 
     // Calculate discount amount
-    let discountAmount: number;
-    if (discount_type === 'percentage') {
-      discountAmount = (order.subtotal * discount_value) / 100;
-    } else {
-      discountAmount = Math.min(discount_value, order.subtotal);
+    let discountAmount = 0;
+    if (discount_value > 0) {
+      if (discount_type === 'percentage') {
+        discountAmount = (order.subtotal * discount_value) / 100;
+      } else {
+        discountAmount = Math.min(discount_value, order.subtotal);
+      }
+      discountAmount = Math.round(discountAmount * 100) / 100;
     }
-    discountAmount = Math.round(discountAmount * 100) / 100;
 
     // Recalculate total from subtotal + tax - discount
     const preRoundTotal = order.subtotal + (order.tax_amount || 0) - discountAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
@@ -553,9 +560,16 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
     db.prepare(`
       UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
         discount_reason = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-    `).run(discountAmount, discount_type, discount_value, discount_reason || null, newTotal, roundOff, now(), req.params.id);
+    `).run(
+      discountAmount,
+      discount_value > 0 ? discount_type : null,
+      discount_value > 0 ? discount_value : null,
+      discount_value > 0 ? (discount_reason || null) : null,
+      newTotal, roundOff, now(), req.params.id
+    );
 
     const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    notifyOrderUpdated();
 
     res.json({ order: updatedOrder });
   } catch (error: any) {
@@ -563,7 +577,7 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
   }
 });
 
-router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
