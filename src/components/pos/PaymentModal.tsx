@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import type { Bill } from '@/lib/types';
+import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
 
@@ -256,12 +257,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   <span>− {currency}{fmt(Number(bill.discount_amount))}</span>
                 </div>
               )}
-              {Number(bill.tax_amount) > 0 && (
-                <div className="flex justify-between text-slate-300">
-                  <span>Tax</span>
-                  <span>{currency}{fmt(Number(bill.tax_amount))}</span>
-                </div>
-              )}
+              <TaxBreakdown
+                taxAmount={Number(bill.tax_amount)}
+                taxBreakdown={bill.tax_breakdown}
+                currency={currency}
+              />
               {Number(bill.delivery_charge) > 0 && (
                 <div className="flex justify-between text-slate-300">
                   <span>Delivery</span>
