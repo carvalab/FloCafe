@@ -181,6 +181,19 @@ jobs:
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: false
 
+      - name: Cache frontend node_modules
+        uses: actions/cache@v4
+        with:
+          path: frontend/node_modules
+          key: ${{ runner.os }}-frontend-${{ hashFiles('frontend/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-frontend-
+
+      - name: Build frontend
+        run: npm run build:frontend
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+
       - name: Compile main process
         run: npm run build
 
