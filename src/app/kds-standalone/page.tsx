@@ -90,6 +90,7 @@ interface Order {
   updated_at: string;
   items?: OrderItem[];
   table?: { name: string } | null;
+  special_instructions?: string | null;
 }
 
 interface ModalItem {
@@ -397,6 +398,12 @@ export default function KdsStandalonePage() {
                   {getTimeSince(order.created_at)}
                 </div>
               </div>
+
+              {order.special_instructions && (
+                <div className="mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-700 font-medium break-words">📝 {order.special_instructions}</p>
+                </div>
+              )}
 
               <div className="space-y-2 flex-1">
                 {order.items?.map((item) => {
