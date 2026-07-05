@@ -148,7 +148,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
 
           {/* Amount + Customer Card */}
           <div className="bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl px-5 py-4 text-white">
-            <div className="flex items-start justify-between">
+            <div className="flex items-start justify-between mb-3">
               <div>
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">Total Due</p>
                 <p className="text-4xl font-bold mt-1 tracking-tight">{currency}{fmt(remaining)}</p>
@@ -161,6 +161,48 @@ export default function PaymentModal({ bill, currency, onClose, onPaid }: Props)
                   <p className="text-sm font-semibold text-white leading-tight">{cartCustomer.name}</p>
                 </div>
               )}
+            </div>
+
+            {/* Bill breakdown — always shown so cashier has full context */}
+            <div className="border-t border-white/10 pt-3 space-y-1.5 text-xs">
+              <div className="flex justify-between text-slate-300">
+                <span>Subtotal</span>
+                <span>{currency}{fmt(Number(bill.subtotal))}</span>
+              </div>
+              {Number(bill.discount_amount) > 0 && (
+                <div className="flex justify-between text-emerald-400 font-medium">
+                  <span>Discount</span>
+                  <span>− {currency}{fmt(Number(bill.discount_amount))}</span>
+                </div>
+              )}
+              {Number(bill.tax_amount) > 0 && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Tax</span>
+                  <span>{currency}{fmt(Number(bill.tax_amount))}</span>
+                </div>
+              )}
+              {Number(bill.delivery_charge) > 0 && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Delivery</span>
+                  <span>{currency}{fmt(Number(bill.delivery_charge))}</span>
+                </div>
+              )}
+              {Number(bill.packaging_charge) > 0 && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Packaging</span>
+                  <span>{currency}{fmt(Number(bill.packaging_charge))}</span>
+                </div>
+              )}
+              {Number(bill.round_off) !== 0 && (
+                <div className="flex justify-between text-slate-300">
+                  <span>Round off</span>
+                  <span>{Number(bill.round_off) > 0 ? '+' : ''}{currency}{fmt(Number(bill.round_off))}</span>
+                </div>
+              )}
+              <div className="flex justify-between text-white font-semibold border-t border-white/10 pt-1.5 mt-1">
+                <span>Total</span>
+                <span>{currency}{fmt(Number(bill.total))}</span>
+              </div>
             </div>
           </div>
 

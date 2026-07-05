@@ -171,8 +171,13 @@ export interface Bill {
   subtotal: number;
   tax_amount: number;
   discount_amount: number;
+  discount_type?: string | null;
+  discount_value?: number | null;
+  discount_reason?: string | null;
   service_charge: number;
   delivery_charge: number;
+  packaging_charge?: number;
+  round_off?: number;
   total: number;
   paid_amount: number;
   balance: number;
