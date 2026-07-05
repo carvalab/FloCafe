@@ -13,8 +13,18 @@ export interface TaxPreview {
   total: number;
 }
 
+interface TaxPreviewItem {
+  product_id: number;
+  name: string;
+  quantity: number;
+  tax_type: string;
+  tax_rate: number;
+  tax_amount: number;
+  tax_breakdown: { title: string; rate: number; amount: number }[];
+}
+
 interface TaxPreviewResponse {
-  items: any[];
+  items: TaxPreviewItem[];
   summary: TaxPreview;
 }
 
@@ -70,8 +80,8 @@ export function useTaxPreview(
         });
 
         setTax(data.summary);
-      } catch (err: any) {
-        if (err?.name === 'CanceledError' || err?.name === 'AbortError') {
+      } catch (err: unknown) {
+        if (err instanceof Error && (err.name === 'CanceledError' || err.name === 'AbortError')) {
           return; // Silently ignore aborted requests
         }
         console.error('[useTaxPreview] Error:', err);
