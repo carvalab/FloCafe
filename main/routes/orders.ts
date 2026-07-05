@@ -110,7 +110,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const { table_id, customer_id, user_id, type, guest_count, special_instructions, packaging_charge, items } = req.body;
 
@@ -253,7 +253,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/items', (req: Request, res: Response) => {
+router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
@@ -377,7 +377,7 @@ router.post('/:id/items', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/status', (req: Request, res: Response) => {
+router.patch('/:id/status', requireRole('owner', 'manager', 'chef', 'waiter'), (req: Request, res: Response) => {
   try {
     const { status, reason, override_pin, free_table } = req.body;
 
@@ -501,7 +501,7 @@ router.patch('/:id/loyalty', (req: Request, res: Response) => {
   res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
 });
 
-router.patch('/:id/discount', (req: Request, res: Response) => {
+router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
@@ -552,21 +552,48 @@ router.patch('/:id/discount', (req: Request, res: Response) => {
       discountAmount = Math.round(discountAmount * 100) / 100;
     }
 
-    // Recalculate total from subtotal + tax - discount
-    const preRoundTotal = order.subtotal + (order.tax_amount || 0) - discountAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+    // Recalculate tax on discounted subtotal (India GST is on post-discount value)
+    const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
+    let newTaxAmount = order.tax_amount || 0;
+    if (discountAmount > 0 && order.subtotal > 0) {
+      // Proportionally reduce tax based on discount
+      const taxRatio = discountedSubtotal / order.subtotal;
+      newTaxAmount = Math.round((order.tax_amount || 0) * taxRatio * 100) / 100;
+    }
+
+    // Recalculate total from discounted subtotal + recalculated tax
+    const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
     const newTotal = Math.round(preRoundTotal);
     const roundOff = newTotal - preRoundTotal;
 
     db.prepare(`
       UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
-        discount_reason = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+        discount_reason = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
     `).run(
       discountAmount,
       discount_value > 0 ? discount_type : null,
       discount_value > 0 ? discount_value : null,
       discount_value > 0 ? (discount_reason || null) : null,
-      newTotal, roundOff, now(), req.params.id
+      newTaxAmount, newTotal, roundOff, now(), req.params.id
     );
+
+    // Sync discount to bill if it exists and is unpaid
+    const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ? AND payment_status != ?')
+      .get(req.params.id, 'paid') as any;
+    if (existingBill) {
+      const newBillBalance = Math.max(0, newTotal - (existingBill.paid_amount || 0));
+      db.prepare(`
+        UPDATE bills SET discount_amount = ?, discount_type = ?, discount_value = ?,
+          discount_reason = ?, tax_amount = ?, total = ?, balance = ?, round_off = ?, updated_at = ?
+        WHERE id = ?
+      `).run(
+        discountAmount,
+        discount_value > 0 ? discount_type : null,
+        discount_value > 0 ? discount_value : null,
+        discount_value > 0 ? (discount_reason || null) : null,
+        newTaxAmount, newTotal, newBillBalance, roundOff, now(), existingBill.id
+      );
+    }
 
     const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
     notifyOrderUpdated();
@@ -577,7 +604,7 @@ router.patch('/:id/discount', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
+router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
@@ -607,17 +634,30 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'discount_value must be a positive number' });
     }
 
-    // Calculate item discount amount
+    // Calculate item discount amount (include addon prices)
+    let addonTotal = 0;
+    if (item.addons) {
+      try {
+        const addons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons;
+        if (Array.isArray(addons)) {
+          for (const addon of addons) {
+            addonTotal += (addon.price || 0) * item.quantity;
+          }
+        }
+      } catch {}
+    }
+    const itemBaseTotal = item.unit_price * item.quantity + addonTotal;
+
     let discountAmount: number;
     if (discount_type === 'percentage') {
-      discountAmount = (item.unit_price * item.quantity * discount_value) / 100;
+      discountAmount = (itemBaseTotal * discount_value) / 100;
     } else {
-      discountAmount = Math.min(discount_value, item.unit_price * item.quantity);
+      discountAmount = Math.min(discount_value, itemBaseTotal);
     }
     discountAmount = Math.round(discountAmount * 100) / 100;
 
     // Recalculate item subtotal after discount
-    const newSubtotal = Math.max(0, (item.unit_price * item.quantity) - discountAmount);
+    const newSubtotal = Math.max(0, itemBaseTotal - discountAmount);
 
     // Recalculate tax on discounted subtotal
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(item.product_id) as any;
@@ -641,7 +681,7 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
         subtotal = ?, tax_amount = ?, tax_breakdown = ?, total = ?, updated_at = ? WHERE id = ?
     `).run(discountAmount, newSubtotal, newTaxAmount, JSON.stringify(newTaxBreakdown), newTotal, now(), req.params.itemId);
 
-    // Update order totals
+    // Update order totals (preserve existing order-level discount)
     const allItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];
     let orderSubtotal = 0;
     let orderTax = 0;
@@ -649,13 +689,30 @@ router.patch('/:id/items/:itemId/discount', (req: Request, res: Response) => {
       orderSubtotal += i.subtotal;
       orderTax += i.tax_amount;
     }
-    const preRoundTotal = orderSubtotal + orderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+
+    // Recalculate order-level discount proportionally on new subtotal
+    const existingDiscountAmount = order.discount_amount || 0;
+    let newOrderDiscount = existingDiscountAmount;
+    if (existingDiscountAmount > 0 && order.subtotal > 0) {
+      // Scale discount proportionally to new subtotal
+      newOrderDiscount = Math.round(existingDiscountAmount * (orderSubtotal / order.subtotal) * 100) / 100;
+    }
+
+    // Recalculate tax on discounted subtotal
+    const discountedSubtotal = Math.max(0, orderSubtotal - newOrderDiscount);
+    let newOrderTax = orderTax;
+    if (newOrderDiscount > 0 && orderSubtotal > 0) {
+      const taxRatio = discountedSubtotal / orderSubtotal;
+      newOrderTax = Math.round(orderTax * taxRatio * 100) / 100;
+    }
+
+    const preRoundTotal = discountedSubtotal + newOrderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
     const orderTotal = Math.round(preRoundTotal);
     const roundOff = orderTotal - preRoundTotal;
 
     db.prepare(`
-      UPDATE orders SET subtotal = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-    `).run(orderSubtotal, orderTax, orderTotal, roundOff, now(), req.params.id);
+      UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+    `).run(orderSubtotal, newOrderTax, newOrderDiscount, orderTotal, roundOff, now(), req.params.id);
 
     const updatedItem = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.itemId) as any;
 

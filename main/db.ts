@@ -331,12 +331,14 @@ export function restoreBackup(backupPath: string, forceDirect: boolean = false):
     fs.copyFileSync(backupPath, dbPath);
     initDatabase();
 
+    // Get fresh DB handle after reinitialization
+    const freshDb = getDatabase();
     return {
       success: true,
       mode: 'direct',
       backupSchemaVersion,
       currentSchemaVersion: currentVersion,
-      tablesRestored: getTables(currentDb).length
+      tablesRestored: getTables(freshDb).length
     };
   }
 
@@ -515,7 +517,7 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     version: 6,
     name: 'add_loyalty_settings',
     up: () => {
-      insertSettingIfMissing('loyalty_enabled', '1');
+      insertSettingIfMissing('loyalty_enabled', 'true');
       insertSettingIfMissing('loyalty_points_per_currency', '1');
       insertSettingIfMissing('loyalty_redemption_rate', '100');
       insertSettingIfMissing('loyalty_max_balance_enabled', '0');
@@ -541,6 +543,19 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     name: 'add_loyalty_index',
     up: () => {
       db.exec('CREATE INDEX IF NOT EXISTS idx_loyalty_customer ON loyalty_ledger(customer_id, type)');
+    },
+  },
+  {
+    version: 9,
+    name: 'add_sequences_table',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS sequences (
+          name TEXT PRIMARY KEY,
+          date TEXT NOT NULL,
+          current_value INTEGER NOT NULL DEFAULT 0
+        )
+      `);
     },
   },
 ];
@@ -929,20 +944,49 @@ export function generateShortId(table: string, length = 6): string {
   throw new Error(`generateShortId: could not find unique id for ${table} after 20 attempts`);
 }
 
+/** Atomically get the next sequence value for a given name and date. */
+function getNextSequence(name: string, date: string): number {
+  // Try to update existing row
+  const updated = db.prepare(`
+    UPDATE sequences SET current_value = current_value + 1
+    WHERE name = ? AND date = ?
+  `).run(name, date);
+
+  if (updated.changes === 0) {
+    // Row doesn't exist for today, insert it
+    try {
+      db.prepare(`
+        INSERT INTO sequences (name, date, current_value) VALUES (?, ?, 1)
+      `).run(name, date);
+      return 1;
+    } catch {
+      // Another concurrent insert won the race, try update again
+      const retry = db.prepare(`
+        UPDATE sequences SET current_value = current_value + 1
+        WHERE name = ? AND date = ?
+      `).run(name, date);
+      if (retry.changes === 0) {
+        throw new Error(`Failed to generate sequence for ${name}`);
+      }
+      return db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
+        .get(name, date) as number;
+    }
+  }
+
+  return db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
+    .get(name, date) as number;
+}
+
 export function generateOrderNumber(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const result = db.prepare(
-    "SELECT COUNT(*) + 1 as next FROM orders WHERE date(created_at) = date('now')"
-  ).get() as { next: number };
-  return `ORD-${date}-${String(result.next).padStart(4, '0')}`;
+  const next = getNextSequence('orders', date);
+  return `ORD-${date}-${String(next).padStart(4, '0')}`;
 }
 
 export function generateBillNumber(): string {
   const date = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-  const result = db.prepare(
-    "SELECT COUNT(*) + 1 as next FROM bills WHERE date(created_at) = date('now')"
-  ).get() as { next: number };
-  return `INV-${date}-${String(result.next).padStart(4, '0')}`;
+  const next = getNextSequence('bills', date);
+  return `INV-${date}-${String(next).padStart(4, '0')}`;
 }
 
 export function now(): string {

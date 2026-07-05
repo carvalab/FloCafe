@@ -78,7 +78,7 @@ router.get('/order/:orderId', (req: Request, res: Response) => {
   }
 });
 
-router.post('/generate', (req: Request, res: Response) => {
+router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const { order_id } = req.body;
 
@@ -173,7 +173,7 @@ router.post('/generate', (req: Request, res: Response) => {
   }
 });
 
-router.post('/:id/payment', (req: Request, res: Response) => {
+router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const { method, amount, transaction_id, notes, customer_id: bodyCustomerId } = req.body;
 
@@ -191,27 +191,7 @@ router.post('/:id/payment', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Bill is already paid' });
     }
 
-    const paidAmount = parseFloat(amount) || bill.total;
-
-    // Pre-validate wallet balance OUTSIDE the txn so we can return a clean 400 without a rollback.
-    if (method === 'wallet') {
-      const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(bill.customer_id) as any;
-      if (!customer) {
-        return res.status(400).json({ error: 'Customer not found for wallet payment' });
-      }
-      const credits = db.prepare(`
-        SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
-        WHERE customer_id = ? AND type = 'credit' AND (expires_at IS NULL OR expires_at > datetime('now'))
-      `).get(bill.customer_id) as { total: number };
-      const debits = db.prepare(`
-        SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
-        WHERE customer_id = ? AND type = 'debit'
-      `).get(bill.customer_id) as { total: number };
-      const walletBalance = Math.max(0, credits.total - debits.total);
-      if (walletBalance < paidAmount) {
-        return res.status(400).json({ error: 'Insufficient wallet balance', balance: walletBalance });
-      }
-    }
+    const paidAmount = amount !== undefined && amount !== null ? parseFloat(amount) : bill.total;
 
     const newPaidAmount = bill.paid_amount + paidAmount;
     const newBalance = Math.max(0, bill.total - newPaidAmount);
@@ -237,7 +217,7 @@ router.post('/:id/payment', (req: Request, res: Response) => {
       const loyaltySetting = (db.prepare(
         `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
       ).get() as any)?.value;
-      if (loyaltySetting === 'true') {
+      if (loyaltySetting === 'true' || loyaltySetting === '1') {
         const expiryRow = (db.prepare(
           `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
         ).get() as any)?.value;
@@ -270,6 +250,20 @@ router.post('/:id/payment', (req: Request, res: Response) => {
       let walletDebited = false;
 
       if (method === 'wallet') {
+        // Check wallet balance INSIDE transaction to prevent double-spend
+        const credits = db.prepare(`
+          SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
+          WHERE customer_id = ? AND type = 'credit' AND (expires_at IS NULL OR expires_at > datetime('now'))
+        `).get(bill.customer_id) as { total: number };
+        const debits = db.prepare(`
+          SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
+          WHERE customer_id = ? AND type = 'debit'
+        `).get(bill.customer_id) as { total: number };
+        const walletBalance = Math.max(0, credits.total - debits.total);
+        if (walletBalance < paidAmount) {
+          throw new Error(`Insufficient wallet balance. Available: ${walletBalance}, Required: ${paidAmount}`);
+        }
+
         db.prepare(`
           INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, created_at, updated_at)
           VALUES (?, ?, 'debit', ?, ?, ?, ?)
@@ -330,11 +324,13 @@ router.post('/:id/payment', (req: Request, res: Response) => {
 
     res.json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Return 400 for wallet balance errors, 500 for everything else
+    const statusCode = error.message?.startsWith('Insufficient wallet balance') ? 400 : 500;
+    res.status(statusCode).json({ error: error.message });
   }
 });
 
-router.post('/:id/applyDiscount', (req: Request, res: Response) => {
+router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { type, value, reason } = req.body;
 
@@ -375,24 +371,33 @@ router.post('/:id/applyDiscount', (req: Request, res: Response) => {
     } else {
       discountAmount = parseFloat(value);
     }
+    discountAmount = Math.round(discountAmount * 100) / 100;
 
-    const preRoundTotal = Math.max(0, bill.subtotal + bill.tax_amount + bill.delivery_charge + bill.packaging_charge - discountAmount);
+    // Recalculate tax on discounted subtotal (India GST is on post-discount value)
+    const discountedSubtotal = Math.max(0, bill.subtotal - discountAmount);
+    let newTaxAmount = bill.tax_amount || 0;
+    if (discountAmount > 0 && bill.subtotal > 0) {
+      const taxRatio = discountedSubtotal / bill.subtotal;
+      newTaxAmount = Math.round((bill.tax_amount || 0) * taxRatio * 100) / 100;
+    }
+
+    const preRoundTotal = discountedSubtotal + newTaxAmount + (bill.delivery_charge || 0) + (bill.packaging_charge || 0);
     const newTotal = Math.round(preRoundTotal);
     const newRoundOff = newTotal - preRoundTotal;
-    const newBalance = newTotal - bill.paid_amount;
+    const newBalance = Math.max(0, newTotal - (bill.paid_amount || 0));
 
     const updatedBill = withTxn(() => {
       db.prepare(`
         UPDATE bills SET discount_amount = ?, discount_type = ?, discount_value = ?,
-          discount_reason = ?, total = ?, round_off = ?, balance = ?, updated_at = ?
+          discount_reason = ?, tax_amount = ?, total = ?, round_off = ?, balance = ?, updated_at = ?
         WHERE id = ?
-      `).run(discountAmount, type, value, reason || null, newTotal, newRoundOff, newBalance, now(), req.params.id);
+      `).run(discountAmount, type, value, reason || null, newTaxAmount, newTotal, newRoundOff, newBalance, now(), req.params.id);
 
       db.prepare(`
         UPDATE orders SET discount_amount = ?, discount_type = ?, discount_value = ?,
-          discount_reason = ?, total = ?, updated_at = ?
+          discount_reason = ?, tax_amount = ?, total = ?, round_off = ?, updated_at = ?
         WHERE id = ?
-      `).run(discountAmount, type, value, reason || null, newTotal, now(), bill.order_id);
+      `).run(discountAmount, type, value, reason || null, newTaxAmount, newTotal, newRoundOff, now(), bill.order_id);
 
       return db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
     });
@@ -423,7 +428,7 @@ router.post('/:id/markPrinted', (req: Request, res: Response) => {
 });
 
 // POST /api/bills/:id/print - Print or reprint bill
-router.post('/:id/print', async (req: Request, res: Response) => {
+router.post('/:id/print', requireRole('owner', 'manager', 'cashier'), async (req: Request, res: Response) => {
   try {
     const { print_type } = req.body;
 

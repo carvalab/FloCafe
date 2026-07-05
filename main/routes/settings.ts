@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 import { cloudSync, DEFAULT_CLOUD_SERVER_URL, normalizeCloudServerUrl } from '../services/cloud-sync';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
 
@@ -45,9 +46,9 @@ function publicSettingsShape(settings: Record<string, string>): Record<string, s
 function boolFlag(value: unknown): string | undefined {
   if (value === undefined) return undefined;
   if (typeof value === 'string') {
-    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()) ? '1' : '0';
+    return ['1', 'true', 'yes', 'on'].includes(value.toLowerCase()) ? 'true' : 'false';
   }
-  return value ? '1' : '0';
+  return value ? 'true' : 'false';
 }
 
 function isMaskedSecret(value: unknown): boolean {
@@ -79,7 +80,7 @@ function taxShape(s: Record<string, string>) {
     state_code: s.state_code || '',
     tax_scheme: s.tax_scheme || 'regular',
     country: s.country || 'IN',
-    loyalty_enabled: s.loyalty_enabled === 'true',
+    loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
     loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
     loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
     loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
@@ -97,7 +98,7 @@ router.get('/business', (req: Request, res: Response) => {
   }
 });
 
-router.put('/business', (req: Request, res: Response) => {
+router.put('/business', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { business_name, timezone, currency, country, gstin, state_code,
       business_address, business_phone, billing_type,
@@ -125,7 +126,7 @@ router.get('/tax', (req: Request, res: Response) => {
   }
 });
 
-router.put('/tax', (req: Request, res: Response) => {
+router.put('/tax', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { tax_registered, gstin, state_code, tax_scheme, country } = req.body;
     const db = getDatabase();
@@ -140,11 +141,11 @@ router.get('/loyalty', (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({
-      loyalty_enabled: s.loyalty_enabled === 'true',
+      loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
       loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
       loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
       loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
-      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === '1',
+      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === 'true' || s.loyalty_max_balance_enabled === '1',
       loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
       loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
       loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
@@ -154,7 +155,7 @@ router.get('/loyalty', (req: Request, res: Response) => {
   }
 });
 
-router.put('/loyalty', (req: Request, res: Response) => {
+router.put('/loyalty', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
       loyalty_enabled,
@@ -179,11 +180,11 @@ router.put('/loyalty', (req: Request, res: Response) => {
     });
     const s = getAllSettings(db);
     res.json({
-      loyalty_enabled: s.loyalty_enabled === 'true',
+      loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
       loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
       loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
       loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
-      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === '1',
+      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === 'true' || s.loyalty_max_balance_enabled === '1',
       loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
       loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
       loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
@@ -203,7 +204,7 @@ router.get('/cloud', (req: Request, res: Response) => {
   }
 });
 
-router.put('/cloud', (req: Request, res: Response) => {
+router.put('/cloud', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
       cloud_server_url,
@@ -238,7 +239,7 @@ router.put('/cloud', (req: Request, res: Response) => {
   }
 });
 
-router.post('/cloud/register', async (req: Request, res: Response) => {
+router.post('/cloud/register', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
   try {
     if (req.body?.cloud_server_url !== undefined) {
       upsertSettings(getDatabase(), {
@@ -252,7 +253,7 @@ router.post('/cloud/register', async (req: Request, res: Response) => {
   }
 });
 
-router.post('/cloud/test', async (_req: Request, res: Response) => {
+router.post('/cloud/test', requireRole('owner', 'manager'), async (_req: Request, res: Response) => {
   try {
     const result = await cloudSync.testConnection();
     res.json(result);
@@ -301,7 +302,7 @@ router.get('/:key', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:key', (req: Request, res: Response) => {
+router.put('/:key', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     if (!ALLOWED_WILDCARD_KEYS.has(req.params.key)) {
       return res.status(403).json({ error: 'This setting cannot be updated via wildcard route' });
