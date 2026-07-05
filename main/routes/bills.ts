@@ -60,6 +60,24 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
+// Get bill by order ID
+router.get('/order/:orderId', (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const bill = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.orderId);
+    if (!bill) {
+      return res.status(404).json({ error: 'Bill not found for this order' });
+    }
+
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get((bill as any).order_id);
+    const customer = (bill as any).customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get((bill as any).customer_id) : null;
+
+    res.json({ bill: { ...bill, order, customer } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.post('/generate', (req: Request, res: Response) => {
   try {
     const { order_id } = req.body;
@@ -74,9 +92,56 @@ router.post('/generate', (req: Request, res: Response) => {
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order_id);
+    const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order_id) as any;
     if (existingBill) {
-      // Return existing bill instead of error
+      // Re-sync bill totals from the order in case discount/adjustments were applied
+      // after the bill was first generated (e.g. discount applied → then checkout clicked).
+      // Only sync if the bill is still unpaid (partial or full payments must not be changed).
+      const orderSubtotal      = order.subtotal        || 0;
+      const orderTaxAmount     = order.tax_amount      || 0;
+      const orderDiscountAmt   = order.discount_amount || 0;
+      const orderDelivery      = order.delivery_charge || 0;
+      const orderPackaging     = order.packaging_charge|| 0;
+      const orderRoundOff      = order.round_off       || 0;
+      const orderTotal         = order.total           || 0;
+
+      const totalsChanged =
+        existingBill.payment_status !== 'paid' && (
+          existingBill.discount_amount !== orderDiscountAmt ||
+          existingBill.subtotal        !== orderSubtotal    ||
+          existingBill.total           !== orderTotal
+        );
+
+      if (totalsChanged) {
+        const newBalance = Math.max(0, orderTotal - (existingBill.paid_amount || 0));
+        db.prepare(`
+          UPDATE bills
+          SET subtotal       = ?,
+              tax_amount     = ?,
+              tax_breakdown  = ?,
+              discount_amount= ?,
+              discount_type  = ?,
+              discount_value = ?,
+              discount_reason= ?,
+              delivery_charge= ?,
+              packaging_charge= ?,
+              round_off      = ?,
+              total          = ?,
+              balance        = ?,
+              updated_at     = ?
+          WHERE id = ?
+        `).run(
+          orderSubtotal, orderTaxAmount, order.tax_breakdown,
+          orderDiscountAmt, order.discount_type, order.discount_value, order.discount_reason,
+          orderDelivery, orderPackaging, orderRoundOff,
+          orderTotal, newBalance, now(),
+          existingBill.id
+        );
+
+        const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(existingBill.id);
+        return res.json({ bill: updatedBill });
+      }
+
       return res.json({ bill: existingBill });
     }
 
