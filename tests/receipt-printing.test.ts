@@ -30,6 +30,11 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 const { initDatabase, getDatabase, closeDatabase } = require('../main/db');
 const { printReceipt } = require('../main/services/receipt');
 
+function isNativeAbiMismatch(error: any): boolean {
+  return error?.code === 'ERR_DLOPEN_FAILED'
+    && String(error?.message || '').includes('NODE_MODULE_VERSION');
+}
+
 let passed = 0;
 let failed = 0;
 let total = 0;
@@ -48,6 +53,11 @@ function assert(condition: boolean, message: string) {
 try {
   initDatabase();
 } catch (error: any) {
+  if (isNativeAbiMismatch(error)) {
+    console.log('   ⚠ Skipping: better-sqlite3 is not built for this shell Node ABI.');
+    console.log(`     Node ${process.version} uses ABI ${process.versions.modules}; rebuild native modules for Node to run this test outside Electron.`);
+    process.exit(0);
+  }
   console.error('Failed to initialize database:', error.message);
   process.exit(1);
 }

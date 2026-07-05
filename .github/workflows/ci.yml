@@ -36,6 +36,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Rebuild native modules for current Node version
+        run: npx @electron/rebuild -f -w better-sqlite3 || npm rebuild better-sqlite3
+
       - name: Run tests
         run: npm test
 
