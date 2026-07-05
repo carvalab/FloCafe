@@ -8,6 +8,7 @@ import { useCartStore } from '@/store/cart';
 
 interface LoyaltySettings {
   loyalty_enabled: boolean;
+  loyalty_redemption_rate: number;
 }
 
 interface Props {
@@ -127,7 +128,11 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
               <Sparkles size={13} className="text-gray-400 shrink-0" />
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
                 <span className="text-gray-700 font-medium">Loyalty</span>
-                <span className="font-semibold text-gray-700">{walletBalance !== null ? walletBalance : '…'} pts</span>
+                <span className="font-semibold text-gray-700">
+                  {walletBalance !== null
+                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)))})`
+                    : '…'}
+                </span>
                 {nextExpiry && (
                   <span className="text-orange-500">Expires {fmtExpiry(nextExpiry)}</span>
                 )}

@@ -165,9 +165,15 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       toast.error('Payment amount is less than balance');
       return;
     }
-    if (walletAmt > 0 && walletBalance !== null && walletAmt > walletBalance) {
-      toast.error('Wallet amount exceeds available balance');
-      return;
+    // Validate wallet amount against available balance (convert currency to points for comparison)
+    if (walletAmt > 0 && walletBalance !== null) {
+      const redemptionRate = loyaltySettings?.loyalty_redemption_rate || 100;
+      const walletPointsRequired = walletAmt * redemptionRate;
+      if (walletPointsRequired > walletBalance) {
+        const maxCurrency = Math.floor(walletBalance / redemptionRate);
+        toast.error(`Wallet amount exceeds available balance. Max: ${currency}${fmt(maxCurrency)}`);
+        return;
+      }
     }
     setProcessing(true);
     try {
@@ -287,7 +293,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
               <Sparkles size={13} className="text-gray-400 shrink-0" />
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
                 <span className="text-gray-700 font-medium">Loyalty</span>
-                <span className="font-semibold text-gray-700">{walletBalance !== null ? walletBalance : '…'} pts</span>
+                <span className="font-semibold text-gray-700">
+                  {walletBalance !== null
+                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)))})`
+                    : '…'}
+                </span>
                 {nextExpiry && (
                   <span className="text-orange-500">Expires {fmtExpiry(nextExpiry)}</span>
                 )}
@@ -454,7 +464,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   <span className={`text-sm font-medium ${walletBalance > 0 ? 'text-purple-900' : 'text-gray-500'}`}>Loyalty Wallet</span>
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
-                  {walletBalance > 0 ? `${currency}${walletBalance.toLocaleString()} available` : 'No balance'}
+                  {walletBalance > 0
+                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)))})`
+                    : 'No balance'}
                 </span>
               </div>
               {walletBalance > 0 && (
@@ -465,7 +477,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                     value={walletAmount}
                     onChange={(e) => {
                       const v = e.target.value;
-                      const max = Math.min(walletBalance, remaining);
+                      // Max is wallet points / redemption rate (converted to currency), capped at remaining
+                      const maxWalletCurrency = Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100));
+                      const max = Math.min(maxWalletCurrency, remaining);
                       const clamped = parseFloat(v) > max ? max.toFixed(2) : v;
                       setWalletAmount(clamped);
                       // Auto-reduce first payment so total stays at remaining
@@ -474,11 +488,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                         i === 0 ? { ...p, amount: Math.max(0, remaining - walletUsed).toFixed(2) } : p
                       ));
                     }}
-                    placeholder={`0 – ${Math.min(walletBalance, remaining).toFixed(2)}`}
+                    placeholder={`0 – ${Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100))}`}
                     className="flex-1 px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                     step="0.01"
                     min="0"
-                    max={Math.min(walletBalance, remaining)}
+                    max={Math.min(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)), remaining)}
                   />
                 </div>
               )}
