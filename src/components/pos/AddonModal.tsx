@@ -123,10 +123,12 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
             <input
               type="text"
               value={instructions}
-              onChange={(e) => setInstructions(e.target.value)}
+              onChange={(e) => setInstructions(e.target.value.slice(0, 100))}
               placeholder="e.g., no onions, extra spicy..."
+              maxLength={100}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand"
             />
+            <p className="text-xs text-gray-400 text-right mt-0.5">{instructions.length}/100</p>
           </div>
         </div>
 

@@ -82,11 +82,8 @@ export default function POSPage() {
   }, [isRestaurant]);
 
   const handleProductClick = (product: Product) => {
-    if (product.addon_groups && product.addon_groups.length > 0) {
-      setAddonProduct(product);
-    } else {
-      cart.addItem(product);
-    }
+    // Always open modal so user can add notes and adjust quantity
+    setAddonProduct(product);
   };
 
   const handleAddonAdd = (product: Product, quantity: number, addons: Addon[], instructions: string) => {
@@ -138,6 +135,7 @@ export default function POSPage() {
           customer_id: cart.customerId,
           type: cart.orderType,
           guest_count: cart.guestCount,
+          special_instructions: cart.orderNotes || undefined,
           items: cart.items.map((item) => ({
             product_id: item.product.id,
             quantity: item.quantity,
@@ -184,6 +182,7 @@ export default function POSPage() {
         customer_id: cart.customerId,
         type: cart.orderType,
         guest_count: cart.guestCount,
+        special_instructions: cart.orderNotes || undefined,
         items: cart.items.map((item) => ({
           product_id: item.product.id,
           quantity: item.quantity,
@@ -403,6 +402,7 @@ export default function POSPage() {
           currency={currency}
           onClose={() => setPaymentBill(null)}
           onPaid={handlePaymentComplete}
+          onBillUpdate={(updated) => setPaymentBill(updated)}
         />
       )}
 

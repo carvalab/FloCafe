@@ -9,6 +9,7 @@ interface CartState {
   customer: Customer | null;
   guestCount: number;
   deliveryAddress: string;
+  orderNotes: string;
 
   addItem: (product: Product, quantity?: number, addons?: Addon[], specialInstructions?: string) => void;
   removeItem: (cartItemId: string) => void;
@@ -21,6 +22,7 @@ interface CartState {
   setCustomer: (customer: Customer | null) => void;
   setGuestCount: (count: number) => void;
   setDeliveryAddress: (address: string) => void;
+  setOrderNotes: (notes: string) => void;
 
   subtotal: () => number;
   itemCount: () => number;
@@ -45,6 +47,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   customer: null,
   guestCount: 1,
   deliveryAddress: '',
+  orderNotes: '',
 
   addItem: (product, quantity = 1, addons = [], specialInstructions = '') => {
     const items = get().items;
@@ -81,7 +84,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   },
 
   clearCart: () => {
-    set({ items: [], tableId: null, customerId: null, customer: null, guestCount: 1, deliveryAddress: '' });
+    set({ items: [], tableId: null, customerId: null, customer: null, guestCount: 1, deliveryAddress: '', orderNotes: '' });
   },
 
   loadItems: (items, tableId, customerId, guestCount) => {
@@ -94,6 +97,7 @@ export const useCartStore = create<CartState>((set, get) => ({
   setCustomer: (customer) => set({ customer, customerId: customer?.id ?? null }),
   setGuestCount: (count) => set({ guestCount: count }),
   setDeliveryAddress: (address) => set({ deliveryAddress: address }),
+  setOrderNotes: (notes) => set({ orderNotes: notes }),
 
   subtotal: () => {
     return get().items.reduce((sum, item) => {

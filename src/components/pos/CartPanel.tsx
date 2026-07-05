@@ -124,6 +124,12 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
           <div className="space-y-3">
             {cart.items.map((item) => (
               <div key={item.id} className="flex items-start gap-3">
+                <button
+                  onClick={() => cart.removeItem(item.id)}
+                  className="w-6 h-6 rounded-full text-gray-300 hover:text-red-500 hover:bg-red-50 flex items-center justify-center transition-colors mt-0.5 shrink-0"
+                >
+                  <Trash2 size={13} />
+                </button>
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium text-gray-900 truncate">
                     {item.product.name}
@@ -138,7 +144,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
                     </div>
                   )}
                   {item.special_instructions && (
-                    <p className="text-xs text-gray-400 italic mt-0.5">{item.special_instructions}</p>
+                    <p className="text-xs text-gray-400 italic mt-0.5 break-words">{item.special_instructions}</p>
                   )}
                   <p className="text-sm text-gray-500">
                     {currency}{Number(item.product.price).toLocaleString()}
@@ -158,12 +164,6 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
                   >
                     <Plus size={14} />
                   </button>
-                  <button
-                    onClick={() => cart.removeItem(item.id)}
-                    className="w-7 h-7 rounded-full text-red-400 hover:bg-red-50 flex items-center justify-center transition-colors"
-                  >
-                    <Trash2 size={14} />
-                  </button>
                 </div>
               </div>
             ))}
@@ -173,6 +173,20 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
 
       {/* Cart Footer */}
       <div className="p-4 border-t border-gray-100">
+        {/* Order Notes */}
+        {cart.items.length > 0 && (
+          <div className="mb-3">
+            <textarea
+              value={cart.orderNotes}
+              onChange={(e) => cart.setOrderNotes(e.target.value.slice(0, 200))}
+              placeholder="Order notes (optional)"
+              rows={2}
+              maxLength={200}
+              className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
+            />
+            <p className="text-xs text-gray-400 text-right mt-0.5">{cart.orderNotes.length}/200</p>
+          </div>
+        )}
         <div className="flex justify-between mb-1 text-sm">
           <span className="text-gray-500">Items</span>
           <span className="font-medium">{cart.itemCount()}</span>

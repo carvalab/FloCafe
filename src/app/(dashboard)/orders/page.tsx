@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Star, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -12,12 +12,21 @@ import type { OrderItem } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 
-const itemStatusConfig: Record<string, { icon: string; color: string; label: string }> = {
-  pending: { icon: '⏳', color: 'text-yellow-600', label: 'Waiting' },
-  preparing: { icon: '🔵', color: 'text-blue-600', label: 'Preparing' },
-  ready: { icon: '🟢', color: 'text-green-600', label: 'Ready' },
-  served: { icon: '✅', color: 'text-purple-600', label: 'Served' },
-  cancelled: { icon: '❌', color: 'text-red-400', label: 'Cancelled' },
+const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
+  pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
+  preparing: { dot: 'bg-blue-500', color: 'text-blue-700', label: 'Preparing' },
+  ready: { dot: 'bg-green-500', color: 'text-green-700', label: 'Ready' },
+  served: { dot: 'bg-purple-500', color: 'text-purple-700', label: 'Served' },
+  cancelled: { dot: 'bg-red-400', color: 'text-red-500', label: 'Cancelled' },
+};
+
+const orderStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending' },
+  preparing: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Preparing' },
+  ready: { bg: 'bg-green-100', text: 'text-green-700', label: 'Ready' },
+  served: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Served' },
+  completed: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Completed' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' },
 };
 
 type FilterType = 'all' | 'active' | 'unpaid';
@@ -68,10 +77,15 @@ export default function OrdersPage() {
   const [confirmPrintBillId, setConfirmPrintBillId] = useState<number | null>(null);
 
   // Other states
-  const [loyaltyEnabled, setLoyaltyEnabled] = useState<Record<number, boolean>>({});
   const [addItemsOrder, setAddItemsOrder] = useState<Order | null>(null);
   const [printHistoryExpanded, setPrintHistoryExpanded] = useState<Record<number, boolean>>({});
   const [printHistory, setPrintHistory] = useState<Record<number, any[]>>({});
+
+  // Add Item modal states
+  const [products, setProducts] = useState<any[]>([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedItems, setSelectedItems] = useState<{ product_id: number; product_name: string; quantity: number; special_instructions: string }[]>([]);
+  const [addingItems, setAddingItems] = useState(false);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
@@ -79,7 +93,14 @@ export default function OrdersPage() {
   const fetchOrders = async () => {
     try {
       const { data } = await api.get('/orders', { params: { per_page: 50 } });
-      setOrders(data.orders || []);
+      const orders = data.orders || [];
+      setOrders(orders);
+      // Eagerly fetch print history for all bills
+      orders.forEach((order: any) => {
+        if (order.bill?.id && !printHistory[order.bill.id]) {
+          fetchPrintHistory(order.bill.id);
+        }
+      });
     } catch {
       toast.error('Failed to load orders');
     } finally {
@@ -247,8 +268,8 @@ export default function OrdersPage() {
       await api.patch(`/orders/${orderId}/items/${itemId}/cancel`, { reason: 'Removed by manager' });
       toast.success('Item removed');
       fetchOrders();
-    } catch {
-      toast.error('Failed to remove item');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to remove item');
     }
   };
 
@@ -258,8 +279,8 @@ export default function OrdersPage() {
       await api.patch(`/orders/${orderId}/items/${itemId}/restore`);
       toast.success('Item restored');
       fetchOrders();
-    } catch {
-      toast.error('Failed to restore item');
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to restore item');
     }
   };
 
@@ -281,16 +302,6 @@ export default function OrdersPage() {
       );
     } catch {
       toast.error('Failed to open WhatsApp');
-    }
-  };
-
-  const handleLoyaltyToggle = async (orderId: number, enabled: boolean) => {
-    try {
-      await api.patch(`/orders/${orderId}/loyalty`, { loyalty_enabled: enabled });
-      setLoyaltyEnabled(prev => ({ ...prev, [orderId]: enabled }));
-      toast.success(enabled ? 'Loyalty points enabled' : 'Loyalty points disabled');
-    } catch {
-      toast.error('Failed to update loyalty setting');
     }
   };
 
@@ -318,6 +329,66 @@ export default function OrdersPage() {
 
   const handleNewOrderForTable = (table: any) => {
     window.location.href = `/pos?table_id=${table.id}`;
+  };
+
+  // Add Item modal: fetch products when modal opens
+  useEffect(() => {
+    if (!addItemsOrder) return;
+    const fetchProducts = async () => {
+      try {
+        const { data } = await api.get('/products', { params: { per_page: 200 } });
+        setProducts(data.products || []);
+      } catch {
+        toast.error('Failed to load menu items');
+      }
+    };
+    fetchProducts();
+    setSelectedItems([]);
+    setProductSearch('');
+  }, [addItemsOrder]);
+
+  const handleAddItemToSelection = (product: any) => {
+    setSelectedItems(prev => {
+      const existing = prev.find(i => i.product_id === product.id);
+      if (existing) {
+        return prev.map(i => i.product_id === product.id ? { ...i, quantity: i.quantity + 1 } : i);
+      }
+      return [...prev, { product_id: product.id, product_name: product.name, quantity: 1, special_instructions: '' }];
+    });
+  };
+
+  const handleRemoveFromSelection = (productId: number) => {
+    setSelectedItems(prev => prev.filter(i => i.product_id !== productId));
+  };
+
+  const handleUpdateSelectionQty = (productId: number, quantity: number) => {
+    if (quantity < 1) return;
+    setSelectedItems(prev => prev.map(i => i.product_id === productId ? { ...i, quantity } : i));
+  };
+
+  const handleUpdateSelectionNotes = (productId: number, notes: string) => {
+    setSelectedItems(prev => prev.map(i => i.product_id === productId ? { ...i, special_instructions: notes } : i));
+  };
+
+  const handleSubmitAddItems = async () => {
+    if (!addItemsOrder || selectedItems.length === 0) return;
+    setAddingItems(true);
+    try {
+      await api.post(`/orders/${addItemsOrder.id}/items`, {
+        items: selectedItems.map(i => ({
+          product_id: i.product_id,
+          quantity: i.quantity,
+          special_instructions: i.special_instructions || undefined,
+        })),
+      });
+      toast.success(`Added ${selectedItems.length} item(s) to order`);
+      setAddItemsOrder(null);
+      fetchOrders();
+    } catch (err: any) {
+      toast.error(err.response?.data?.error || 'Failed to add items');
+    } finally {
+      setAddingItems(false);
+    }
   };
 
   const handleCancelOrder = async () => {
@@ -450,12 +521,17 @@ export default function OrdersPage() {
             return (
               <div
                 key={order.id}
-                className="bg-white rounded-xl border border-gray-100 overflow-hidden"
+                className={`bg-white rounded-xl border overflow-hidden ${
+                  order.status === 'cancelled' ? 'border-red-200 opacity-75' : 'border-gray-100'
+                }`}
               >
                 {/* Order Header */}
                 <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
                   <div className="flex items-center gap-3">
                     <span className="font-bold text-gray-900">#{order.order_number}</span>
+                    {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
+                    ) : null; })()}
                     <span className="text-sm text-gray-500 capitalize">{order.type.replace('_', ' ')}</span>
                     {order.table && (
                       <span className="text-sm text-orange-600 font-medium">{order.table.name}</span>
@@ -479,17 +555,10 @@ export default function OrdersPage() {
                         Share
                       </button>
                     )}
-                    {order.customer && (
-                      <label className="flex items-center gap-1 cursor-pointer select-none">
-                        <input
-                          type="checkbox"
-                          checked={loyaltyEnabled[order.id] ?? true}
-                          onChange={(e) => handleLoyaltyToggle(order.id, e.target.checked)}
-                          className="h-4 w-4 rounded border-gray-300 text-yellow-500 focus:ring-yellow-500"
-                        />
-                        <Star size={14} className="text-yellow-500 fill-yellow-500" />
-                        <span className="text-xs text-gray-600 font-medium">Award points</span>
-                      </label>
+                    {Number(order.discount_amount) > 0 && (
+                      <span className="text-xs text-purple-600 font-medium">
+                        -{currency}{Number(order.discount_amount).toLocaleString()} discount
+                      </span>
                     )}
                     <span className="font-bold text-gray-900">{currency}{Number(order.total).toLocaleString()}</span>
                   </div>
@@ -503,13 +572,13 @@ export default function OrdersPage() {
                       return (
                         <div key={item.id} className="flex items-center justify-between py-1.5">
                           <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className="text-xs" title={config.label}>{config.icon}</span>
+                            <span className={`w-2 h-2 rounded-full shrink-0 ${config.dot}`} title={config.label} />
                             <span className={`text-sm font-medium ${config.color}`}>
                               {item.quantity}x
                             </span>
                             <span className="text-sm text-gray-900 truncate">{item.product_name}</span>
                             {item.special_instructions && (
-                              <span className="text-xs text-red-500 italic truncate">&quot;{item.special_instructions}&quot;</span>
+                              <span className="text-xs text-red-500 italic break-words">&quot;{item.special_instructions}&quot;</span>
                             )}
                           </div>
                           <div className="flex items-center gap-2">
@@ -553,14 +622,11 @@ export default function OrdersPage() {
                   )}
 
                   {/* Print History */}
-                  {order.bill && (
+                  {order.bill && printHistory[order.bill.id]?.length > 0 && (
                     <div className="mt-3 pt-3 border-t border-gray-100">
                       <button
                         onClick={() => {
                           setPrintHistoryExpanded(prev => ({ ...prev, [order.bill!.id]: !prev[order.bill!.id] }));
-                          if (!printHistory[order.bill!.id]) {
-                            fetchPrintHistory(order.bill!.id);
-                          }
                         }}
                         className="flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700"
                       >
@@ -568,7 +634,7 @@ export default function OrdersPage() {
                         Print History
                       </button>
 
-                      {printHistoryExpanded[order.bill!.id] && printHistory[order.bill!.id] && (
+                      {printHistoryExpanded[order.bill!.id] && (
                         <div className="mt-2 pl-4 space-y-1">
                           {printHistory[order.bill!.id].map((print, index) => (
                             <div key={print.id} className="text-xs text-gray-500">
@@ -603,17 +669,6 @@ export default function OrdersPage() {
                       >
                         <CreditCard size={14} className="mr-1.5" />
                         {generatingBill === order.id ? 'Generating...' : 'Checkout'}
-                      </Button>
-                    )}
-                    {showCheckout(order) && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setDiscountModal({ order, type: 'percentage', value: 0, reason: '' })}
-                        size="sm"
-                        className="border-purple-300 text-purple-600 hover:bg-purple-50 hover:text-purple-700"
-                      >
-                        <Percent size={14} className="mr-1.5" />
-                        Discount
                       </Button>
                     )}
                     {!['completed', 'cancelled'].includes(order.status) && (
@@ -673,6 +728,7 @@ export default function OrdersPage() {
           currency={currency}
           onClose={() => setPaymentBill(null)}
           onPaid={handlePaymentComplete}
+          onBillUpdate={(updated) => setPaymentBill(updated)}
         />
       )}
 
@@ -900,6 +956,111 @@ export default function OrdersPage() {
               >
                 <Percent size={14} className="mr-1.5" />
                 Apply Discount
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add Item Modal */}
+      {addItemsOrder && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+          <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
+            <h2 className="text-lg font-bold text-gray-900 mb-4">Add Items to Order #{addItemsOrder.order_number}</h2>
+
+            {/* Search */}
+            <div className="relative mb-3">
+              <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+              <input
+                type="text"
+                placeholder="Search menu items..."
+                value={productSearch}
+                onChange={(e) => setProductSearch(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
+              />
+            </div>
+
+            {/* Product list */}
+            <div className="flex-1 overflow-y-auto border border-gray-200 rounded-lg mb-3 max-h-48">
+              {products
+                .filter(p => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase()))
+                .map((product: any) => (
+                  <button
+                    key={product.id}
+                    onClick={() => handleAddItemToSelection(product)}
+                    className="w-full flex items-center justify-between px-3 py-2 hover:bg-green-50 text-left border-b border-gray-50 last:border-0 transition-colors"
+                  >
+                    <div>
+                      <span className="text-sm font-medium text-gray-900">{product.name}</span>
+                      {product.price && (
+                        <span className="text-xs text-gray-500 ml-2">{currency}{Number(product.price).toLocaleString()}</span>
+                      )}
+                    </div>
+                    <Plus size={14} className="text-green-500" />
+                  </button>
+                ))
+              }
+              {products.filter(p => !productSearch || p.name.toLowerCase().includes(productSearch.toLowerCase())).length === 0 && (
+                <div className="px-3 py-4 text-sm text-gray-400 text-center">No items found</div>
+              )}
+            </div>
+
+            {/* Selected items */}
+            {selectedItems.length > 0 && (
+              <div className="space-y-2 mb-3">
+                <p className="text-xs font-medium text-gray-500 uppercase">Selected Items</p>
+                {selectedItems.map(item => (
+                  <div key={item.product_id} className="flex items-center gap-2 bg-gray-50 rounded-lg p-2">
+                    <div className="flex-1 min-w-0">
+                      <span className="text-sm font-medium text-gray-900 truncate block">{item.product_name}</span>
+                      <input
+                        type="text"
+                        placeholder="Notes (optional)"
+                        value={item.special_instructions}
+                        maxLength={100}
+                        onChange={(e) => handleUpdateSelectionNotes(item.product_id, e.target.value.slice(0, 100))}
+                        className="w-full text-xs text-gray-500 bg-transparent border-0 p-0 focus:outline-none placeholder:text-gray-300"
+                      />
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <button
+                        onClick={() => handleUpdateSelectionQty(item.product_id, item.quantity - 1)}
+                        className="w-6 h-6 rounded bg-gray-200 text-gray-600 text-xs hover:bg-gray-300"
+                      >-</button>
+                      <span className="w-6 text-center text-sm font-medium">{item.quantity}</span>
+                      <button
+                        onClick={() => handleUpdateSelectionQty(item.product_id, item.quantity + 1)}
+                        className="w-6 h-6 rounded bg-gray-200 text-gray-600 text-xs hover:bg-gray-300"
+                      >+</button>
+                    </div>
+                    <button
+                      onClick={() => handleRemoveFromSelection(item.product_id)}
+                      className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600"
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex justify-end gap-2 pt-2 border-t border-gray-100">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setAddItemsOrder(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="sm"
+                onClick={handleSubmitAddItems}
+                disabled={selectedItems.length === 0 || addingItems}
+                className="bg-green-600 hover:bg-green-700 text-white"
+              >
+                <Plus size={14} className="mr-1.5" />
+                {addingItems ? 'Adding...' : `Add ${selectedItems.length} Item(s)`}
               </Button>
             </div>
           </div>

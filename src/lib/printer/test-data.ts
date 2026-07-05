@@ -83,8 +83,6 @@ export function createTestOrder(overrides?: Partial<Order>): Order {
       ],
       special_instructions: 'Less onion',
       status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     },
     {
       id: 2,
@@ -100,8 +98,6 @@ export function createTestOrder(overrides?: Partial<Order>): Order {
       addons: null,
       special_instructions: null,
       status: 'pending',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     },
     {
       id: 3,
@@ -117,8 +113,6 @@ export function createTestOrder(overrides?: Partial<Order>): Order {
       addons: null,
       special_instructions: null,
       status: 'ready',
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     },
   ];
 

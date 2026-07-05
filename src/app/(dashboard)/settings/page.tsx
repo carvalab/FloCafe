@@ -88,7 +88,13 @@ export default function SettingsPage() {
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
 
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
-  const [loyaltyDays, setLoyaltyDays] = useState(365);
+  const [loyaltyExpiryMonths, setLoyaltyExpiryMonths] = useState(6);
+  const [loyaltyPointsPerCurrency, setLoyaltyPointsPerCurrency] = useState(1);
+  const [loyaltyRedemptionRate, setLoyaltyRedemptionRate] = useState(100);
+  const [loyaltyMaxBalanceEnabled, setLoyaltyMaxBalanceEnabled] = useState(false);
+  const [loyaltyMaxBalancePoints, setLoyaltyMaxBalancePoints] = useState(10000);
+  const [loyaltyMinRedemption, setLoyaltyMinRedemption] = useState(100);
+  const [loyaltyMaxRedemptionPct, setLoyaltyMaxRedemptionPct] = useState(50);
   const [savingLoyalty, setSavingLoyalty] = useState(false);
 
   // ── KDS pairing ──────────────────────────────────────────────────────────
@@ -385,7 +391,13 @@ export default function SettingsPage() {
 
     api.get('/settings/loyalty').then((res) => {
       setLoyaltyEnabled(!!res.data.loyalty_enabled);
-      if (res.data.loyalty_expiry_days) setLoyaltyDays(Number(res.data.loyalty_expiry_days));
+      if (res.data.loyalty_expiry_months) setLoyaltyExpiryMonths(Number(res.data.loyalty_expiry_months));
+      if (res.data.loyalty_points_per_currency) setLoyaltyPointsPerCurrency(Number(res.data.loyalty_points_per_currency));
+      if (res.data.loyalty_redemption_rate) setLoyaltyRedemptionRate(Number(res.data.loyalty_redemption_rate));
+      if (res.data.loyalty_max_balance_enabled !== undefined) setLoyaltyMaxBalanceEnabled(!!res.data.loyalty_max_balance_enabled);
+      if (res.data.loyalty_max_balance_points) setLoyaltyMaxBalancePoints(Number(res.data.loyalty_max_balance_points));
+      if (res.data.loyalty_min_redemption) setLoyaltyMinRedemption(Number(res.data.loyalty_min_redemption));
+      if (res.data.loyalty_max_redemption_percentage) setLoyaltyMaxRedemptionPct(Number(res.data.loyalty_max_redemption_percentage));
     }).catch(() => {});
 
     api.get('/mobile/pairing-code').then((res) => {
@@ -471,7 +483,13 @@ export default function SettingsPage() {
     try {
       await api.put('/settings/loyalty', {
         loyalty_enabled: loyaltyEnabled,
-        loyalty_expiry_days: loyaltyDays,
+        loyalty_expiry_months: loyaltyExpiryMonths,
+        loyalty_points_per_currency: loyaltyPointsPerCurrency,
+        loyalty_redemption_rate: loyaltyRedemptionRate,
+        loyalty_max_balance_enabled: loyaltyMaxBalanceEnabled,
+        loyalty_max_balance_points: loyaltyMaxBalancePoints,
+        loyalty_min_redemption: loyaltyMinRedemption,
+        loyalty_max_redemption_percentage: loyaltyMaxRedemptionPct,
       });
       toast.success('Loyalty settings saved');
     } catch {
@@ -817,15 +835,91 @@ export default function SettingsPage() {
 
                 {loyaltyEnabled && (
                   <>
+                    {/* Earning rate */}
+                    <div>
+                      <p className="font-medium text-gray-900">Earning Rate</p>
+                      <p className="text-sm text-gray-500 mb-2">Points earned per 1 unit of currency spent</p>
+                      <div className="flex items-center gap-3">
+                        <input type="number" min={0.1} step={0.1} value={loyaltyPointsPerCurrency}
+                          onChange={(e) => setLoyaltyPointsPerCurrency(parseFloat(e.target.value) || 1)}
+                          className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                        <span className="text-sm text-gray-500">points per 1 spent</span>
+                      </div>
+                    </div>
+
+                    {/* Redemption rate */}
+                    <div>
+                      <p className="font-medium text-gray-900">Redemption Rate</p>
+                      <p className="text-sm text-gray-500 mb-2">Points needed to redeem 1 unit of currency</p>
+                      <div className="flex items-center gap-3">
+                        <input type="number" min={1} value={loyaltyRedemptionRate}
+                          onChange={(e) => setLoyaltyRedemptionRate(parseInt(e.target.value) || 100)}
+                          className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                        <span className="text-sm text-gray-500">points = 1 currency unit</span>
+                      </div>
+                    </div>
+
                     {/* Points expiry */}
                     <div>
                       <p className="font-medium text-gray-900">Points Expiry</p>
-                      <p className="text-sm text-gray-500 mb-2">Number of days before earned points expire</p>
+                      <p className="text-sm text-gray-500 mb-2">Months before earned points expire</p>
                       <div className="flex items-center gap-3">
-                        <input type="number" min={1} max={3650} value={loyaltyDays}
-                          onChange={(e) => setLoyaltyDays(parseInt(e.target.value) || 365)}
+                        <input type="number" min={1} max={120} value={loyaltyExpiryMonths}
+                          onChange={(e) => setLoyaltyExpiryMonths(parseInt(e.target.value) || 6)}
                           className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                        <span className="text-sm text-gray-500">days</span>
+                        <span className="text-sm text-gray-500">months</span>
+                      </div>
+                    </div>
+
+                    {/* Max balance */}
+                    <div>
+                      <div className="flex items-center justify-between mb-2">
+                        <div>
+                          <p className="font-medium text-gray-900">Max Balance Cap</p>
+                          <p className="text-sm text-gray-500">Limit total points a customer can accumulate</p>
+                        </div>
+                        <button
+                          onClick={() => setLoyaltyMaxBalanceEnabled(!loyaltyMaxBalanceEnabled)}
+                          className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                            loyaltyMaxBalanceEnabled ? 'bg-brand' : 'bg-gray-200'
+                          }`}
+                        >
+                          <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                            loyaltyMaxBalanceEnabled ? 'translate-x-6' : 'translate-x-1'
+                          }`} />
+                        </button>
+                      </div>
+                      {loyaltyMaxBalanceEnabled && (
+                        <div className="flex items-center gap-3">
+                          <input type="number" min={100} value={loyaltyMaxBalancePoints}
+                            onChange={(e) => setLoyaltyMaxBalancePoints(parseInt(e.target.value) || 10000)}
+                            className="w-32 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                          <span className="text-sm text-gray-500">max points</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Min redemption */}
+                    <div>
+                      <p className="font-medium text-gray-900">Minimum Redemption</p>
+                      <p className="text-sm text-gray-500 mb-2">Minimum points required to redeem</p>
+                      <div className="flex items-center gap-3">
+                        <input type="number" min={1} value={loyaltyMinRedemption}
+                          onChange={(e) => setLoyaltyMinRedemption(parseInt(e.target.value) || 100)}
+                          className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                        <span className="text-sm text-gray-500">points</span>
+                      </div>
+                    </div>
+
+                    {/* Max redemption percentage */}
+                    <div>
+                      <p className="font-medium text-gray-900">Max Redemption per Order</p>
+                      <p className="text-sm text-gray-500 mb-2">Maximum percentage of order total payable with points</p>
+                      <div className="flex items-center gap-3">
+                        <input type="number" min={1} max={100} value={loyaltyMaxRedemptionPct}
+                          onChange={(e) => setLoyaltyMaxRedemptionPct(parseInt(e.target.value) || 50)}
+                          className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                        <span className="text-sm text-gray-500">%</span>
                       </div>
                     </div>
                   </>

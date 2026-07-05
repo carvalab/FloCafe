@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import api from '@/lib/api';
 import toast from 'react-hot-toast';
-import { Clock, ChefHat, X, ChevronRight, ChevronLeft, LogOut, Wifi, WifiOff, Sparkles } from 'lucide-react';
+import { Clock, ChefHat, X, ChevronRight, ChevronLeft, LogOut, Wifi, WifiOff } from 'lucide-react';
 import type { Order, OrderItem } from '@/lib/types';
 
 const STATUS_CONFIG = {
@@ -88,10 +88,6 @@ export default function KdsPage() {
   }, []);
 
   const startRestPolling = useCallback(() => {
-    // Clear any existing interval first
-    if (restIntervalRef.current) {
-      clearInterval(restIntervalRef.current);
-    }
     setConnectionMode('rest');
     setConnected(true);
     fetchOrdersRest();
@@ -248,11 +244,6 @@ export default function KdsPage() {
         const parsed = JSON.parse(savedUser) as LoggedInUser;
         setUser(parsed);
         tryWebSocket(parsed.token);
-        // Fallback: set loading to false after 5 seconds if WebSocket doesn't connect
-        const loadingTimeout = setTimeout(() => {
-          setLoading(false);
-        }, 5000);
-        return () => clearTimeout(loadingTimeout);
       } catch {
         localStorage.removeItem('kds_user');
         setLoading(false);
@@ -410,14 +401,10 @@ export default function KdsPage() {
             >
               <div className="flex justify-between items-center mb-3">
                 <div>
-                  <span className="font-bold text-lg">#{order.order_number}</span>
-                  {order.table && (
-                    <span className="text-sm text-orange-600 font-medium ml-2">
-                      🪑 {order.table.name}
-                    </span>
-                  )}
+                  <span className="font-bold text-base">#{order.order_number}</span>
                   <span className="text-xs text-gray-500 ml-2">
                     {order.type.replace('_', ' ')}
+                    {order.table && ` — ${order.table.name}`}
                   </span>
                 </div>
                 <div className="flex items-center gap-1 text-xs text-gray-400">
@@ -426,11 +413,16 @@ export default function KdsPage() {
                 </div>
               </div>
 
+              {order.special_instructions && (
+                <div className="mb-2 px-2 py-1.5 bg-amber-50 border border-amber-200 rounded-lg">
+                  <p className="text-sm text-amber-700 font-medium break-words">📝 {order.special_instructions}</p>
+                </div>
+              )}
+
               <div className="space-y-2 flex-1">
                 {order.items?.map((item) => {
                   const itemStatus = (item.status || 'pending') as KitchenStatus;
                   const config = STATUS_CONFIG[itemStatus];
-                  const isNewItem = item.created_at > order.created_at;
 
                   return (
                     <button
@@ -442,12 +434,6 @@ export default function KdsPage() {
                         <div className={`w-2.5 h-2.5 rounded-full shrink-0 ${config.color}`} />
                         <span className={`font-bold text-sm w-6 shrink-0 ${config.text}`}>{item.quantity}×</span>
                         <span className="text-gray-900 text-sm font-semibold flex-1 truncate">{item.product_name}</span>
-                        {isNewItem && (
-                          <span className="inline-flex items-center gap-1 text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-medium">
-                            <Sparkles size={10} />
-                            NEW
-                          </span>
-                        )}
                         <ChevronRight size={14} className="text-gray-400 shrink-0" />
                       </div>
                       {item.addons && item.addons.length > 0 && (
@@ -460,7 +446,7 @@ export default function KdsPage() {
                         </div>
                       )}
                       {item.special_instructions && (
-                        <p className="ml-[26px] text-[11px] text-red-600 italic mt-0.5 font-medium">
+                        <p className="ml-[26px] text-xs text-red-600 italic mt-0.5 font-medium break-words">
                           {`"${item.special_instructions}"`}
                         </p>
                       )}
@@ -528,7 +514,7 @@ export default function KdsPage() {
             {activeItem.special_instructions && (
               <div className="bg-red-50 rounded-xl p-3">
                 <p className="text-xs font-semibold text-red-700 mb-1 uppercase tracking-wide">Special Instructions</p>
-                <p className="text-sm text-red-700 italic font-medium">{activeItem.special_instructions}</p>
+                <p className="text-sm text-red-700 italic font-medium break-words">{activeItem.special_instructions}</p>
               </div>
             )}
 

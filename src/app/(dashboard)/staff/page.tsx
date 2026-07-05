@@ -40,6 +40,7 @@ export default function StaffPage() {
     email: '',
     password: '',
     role: 'waiter',
+    pin: '',
   });
   const [newPassword, setNewPassword] = useState('');
 
@@ -58,13 +59,13 @@ export default function StaffPage() {
 
   const openAdd = () => {
     setEditingStaff(null);
-    setForm({ name: '', email: '', password: '', role: 'waiter' });
+    setForm({ name: '', email: '', password: '', role: 'waiter', pin: '' });
     setShowForm(true);
   };
 
   const openEdit = (s: Staff) => {
     setEditingStaff(s);
-    setForm({ name: s.name, email: s.email || '', password: '', role: s.role });
+    setForm({ name: s.name, email: s.email || '', password: '', role: s.role, pin: '' });
     setShowForm(true);
   };
 
@@ -83,6 +84,7 @@ export default function StaffPage() {
           email: form.email || null,
           role: form.role,
           ...(form.password ? { password: form.password } : {}),
+          ...(form.pin ? { pin: form.pin } : {}),
         });
         toast.success('Staff updated');
       } else {
@@ -91,6 +93,7 @@ export default function StaffPage() {
           email: form.email || null,
           password: form.password,
           role: form.role,
+          ...(form.pin ? { pin: form.pin } : {}),
         });
         toast.success('Staff added');
       }
@@ -136,6 +139,9 @@ export default function StaffPage() {
               <div>
                 <p className="font-bold text-gray-900">{s.name}</p>
                 <p className="text-xs text-gray-500">{s.email || '—'}</p>
+                {s.pin_hash && (
+                  <p className="text-xs text-green-600 mt-1">✓ PIN set</p>
+                )}
               </div>
               <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${roleColors[s.role] || 'bg-gray-100 text-gray-800'}`}>
                 {roleLabels[s.role] || s.role}
@@ -186,6 +192,18 @@ export default function StaffPage() {
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
                 required={!editingStaff}
               />
+              <div>
+                <input
+                  type="text" placeholder={editingStaff ? 'New PIN (leave empty to keep)' : 'PIN (4-6 digits)'}
+                  value={form.pin}
+                  onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
+                  className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
+                  maxLength={6}
+                  pattern="[0-9]*"
+                  inputMode="numeric"
+                />
+                <p className="text-xs text-gray-500 mt-1">Used for manager approvals (cancelling orders, etc.)</p>
+              </div>
               <select
                 value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
