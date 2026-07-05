@@ -30,6 +30,14 @@ export interface GstBillOptions {
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
 
 /**
+ * Mask phone number for receipt display — shows only last 4 digits.
+ */
+function maskPhoneOnReceipt(phone: string): string {
+  if (!phone || phone.length < 4) return phone;
+  return 'x'.repeat(phone.length - 4) + phone.slice(-4);
+}
+
+/**
  * Build a GST-compliant bill byte array from a Bill object.
  */
 export function buildGstBillBytes(
@@ -73,7 +81,7 @@ export function buildGstBillBytes(
   if (order?.customer?.name) {
     enc.text(`Customer: ${order.customer.name}`);
     if (order.customer.phone) {
-      enc.text(` (${order.customer.phone})`);
+      enc.text(` (${maskPhoneOnReceipt(order.customer.phone)})`);
     }
     enc.newline();
   }

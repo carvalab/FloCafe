@@ -4,12 +4,12 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight, UserPlus, User } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
 import { useConfirm } from '@/hooks/use-confirm';
-import type { OrderItem, Table, Product } from '@/lib/types';
+import type { OrderItem, Table, Product, Customer } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 
@@ -89,6 +89,13 @@ export default function OrdersPage() {
   const [productSearch, setProductSearch] = useState('');
   const [selectedItems, setSelectedItems] = useState<{ product_id: number; product_name: string; quantity: number; special_instructions: string }[]>([]);
   const [addingItems, setAddingItems] = useState(false);
+
+  // Link Customer states
+  const [linkCustomerOrderId, setLinkCustomerOrderId] = useState<number | null>(null);
+  const [linkCustomerSearch, setLinkCustomerSearch] = useState('');
+  const [linkCustomerResults, setLinkCustomerResults] = useState<Customer[]>([]);
+  const [linkingCustomer, setLinkingCustomer] = useState(false);
+  const linkSearchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
@@ -199,6 +206,44 @@ export default function OrdersPage() {
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
+  };
+
+  const maskPhone = (phone: string) => {
+    if (!phone || phone.length < 4) return phone;
+    return 'x'.repeat(phone.length - 4) + phone.slice(-4);
+  };
+
+  const searchCustomersForLink = (query: string) => {
+    clearTimeout(linkSearchRef.current);
+    if (query.length < 2) {
+      setLinkCustomerResults([]);
+      return;
+    }
+    linkSearchRef.current = setTimeout(async () => {
+      try {
+        const { data } = await api.get(`/customers-search?q=${encodeURIComponent(query)}`);
+        setLinkCustomerResults(Array.isArray(data) ? data : (data.customers || []));
+      } catch {
+        setLinkCustomerResults([]);
+      }
+    }, 300);
+  };
+
+  const handleLinkCustomer = async (orderId: number, customerId: string) => {
+    setLinkingCustomer(true);
+    try {
+      await api.patch(`/orders/${orderId}/customer`, { customer_id: customerId });
+      toast.success('Customer linked');
+      setLinkCustomerOrderId(null);
+      setLinkCustomerSearch('');
+      setLinkCustomerResults([]);
+      fetchOrders();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || 'Failed to link customer');
+    } finally {
+      setLinkingCustomer(false);
+    }
   };
 
   const filteredOrders = orders.filter((order) => {
@@ -578,6 +623,75 @@ export default function OrdersPage() {
                     </p>
                   </div>
                 )}
+
+                {/* Customer info strip */}
+                {order.customer ? (
+                  <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                    <div className="flex items-center gap-2">
+                      <User size={14} className="text-blue-600 shrink-0" />
+                      <span className="text-sm font-medium text-blue-800">{order.customer.name}</span>
+                      {order.customer.phone && (
+                        <span className="text-xs text-blue-600">({maskPhone(order.customer.phone)})</span>
+                      )}
+                    </div>
+                  </div>
+                ) : isOwnerOrManager && !['completed', 'cancelled'].includes(order.status) ? (
+                  <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">
+                    {linkCustomerOrderId === order.id ? (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={linkCustomerSearch}
+                          onChange={(e) => {
+                            setLinkCustomerSearch(e.target.value);
+                            searchCustomersForLink(e.target.value);
+                          }}
+                          placeholder="Search by phone or name..."
+                          className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
+                          autoFocus
+                        />
+                        <button
+                          onClick={() => {
+                            setLinkCustomerOrderId(null);
+                            setLinkCustomerSearch('');
+                            setLinkCustomerResults([]);
+                          }}
+                          className="text-gray-400 hover:text-gray-600"
+                        >
+                          <XCircle size={16} />
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setLinkCustomerOrderId(order.id)}
+                        className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-blue-600 transition-colors"
+                      >
+                        <UserPlus size={14} />
+                        Link Customer
+                      </button>
+                    )}
+                    {linkCustomerOrderId === order.id && linkCustomerResults.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {linkCustomerResults.map((customer) => (
+                          <button
+                            key={customer.id}
+                            onClick={() => handleLinkCustomer(order.id, String(customer.id))}
+                            disabled={linkingCustomer}
+                            className="w-full flex items-center justify-between px-3 py-2 bg-white rounded-lg border border-gray-200 hover:border-blue-300 hover:bg-blue-50 transition-colors text-left disabled:opacity-50"
+                          >
+                            <div>
+                              <span className="text-sm font-medium text-gray-900">{customer.name}</span>
+                              {customer.phone && (
+                                <span className="text-xs text-gray-500 ml-2">{customer.phone}</span>
+                              )}
+                            </div>
+                            {linkingCustomer && <span className="text-xs text-gray-400">Linking...</span>}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                ) : null}
 
                 {/* Items */}
                 <div className="px-4 py-3">

@@ -38,6 +38,15 @@ export interface ReceiptOptions {
 
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
 
+/**
+ * Mask phone number for receipt display — shows only last 4 digits.
+ * Example: "9876543210" → "xxxxx3210"
+ */
+function maskPhoneOnReceipt(phone: string): string {
+  if (!phone || phone.length < 4) return phone;
+  return 'x'.repeat(phone.length - 4) + phone.slice(-4);
+}
+
 // ---------------------------------------------------------------------------
 // 4-column layout helpers
 // ---------------------------------------------------------------------------
@@ -122,7 +131,7 @@ export function buildClassicReceiptBytes(
   if (order?.customer?.name) {
     enc.text(order.customer.name).newline();
     if (order.customer.phone) {
-      enc.text(order.customer.phone).newline();
+      enc.text(maskPhoneOnReceipt(order.customer.phone)).newline();
     }
   }
 
@@ -270,7 +279,8 @@ export function buildCompactReceiptBytes(
     enc.text(`Table: ${order.table.name}`).newline();
   }
   if (order?.customer?.name) {
-    enc.text(`Cust: ${truncate(order.customer.name, cols - 6)}`).newline();
+    const maskedPhone = order.customer.phone ? ` (${maskPhoneOnReceipt(order.customer.phone)})` : '';
+    enc.text(`Cust: ${truncate(order.customer.name + maskedPhone, cols - 6)}`).newline();
   }
 
   enc.rule({ style: 'single' });
@@ -382,7 +392,7 @@ export function buildDetailedReceiptBytes(
       .text(
         padRow(
           `Customer: ${truncate(order.customer.name, cols - 20)}`,
-          order.customer.phone ?? '',
+          order.customer.phone ? maskPhoneOnReceipt(order.customer.phone) : '',
           cols
         )
       )
