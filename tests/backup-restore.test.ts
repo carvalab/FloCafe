@@ -138,6 +138,11 @@ function getSchemaVersionFromBackup(backupPath: string): number {
   }
 }
 
+// NOTE: This is a simplified reimplementation of the production dataOnlyRestore logic.
+// The production version (main/db.ts) uses ATTACH DATABASE for efficiency, but this
+// test version reads data into memory and inserts it. Both test the same concept:
+// handling schema mismatches between backup and current database.
+// TODO: Consider refactoring to use the production restoreBackup() function directly.
 function dataOnlyRestore(backupPath: string, targetDb: Database): { success: boolean; tablesRestored: number; error?: string } {
   if (fs.existsSync(backupPath + '-wal')) fs.unlinkSync(backupPath + '-wal');
   if (fs.existsSync(backupPath + '-shm')) fs.unlinkSync(backupPath + '-shm');

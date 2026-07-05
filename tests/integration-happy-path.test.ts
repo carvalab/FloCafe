@@ -71,12 +71,11 @@ async function main() {
     assert(orderId > 0, `order has valid id (${orderId})`);
 
     // Verify initial totals (500 + 300 = 800 subtotal)
-    // Tax depends on settings — India GST 5% → 40 tax → total 840, or no tax → total 800
+    // India restaurant: 5% GST → 40 tax → total 840
     const orderSubtotal = createRes.data.order.subtotal;
     const orderTotal = createRes.data.order.total;
     assertEqual(orderSubtotal, 800, 'order subtotal = 800 (500 + 300)');
-    // Total should be either 800 (no tax) or 840 (5% GST) — nothing else
-    assert(orderTotal === 800 || orderTotal === 840, `order total = 800 or 840 (got ${orderTotal})`);
+    assertEqual(orderTotal, 840, 'order total = 840 (800 + 5% GST)');
     assertEqual(createRes.data.order.status, 'pending', 'order status is pending');
 
     // ── Step 2: Apply 10% discount ───────────────────────────────────
@@ -92,9 +91,9 @@ async function main() {
     assertEqual(discountRes.data.order.discount_amount, 80, 'discount amount = 80 (10% of 800)');
 
     // Verify total is recalculated (subtotal - discount + tax)
-    // discounted subtotal = 720, tax = 5% of 720 = 36, total = 756 (or no tax → 720)
+    // discounted subtotal = 720, tax = 5% of 720 = 36, total = 756
     const discountedTotal = discountRes.data.order.total;
-    assert(discountedTotal === 720 || discountedTotal === 756, `discounted total = 720 (no tax) or 756 (5% GST), got ${discountedTotal}`);
+    assertEqual(discountedTotal, 756, 'discounted total = 756 (720 + 5% GST)');
 
     // ── Step 3: Generate bill ────────────────────────────────────────
     console.log('\n3. Generate bill');

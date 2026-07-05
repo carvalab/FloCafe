@@ -138,15 +138,15 @@ async function runTests() {
     }
   }
 
-  // ── Test 2: POST /api/bills/:id/print with invalid bill returns 500 ─
-  console.log('\nTest 2: POST /api/bills/:id/print with non-existent bill returns error');
+  // ── Test 2: POST /api/bills/:id/print with invalid bill returns 404 ─
+  console.log('\nTest 2: POST /api/bills/:id/print with non-existent bill returns 404');
   {
     const res = await request(app)
       .post('/api/bills/999999/print')
       .set('Authorization', authHeader)
       .send({ print_type: 'receipt' });
 
-    assert(res.status === 500, `returns 500 for non-existent bill (got ${res.status})`);
+    assert(res.status === 404, `returns 404 for non-existent bill (got ${res.status})`);
     assert(res.body.error !== undefined, 'response includes error message');
   }
 

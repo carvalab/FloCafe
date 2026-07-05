@@ -222,6 +222,10 @@ async function main() {
     // ── Test 3: Order-level amount discount ──────────────────────────────
     console.log('\n3. PATCH /api/orders/:id/discount — amount discount');
     {
+      // Reset order to original state (clear previous discount)
+      const db = getDatabase();
+      db.prepare('UPDATE orders SET discount_type = NULL, discount_value = 0, discount_amount = 0, total = 500 WHERE id = ?').run(orderId);
+
       const res = await request(baseUrl, `/api/orders/${orderId}/discount`, {
         method: 'PATCH',
         body: JSON.stringify({
@@ -323,6 +327,10 @@ async function main() {
     // ── Test 10: Item-level percentage discount ──────────────────────────
     console.log('\n10. PATCH /api/orders/:id/items/:itemId/discount — percentage discount');
     {
+      // Reset item to original state (clear previous discount)
+      const db = getDatabase();
+      db.prepare('UPDATE order_items SET discount_amount = 0, subtotal = 500, total = 500 WHERE id = ?').run(itemId);
+
       const res = await request(baseUrl, `/api/orders/${orderId}/items/${itemId}/discount`, {
         method: 'PATCH',
         body: JSON.stringify({

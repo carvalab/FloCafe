@@ -193,7 +193,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
         const loyaltySetting = (db.prepare(
           `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
         ).get() as any)?.value;
-        if (loyaltySetting === 'true' || loyaltySetting === '1') {
+        if ((loyaltySetting === 'true' || loyaltySetting === '1') && effectiveCustomerId) {
           const expiryRow = (db.prepare(
             `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
           ).get() as any)?.value;
@@ -491,7 +491,9 @@ router.post('/:id/print', requireRole('owner', 'manager', 'cashier'), async (req
     const result = await printReceipt(parseInt(req.params.id), userId, print_type);
     res.json(result);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    // Return 404 for "Bill not found", 500 for other errors
+    const statusCode = error.message?.includes('Bill not found') ? 404 : 500;
+    res.status(statusCode).json({ error: error.message });
   }
 });
 

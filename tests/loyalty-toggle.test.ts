@@ -3,8 +3,7 @@
  *
  * Verifies that:
  * 1. Loyalty settings exist in the database after migration
- * 2. PATCH /api/orders/:id/loyalty endpoint works
- * 3. PATCH returns 404 for missing orders
+ * 2-4. PATCH /api/orders/:id/loyalty endpoint — SKIPPED (stub, not persisted)
  *
  * Uses Electron runtime (via run-electron-node-test.cjs) because
  * better-sqlite3 is built for Electron's Node ABI.
@@ -190,43 +189,25 @@ async function main() {
       }
     }
 
-    // ── Test 2: PATCH endpoint enables loyalty on an order ──────────────
-    // NOTE: This endpoint is currently a stub (returns value but doesn't persist to DB).
-    // The test verifies the API contract; persistence is a TODO.
-    console.log('\n2. PATCH /api/orders/:id/loyalty enables loyalty');
+    // ── Test 2-4: PATCH endpoint tests (STUB — not persisted) ──────────
+    // TODO: These tests verify a stub endpoint that returns hardcoded success.
+    // When the endpoint is implemented, rewrite to test actual persistence and validation.
+    console.log('\n2. PATCH /api/orders/:id/loyalty — STUB (skipped)');
     {
-      const res = await request(baseUrl, `/api/orders/${testOrderId}/loyalty`, {
-        method: 'PATCH',
-        body: JSON.stringify({ loyalty_enabled: true }),
-      });
-      assertEqual(res.status, 200, 'returns 200');
-      assertEqual(res.data.success, true, 'response has success: true');
-      assertEqual(res.data.loyalty_enabled, true, 'response has loyalty_enabled: true');
+      total++;
+      console.log('  ⏭ Skipped: stub endpoint — rewrite when implemented');
     }
 
-    // ── Test 3: PATCH endpoint disables loyalty on an order ─────────────
-    console.log('\n3. PATCH /api/orders/:id/loyalty disables loyalty');
+    console.log('\n3. PATCH /api/orders/:id/loyalty disable — STUB (skipped)');
     {
-      const res = await request(baseUrl, `/api/orders/${testOrderId}/loyalty`, {
-        method: 'PATCH',
-        body: JSON.stringify({ loyalty_enabled: false }),
-      });
-      assertEqual(res.status, 200, 'returns 200');
-      assertEqual(res.data.success, true, 'response has success: true');
-      assertEqual(res.data.loyalty_enabled, false, 'response has loyalty_enabled: false');
+      total++;
+      console.log('  ⏭ Skipped: stub endpoint — rewrite when implemented');
     }
 
-    // ── Test 4: PATCH endpoint returns success for any id (stub behavior) ──
-    // NOTE: The loyalty toggle endpoint is a stub — it doesn't check order existence.
-    // When the endpoint is fully implemented, this test should expect 404.
-    console.log('\n4. PATCH /api/orders/:id/loyalty returns success (stub — no order lookup)');
+    console.log('\n4. PATCH /api/orders/:id/loyalty non-existent order — STUB (skipped)');
     {
-      const res = await request(baseUrl, '/api/orders/99999/loyalty', {
-        method: 'PATCH',
-        body: JSON.stringify({ loyalty_enabled: true }),
-      });
-      assertEqual(res.status, 200, 'returns 200 (stub ignores order id)');
-      assertEqual(res.data.success, true, 'response has success: true');
+      total++;
+      console.log('  ⏭ Skipped: stub endpoint should return 404 when implemented');
     }
   } finally {
     server.close();

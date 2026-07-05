@@ -5,6 +5,7 @@
  * A) Split payments (cash + UPI)
  * B) Wallet double-spend prevention
  * C) Zero-amount rejection
+ * D) No loyalty credit without customer
  *
  * Usage: node tests/run-electron-node-test.cjs tests/integration-payments.test.ts
  */
@@ -109,6 +110,10 @@ async function main() {
     // ═══════════════════════════════════════════════════════════════════
     console.log('\n─── Scenario B: Wallet Double-Spend ───');
 
+    // Disable loyalty so cashback isn't credited during payment —
+    // this test verifies wallet balance depletion, not loyalty earn
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
+
     // Give customer ₹600 wallet balance — enough for first order (₹500 + tax ≈ ₹525)
     // but NOT enough for second order (₹200 + tax ≈ ₹210)
     seedWalletCredit(db, 'cust-wallet', 600);
@@ -190,6 +195,37 @@ async function main() {
     });
     assertEqual(payC.status, 400, 'amount=0 rejected with 400');
     assertIncludes(payC.data.error, 'greater than zero', 'error mentions amount must be positive');
+
+    // ═══════════════════════════════════════════════════════════════════
+    // Scenario D: No Loyalty Credit Without Customer
+    // ═══════════════════════════════════════════════════════════════════
+    console.log('\n─── Scenario D: No Loyalty Without Customer ───');
+
+    // Enable loyalty
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
+    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_points_per_currency', '1', ?)").run(now());
+
+    // Create order WITHOUT customer_id
+    const orderD = await api(baseUrl, '/api/orders', {
+      method: 'POST',
+      body: { type: 'takeaway', items: [{ product_id: 'prod-pay-1', quantity: 1 }] },
+      headers: authHeader,
+    });
+    assertEqual(orderD.status, 201, 'order D created (no customer)');
+
+    const billD = await api(baseUrl, '/api/bills/generate', {
+      method: 'POST',
+      body: { order_id: orderD.data.order.id },
+      headers: authHeader,
+    });
+
+    const payD = await api(baseUrl, `/api/bills/${billD.data.bill.id}/payment`, {
+      method: 'POST',
+      body: { method: 'cash', amount: billD.data.bill.total },
+      headers: authHeader,
+    });
+    assertEqual(payD.status, 200, 'payment accepted');
+    assertEqual(payD.data.loyaltyPointsEarned, 0, 'no loyalty points earned (no customer)');
 
   } finally {
     server.close();
