@@ -134,6 +134,9 @@ export interface Order {
   tax_amount: number;
   discount_amount: number;
   delivery_charge: number;
+  packaging_charge?: number;
+  round_off?: number;
+  tax_breakdown?: { title: string; rate: number; amount: number }[] | null;
   total: number;
   guest_count: number | null;
   special_instructions: string | null;
