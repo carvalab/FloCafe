@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
@@ -80,6 +80,7 @@ export default function OrdersPage() {
   const [addItemsOrder, setAddItemsOrder] = useState<Order | null>(null);
   const [printHistoryExpanded, setPrintHistoryExpanded] = useState<Record<number, boolean>>({});
   const [printHistory, setPrintHistory] = useState<Record<number, { id: number; print_type: string; user_name: string; printed_at: string }[]>>({});
+  const fetchedBillIdsRef = useRef<Set<number>>(new Set());
 
   // Add Item modal states
   const [products, setProducts] = useState<Product[]>([]);
@@ -95,9 +96,10 @@ export default function OrdersPage() {
       const { data } = await api.get('/orders', { params: { per_page: 50 } });
       const orders = data.orders || [];
       setOrders(orders);
-      // Eagerly fetch print history for all bills
+      // Fetch print history only for bills we haven't fetched yet
       orders.forEach((order: Order) => {
-        if (order.bill?.id && !printHistory[order.bill.id]) {
+        if (order.bill?.id && !fetchedBillIdsRef.current.has(order.bill.id)) {
+          fetchedBillIdsRef.current.add(order.bill.id);
           fetchPrintHistory(order.bill.id);
         }
       });
@@ -111,8 +113,8 @@ export default function OrdersPage() {
   useEffect(() => {
     fetchOrders();
 
-    // 5-second backup polling interval
-    const interval = setInterval(fetchOrders, 5000);
+    // 10-second backup polling interval (WebSocket handles real-time updates)
+    const interval = setInterval(fetchOrders, 10000);
 
     // Live WebSocket connection to trigger immediate updates
     let ws: globalThis.WebSocket | null = null;
