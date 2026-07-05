@@ -279,7 +279,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
       return res.status(400).json({ error: 'Cannot add items to a completed or cancelled order' });
     }
 
-    const { items } = req.body;
+    const { items, special_instructions } = req.body;
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
     }
@@ -287,6 +287,9 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
     try {
       for (const item of items) {
         validateItemNotes(db, item.special_instructions);
+      }
+      if (special_instructions !== undefined) {
+        validateOrderNotes(db, special_instructions);
       }
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
@@ -400,9 +403,16 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 
-      db.prepare(`
-        UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-      `).run(subtotal, newTaxAmount, JSON.stringify(allTaxBreakdowns), newDiscountAmount, total, roundOff, now(), req.params.id);
+      // Update order totals and optionally update order-level notes
+      if (special_instructions !== undefined) {
+        db.prepare(`
+          UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, discount_amount = ?, total = ?, round_off = ?, special_instructions = ?, updated_at = ? WHERE id = ?
+        `).run(subtotal, newTaxAmount, JSON.stringify(allTaxBreakdowns), newDiscountAmount, total, roundOff, special_instructions || null, now(), req.params.id);
+      } else {
+        db.prepare(`
+          UPDATE orders SET subtotal = ?, tax_amount = ?, tax_breakdown = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+        `).run(subtotal, newTaxAmount, JSON.stringify(allTaxBreakdowns), newDiscountAmount, total, roundOff, now(), req.params.id);
+      }
 
       // BUG #4 FIX: Sync bill if it exists (add-items didn't update the bill)
       const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(req.params.id) as any;
@@ -548,6 +558,50 @@ router.patch('/:id/loyalty', (req: Request, res: Response) => {
   // For now, return success but don't persist (frontend handles state locally)
   const { loyalty_enabled } = req.body;
   res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
+});
+
+router.patch('/:id/customer', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+
+    const { customer_id } = req.body;
+
+    // Validate customer exists if providing one
+    if (customer_id) {
+      const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(customer_id);
+      if (!customer) {
+        return res.status(404).json({ error: 'Customer not found' });
+      }
+    }
+
+    const nowStr = now();
+    db.prepare('UPDATE orders SET customer_id = ?, updated_at = ? WHERE id = ?')
+      .run(customer_id || null, nowStr, req.params.id);
+
+    // Sync bill if it exists
+    const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(req.params.id) as any;
+    if (existingBill) {
+      db.prepare('UPDATE bills SET customer_id = ?, updated_at = ? WHERE id = ?')
+        .run(customer_id || null, nowStr, existingBill.id);
+    }
+
+    // Return updated order with customer relation
+    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    const customer = updatedOrder.customer_id
+      ? db.prepare('SELECT * FROM customers WHERE id = ?').get(updatedOrder.customer_id)
+      : null;
+
+    cloudSync.recordOrderChanged(req.params.id, 'order.updated');
+    notifyOrderUpdated();
+
+    res.json({ order: { ...updatedOrder, customer } });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
