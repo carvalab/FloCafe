@@ -1016,3 +1016,39 @@ export function parseItemJson(item: any): any {
     tax_breakdown: tryParse(item.tax_breakdown),
   };
 }
+
+/** Parse JSON text columns on bill/order rows returned from SQLite. */
+export function parseRowJson(row: any): any {
+  if (!row) return row;
+  const tryParse = (val: any) => {
+    if (typeof val !== 'string') return val;
+    try { return JSON.parse(val); } catch { return val; }
+  };
+
+  // tax_breakdown is stored as an array of per-item breakdowns (array of arrays).
+  // Aggregate into a flat array of { title, rate, amount } for the frontend.
+  let taxBreakdown = tryParse(row.tax_breakdown);
+  if (Array.isArray(taxBreakdown) && taxBreakdown.length > 0 && Array.isArray(taxBreakdown[0])) {
+    const merged: Record<string, { title: string; rate: number; amount: number }> = {};
+    for (const itemBreakdown of taxBreakdown) {
+      if (!Array.isArray(itemBreakdown)) continue;
+      for (const line of itemBreakdown) {
+        const key = `${line.title}_${line.rate}`;
+        if (!merged[key]) {
+          merged[key] = { title: line.title, rate: line.rate, amount: 0 };
+        }
+        merged[key].amount += line.amount;
+      }
+    }
+    taxBreakdown = Object.values(merged).map((line) => ({
+      ...line,
+      amount: Math.round(line.amount * 100) / 100,
+    }));
+  }
+
+  return {
+    ...row,
+    tax_breakdown: taxBreakdown,
+    payment_details: tryParse(row.payment_details),
+  };
+}

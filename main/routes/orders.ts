@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateOrderNumber, now, parseItemJson, withTxn, verifyPin, getSettingValue } from '../db';
+import { getDatabase, generateOrderNumber, now, parseItemJson, parseRowJson, withTxn, verifyPin, getSettingValue } from '../db';
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
@@ -78,7 +78,7 @@ router.get('/', (req: Request, res: Response) => {
       query += ` LIMIT ${perPage}`;
     }
 
-    const orders = db.prepare(query).all(...params);
+    const orders = db.prepare(query).all(...params).map(parseRowJson);
 
     // Load related data
     const ordersWithRelations = orders.map((order: any) => {
@@ -86,7 +86,7 @@ router.get('/', (req: Request, res: Response) => {
       const tableRow = order.table_id ? db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id) as any : null;
       const table = tableRow ? { ...tableRow, name: tableRow.number } : null;
       const customer = order.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) : null;
-      const bill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order.id) as any;
+      const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order.id) as any);
       return { ...order, items, table, customer, bill };
     });
 
@@ -99,7 +99,7 @@ router.get('/', (req: Request, res: Response) => {
 router.get('/:id', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id);
+    const order = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id));
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
@@ -108,7 +108,7 @@ router.get('/:id', (req: Request, res: Response) => {
     const tableRow = (order as any).table_id ? db.prepare('SELECT * FROM tables WHERE id = ?').get((order as any).table_id) as any : null;
     const table = tableRow ? { ...tableRow, name: tableRow.number } : null;
     const customer = (order as any).customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get((order as any).customer_id) : null;
-    const bill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(req.params.id);
+    const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE order_id = ?').get(req.params.id));
 
     res.json({ order: { ...order, items, table, customer, bill } });
   } catch (error: any) {
@@ -243,7 +243,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         db.prepare("UPDATE tables SET status = 'occupied', updated_at = ? WHERE id = ?").run(now(), table_id);
       }
 
-      const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
+      const order = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)) as any;
       const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
       return { order, orderItems };
     });
@@ -422,7 +422,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
           .run(total, newBillBalance, newTaxAmount, newDiscountAmount, roundOff, now(), existingBill.id);
       }
 
-      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+      const updatedOrder = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) as any;
       const updatedItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
       return { updatedOrder, updatedItems };
     });
@@ -536,7 +536,7 @@ router.patch('/:id/status', requireRole('owner', 'manager', 'chef', 'waiter'), (
         }
       }
 
-      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+      const updatedOrder = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) as any;
       const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
       const tableRow2 = updatedOrder.table_id ? db.prepare('SELECT * FROM tables WHERE id = ?').get(updatedOrder.table_id) as any : null;
       const table = tableRow2 ? { ...tableRow2, name: tableRow2.number } : null;
@@ -590,7 +590,7 @@ router.patch('/:id/customer', requireRole('owner', 'manager'), (req: Request, re
     }
 
     // Return updated order with customer relation
-    const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    const updatedOrder = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) as any;
     const customer = updatedOrder.customer_id
       ? db.prepare('SELECT * FROM customers WHERE id = ?').get(updatedOrder.customer_id)
       : null;
@@ -707,7 +707,7 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
         );
       }
 
-      const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+      const updatedOrder = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) as any;
       return updatedOrder;
     });
 

@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateBillNumber, now, withTxn, getSettingValue } from '../db';
+import { getDatabase, generateBillNumber, now, withTxn, getSettingValue, parseRowJson } from '../db';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
@@ -36,7 +36,7 @@ router.get('/', requireRole('owner', 'manager', 'cashier'), (req: Request, res: 
       query += ` LIMIT ${perPage}`;
     }
 
-    const bills = db.prepare(query).all(...params);
+    const bills = db.prepare(query).all(...params).map(parseRowJson);
     res.json({ bills });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -46,7 +46,7 @@ router.get('/', requireRole('owner', 'manager', 'cashier'), (req: Request, res: 
 router.get('/:id', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+    const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id));
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found' });
     }
@@ -64,7 +64,7 @@ router.get('/:id', requireRole('owner', 'manager', 'cashier'), (req: Request, re
 router.get('/order/:orderId', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const bill = db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.orderId);
+    const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE order_id = ? ORDER BY created_at DESC LIMIT 1').get(req.params.orderId));
     if (!bill) {
       return res.status(404).json({ error: 'Bill not found for this order' });
     }
@@ -138,11 +138,11 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
           existingBill.id
         );
 
-        const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(existingBill.id);
+        const updatedBill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(existingBill.id));
         return res.json({ bill: updatedBill });
       }
 
-      return res.json({ bill: existingBill });
+      return res.json({ bill: parseRowJson(existingBill) });
     }
 
     const billNumber = generateBillNumber();
@@ -165,7 +165,7 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
       deliveryCharge, packagingCharge, roundOff, total, 0, total, now(), now()
     );
 
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid);
+    const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid));
     notifyOrderUpdated();
     res.status(201).json({ bill });
   } catch (error: any) {
@@ -388,7 +388,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
         }
       }
 
-      const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+      const updatedBill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id));
       return { bill: updatedBill, walletDebited, loyaltyPointsEarned: actualLoyaltyPointsEarned };
     });
 
@@ -475,7 +475,7 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
         WHERE id = ?
       `).run(discountAmount, type, value, reason || null, newTaxAmount, newTotal, newRoundOff, now(), bill.order_id);
 
-      return db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+      return parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id));
     });
 
     notifyOrderUpdated();
@@ -496,7 +496,7 @@ router.post('/:id/markPrinted', requireRole('owner', 'manager'), (req: Request, 
     db.prepare('UPDATE bills SET printed_at = ?, updated_at = ? WHERE id = ?')
       .run(now(), now(), req.params.id);
 
-    const updatedBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id);
+    const updatedBill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id));
     res.json({ bill: updatedBill });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
