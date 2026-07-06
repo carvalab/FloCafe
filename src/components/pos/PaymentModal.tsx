@@ -49,6 +49,8 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [discountValue, setDiscountValue] = useState('');
   const [discountReason, setDiscountReason] = useState('');
   const [discountApplied, setDiscountApplied] = useState(false);
+  const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
+  const [discountPin, setDiscountPin] = useState('');
   const [loyaltySettings, setLoyaltySettings] = useState<{
     loyalty_enabled: boolean;
     loyalty_points_per_currency: number;
@@ -101,6 +103,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     api.get('/settings/loyalty')
       .then((res) => setLoyaltySettings(res.data))
       .catch(() => {});
+    api.get('/settings/discount')
+      .then((res) => setDiscountRequiresApproval(!!res.data.discount_requires_approval))
+      .catch(() => {});
   }, [bill.customer_id, cartCustomerId]);
 
   const updatePayment = (idx: number, field: keyof Payment, value: string) => {
@@ -137,11 +142,17 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       toast.error('Please enter a valid discount value');
       return;
     }
+    // Check if PIN is required
+    if (discountRequiresApproval && val > 0 && !discountPin) {
+      toast.error('Manager PIN required for discounts');
+      return;
+    }
     try {
       const res = await api.patch(`/orders/${bill.order_id}/discount`, {
         discount_type: discountType,
         discount_value: val,
         discount_reason: val > 0 ? discountReason || undefined : undefined,
+        override_pin: discountRequiresApproval && val > 0 ? discountPin : undefined,
       });
       toast.success(val === 0 ? 'Discount removed' : 'Discount updated');
       if (val === 0) {
@@ -369,7 +380,17 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   placeholder="Reason (optional)"
                   className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                 />
-                <Button 
+                {discountRequiresApproval && parseFloat(discountValue) > 0 && (
+                  <input
+                    type="password"
+                    value={discountPin}
+                    onChange={(e) => setDiscountPin(e.target.value)}
+                    placeholder="Manager PIN"
+                    maxLength={6}
+                    className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
+                  />
+                )}
+                <Button
                   size="sm" 
                   onClick={() => handleApplyDiscount()} 
                   disabled={discountValue === '' || isNaN(parseFloat(discountValue))} 

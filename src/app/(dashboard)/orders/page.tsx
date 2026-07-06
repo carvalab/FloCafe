@@ -72,6 +72,8 @@ export default function OrdersPage() {
 
   // Consolidated discount modal state
   const [discountModal, setDiscountModal] = useState<DiscountModal | null>(null);
+  const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
+  const [discountPin, setDiscountPin] = useState('');
 
   // Print states
   const [generatingBill, setGeneratingBill] = useState<number | null>(null);
@@ -121,6 +123,9 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    api.get('/settings/discount')
+      .then((res) => setDiscountRequiresApproval(!!res.data.discount_requires_approval))
+      .catch(() => {});
 
     // 10-second backup polling interval (WebSocket handles real-time updates)
     const interval = setInterval(fetchOrders, 10000);
@@ -360,11 +365,18 @@ export default function OrdersPage() {
   const handleApplyDiscount = async () => {
     if (!discountModal) return;
 
+    // Check if PIN is required
+    if (discountRequiresApproval && discountModal.value > 0 && !discountPin) {
+      toast.error('Manager PIN required for discounts');
+      return;
+    }
+
     try {
       await api.patch(`/orders/${discountModal.order.id}/discount`, {
         discount_type: discountModal.type,
         discount_value: discountModal.value,
         discount_reason: discountModal.reason || undefined,
+        override_pin: discountRequiresApproval && discountModal.value > 0 ? discountPin : undefined,
       });
       toast.success('Discount applied successfully');
       fetchOrders();
@@ -1055,6 +1067,20 @@ export default function OrdersPage() {
                 </div>
               </div>
             </div>
+
+            {discountRequiresApproval && discountModal.value > 0 && (
+              <div className="mt-4">
+                <label className="block text-sm font-medium text-gray-700 mb-1">Manager PIN</label>
+                <input
+                  type="password"
+                  value={discountPin}
+                  onChange={(e) => setDiscountPin(e.target.value)}
+                  placeholder="Enter manager PIN"
+                  maxLength={6}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                />
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 mt-6">
               <Button

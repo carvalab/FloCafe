@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
-import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap } from 'lucide-react';
+import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -100,6 +100,13 @@ export default function SettingsPage() {
   const [loyaltyMinRedemption, setLoyaltyMinRedemption] = useState(100);
   const [loyaltyMaxRedemptionPct, setLoyaltyMaxRedemptionPct] = useState(50);
   const [savingLoyalty, setSavingLoyalty] = useState(false);
+
+  // Discount settings
+  const [discountMaxPct, setDiscountMaxPct] = useState(50);
+  const [discountMaxAmount, setDiscountMaxAmount] = useState(100);
+  const [discountMode, setDiscountMode] = useState('both');
+  const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
+  const [savingDiscount, setSavingDiscount] = useState(false);
 
   // Table info dialog
   const [tableInfoOpen, setTableInfoOpen] = useState(false);
@@ -408,6 +415,13 @@ export default function SettingsPage() {
       if (res.data.loyalty_max_redemption_percentage) setLoyaltyMaxRedemptionPct(Number(res.data.loyalty_max_redemption_percentage));
     }).catch(() => {});
 
+    api.get('/settings/discount').then((res) => {
+      if (res.data.discount_max_percentage !== undefined) setDiscountMaxPct(Number(res.data.discount_max_percentage));
+      if (res.data.discount_max_amount !== undefined) setDiscountMaxAmount(Number(res.data.discount_max_amount));
+      if (res.data.discount_mode) setDiscountMode(res.data.discount_mode);
+      if (res.data.discount_requires_approval !== undefined) setDiscountRequiresApproval(!!res.data.discount_requires_approval);
+    }).catch(() => {});
+
     api.get('/mobile/pairing-code').then((res) => {
       setPairingCode(res.data.pairing_code);
       setPairingRotatedAt(res.data.rotated_at);
@@ -504,6 +518,23 @@ export default function SettingsPage() {
       toast.error('Failed to save');
     } finally {
       setSavingLoyalty(false);
+    }
+  };
+
+  const saveDiscount = async () => {
+    setSavingDiscount(true);
+    try {
+      await api.put('/settings/discount', {
+        discount_max_percentage: discountMaxPct,
+        discount_max_amount: discountMaxAmount,
+        discount_mode: discountMode,
+        discount_requires_approval: discountRequiresApproval,
+      });
+      toast.success('Discount settings saved');
+    } catch {
+      toast.error('Failed to save');
+    } finally {
+      setSavingDiscount(false);
     }
   };
 
@@ -932,6 +963,76 @@ export default function SettingsPage() {
                     </div>
                   </>
                 )}
+              </div>
+            </div>
+
+            {/* Discount Limits */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Percent size={20} className="text-gray-500" />
+                <h2 className="font-semibold text-gray-900">Discount Limits</h2>
+              </div>
+              <div className="space-y-5">
+                {/* Max discount percentage */}
+                <div>
+                  <p className="font-medium text-gray-900">Max Discount Percentage</p>
+                  <p className="text-sm text-gray-500 mb-2">Maximum percentage for percentage discounts</p>
+                  <div className="flex items-center gap-3">
+                    <input type="number" min={0} max={100} value={discountMaxPct}
+                      onChange={(e) => setDiscountMaxPct(parseInt(e.target.value) || 0)}
+                      className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                    <span className="text-sm text-gray-500">% (0 = no limit)</span>
+                  </div>
+                </div>
+
+                {/* Max discount amount */}
+                <div>
+                  <p className="font-medium text-gray-900">Max Discount Amount</p>
+                  <p className="text-sm text-gray-500 mb-2">Maximum flat amount for discounts</p>
+                  <div className="flex items-center gap-3">
+                    <input type="number" min={0} max={999999} value={discountMaxAmount}
+                      onChange={(e) => setDiscountMaxAmount(parseInt(e.target.value) || 0)}
+                      className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                    <span className="text-sm text-gray-500">(0 = no limit)</span>
+                  </div>
+                </div>
+
+                {/* Discount mode */}
+                <div>
+                  <p className="font-medium text-gray-900">Discount Mode</p>
+                  <p className="text-sm text-gray-500 mb-2">Which discount types are available</p>
+                  <select value={discountMode}
+                    onChange={(e) => setDiscountMode(e.target.value)}
+                    className="w-48 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand bg-white">
+                    <option value="both">Both (% and flat)</option>
+                    <option value="percentage">Percentage only</option>
+                    <option value="flat">Flat amount only</option>
+                  </select>
+                </div>
+
+                {/* Require approval */}
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-medium text-gray-900">Require Approval</p>
+                    <p className="text-sm text-gray-500">Require manager PIN to apply discounts</p>
+                  </div>
+                  <button
+                    onClick={() => setDiscountRequiresApproval(!discountRequiresApproval)}
+                    className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                      discountRequiresApproval ? 'bg-brand' : 'bg-gray-200'
+                    }`}
+                  >
+                    <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                      discountRequiresApproval ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+
+                {/* Save button */}
+                <button onClick={saveDiscount} disabled={savingDiscount}
+                  className="w-full py-2 px-4 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand/90 disabled:opacity-50 transition-colors">
+                  {savingDiscount ? 'Saving...' : 'Save Changes'}
+                </button>
               </div>
             </div>
 
