@@ -376,7 +376,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         if (item.tax_breakdown) {
           try {
             const breakdown = JSON.parse(item.tax_breakdown);
-            if (Array.isArray(breakdown)) allTaxBreakdowns.push(...breakdown);
+            if (Array.isArray(breakdown)) allTaxBreakdowns.push(breakdown);
           } catch {}
         }
       }
