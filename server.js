@@ -145,13 +145,13 @@ db.exec(`
   );
 `);
 
-const adminExists = db.prepare('SELECT id FROM staff WHERE email = ?').get('admin@flopos.local');
+const adminExists = db.prepare('SELECT id FROM staff WHERE email = ?').get('admin@flo.local');
 if (!adminExists) {
   const hashedPassword = bcrypt.hashSync(process.env.ADMIN_PASSWORD || 'admin123', 10);
   db.prepare('INSERT INTO staff (id, name, email, password, role) VALUES (?, ?, ?, ?, ?)').run(
-    'staff-1', 'Administrator', 'admin@flopos.local', hashedPassword, 'admin'
+    'staff-1', 'Administrator', 'admin@flo.local', hashedPassword, 'admin'
   );
-  console.log('Created default admin user: admin@flopos.local / admin123');
+  console.log('Created default admin user: admin@flo.local');
 }
 
 const categoryExists = db.prepare('SELECT id FROM categories WHERE name = ?').get('Beverages');

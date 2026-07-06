@@ -75,9 +75,18 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
       return res.status(400).json({ error: 'name, password, and role are required' });
     }
 
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
     const validRoles = ['owner', 'manager', 'cashier', 'waiter', 'chef'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({ error: `role must be one of: ${validRoles.join(', ')}` });
+    }
+
+    // Only owners can create other owner accounts (privilege escalation guard)
+    if (role === 'owner' && (req as any).user.role !== 'owner') {
+      return res.status(403).json({ error: 'Only owners can create owner accounts' });
     }
 
     const db = getDatabase();
@@ -137,6 +146,10 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
       if (existing) {
         return res.status(400).json({ error: 'Email already in use' });
       }
+    }
+
+    if (password && String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     const hashedPassword = password ? bcrypt.hashSync(password, 10) : member.password;

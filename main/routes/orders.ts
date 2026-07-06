@@ -138,21 +138,22 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
     } catch (err: any) {
       return res.status(400).json({ error: err.message });
     }
-    const orderNumber = generateOrderNumber();
-
-    // Get settings for tax calculation
-    const settings: Record<string, string> = {};
-    db.prepare('SELECT key, value FROM settings').all().forEach((row: any) => {
-      settings[row.key] = row.value;
-    });
-
-    const tenantInfo = {
-      country: settings.country || 'IN',
-      business_type: settings.business_type || 'restaurant',
-      state_code: settings.state_code || '',
-    };
-
     const { order, orderItems } = withTxn(() => {
+      // Generate order number inside transaction to prevent race conditions
+      const orderNumber = generateOrderNumber();
+
+      // Get settings for tax calculation
+      const settings: Record<string, string> = {};
+      db.prepare('SELECT key, value FROM settings').all().forEach((row: any) => {
+        settings[row.key] = row.value;
+      });
+
+      const tenantInfo = {
+        country: settings.country || 'IN',
+        business_type: settings.business_type || 'restaurant',
+        state_code: settings.state_code || '',
+      };
+
       const orderResult = db.prepare(`
         INSERT INTO orders (order_number, table_id, customer_id, user_id, type, guest_count, special_instructions,
           packaging_charge, status, created_at, updated_at)

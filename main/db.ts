@@ -963,36 +963,36 @@ export function generateShortId(table: string, length = 6): string {
 
 /** Atomically get the next sequence value for a given name and date. */
 function getNextSequence(name: string, date: string): number {
-  // Try to update existing row
-  const updated = db.prepare(`
-    UPDATE sequences SET current_value = current_value + 1
-    WHERE name = ? AND date = ?
-  `).run(name, date);
+  return db.transaction(() => {
+    // Try to update existing row
+    const updated = db.prepare(`
+      UPDATE sequences SET current_value = current_value + 1
+      WHERE name = ? AND date = ?
+    `).run(name, date);
 
-  if (updated.changes === 0) {
-    // Row doesn't exist for today, insert it
-    try {
-      db.prepare(`
-        INSERT INTO sequences (name, date, current_value) VALUES (?, ?, 1)
-      `).run(name, date);
-      return 1;
-    } catch {
-      // Another concurrent insert won the race, try update again
-      const retry = db.prepare(`
-        UPDATE sequences SET current_value = current_value + 1
-        WHERE name = ? AND date = ?
-      `).run(name, date);
-      if (retry.changes === 0) {
-        throw new Error(`Failed to generate sequence for ${name}`);
+    if (updated.changes === 0) {
+      // Row doesn't exist for today, insert it
+      try {
+        db.prepare(`
+          INSERT INTO sequences (name, date, current_value) VALUES (?, ?, 1)
+        `).run(name, date);
+        return 1;
+      } catch {
+        // Another concurrent insert won the race, try update again
+        const retry = db.prepare(`
+          UPDATE sequences SET current_value = current_value + 1
+          WHERE name = ? AND date = ?
+        `).run(name, date);
+        if (retry.changes === 0) {
+          throw new Error(`Failed to generate sequence for ${name}`);
+        }
       }
-      return db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
-        .get(name, date) as number;
     }
-  }
 
-  const row = db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
-    .get(name, date) as any;
-  return row?.current_value ?? 0;
+    const row = db.prepare('SELECT current_value FROM sequences WHERE name = ? AND date = ?')
+      .get(name, date) as any;
+    return row?.current_value ?? 0;
+  })();
 }
 
 export function generateOrderNumber(): string {

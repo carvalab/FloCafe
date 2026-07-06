@@ -317,6 +317,10 @@ router.post('/password/change', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+
     const hashedPassword = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password = ?, updated_at = ? WHERE id = ?').run(hashedPassword, now(), decoded.userId);
 
@@ -386,8 +390,8 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'A valid email is required' });
     }
 
-    if (String(password).length < 6) {
-      return res.status(400).json({ error: 'Password must be at least 6 characters' });
+    if (String(password).length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
     }
 
     if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {

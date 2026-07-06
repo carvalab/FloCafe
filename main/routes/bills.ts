@@ -162,25 +162,28 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
       return res.json({ bill: parseRowJson(existingBill) });
     }
 
-    const billNumber = generateBillNumber();
-    const subtotal = order.subtotal || 0;
-    const taxAmount = order.tax_amount || 0;
-    const discountAmount = order.discount_amount || 0;
-    const deliveryCharge = order.delivery_charge || 0;
-    const packagingCharge = order.packaging_charge || 0;
-    const roundOff = order.round_off || 0;
-    const total = order.total || 0;
+    const result = withTxn(() => {
+      // Generate bill number inside transaction to prevent race conditions
+      const billNumber = generateBillNumber();
+      const subtotal = order.subtotal || 0;
+      const taxAmount = order.tax_amount || 0;
+      const discountAmount = order.discount_amount || 0;
+      const deliveryCharge = order.delivery_charge || 0;
+      const packagingCharge = order.packaging_charge || 0;
+      const roundOff = order.round_off || 0;
+      const total = order.total || 0;
 
-    const result = db.prepare(`
-      INSERT INTO bills (bill_number, order_id, customer_id, subtotal, tax_amount, tax_breakdown,
-        discount_amount, discount_type, discount_value, discount_reason,
-        delivery_charge, packaging_charge, round_off, total, paid_amount, balance, payment_status, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', ?, ?)
-    `).run(
-      billNumber, order_id, order.customer_id, subtotal, taxAmount, order.tax_breakdown,
-      discountAmount, order.discount_type, order.discount_value, order.discount_reason,
-      deliveryCharge, packagingCharge, roundOff, total, 0, total, now(), now()
-    );
+      return db.prepare(`
+        INSERT INTO bills (bill_number, order_id, customer_id, subtotal, tax_amount, tax_breakdown,
+          discount_amount, discount_type, discount_value, discount_reason,
+          delivery_charge, packaging_charge, round_off, total, paid_amount, balance, payment_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', ?, ?)
+      `).run(
+        billNumber, order_id, order.customer_id, subtotal, taxAmount, order.tax_breakdown,
+        discountAmount, order.discount_type, order.discount_value, order.discount_reason,
+        deliveryCharge, packagingCharge, roundOff, total, 0, total, now(), now()
+      );
+    });
 
     const bill = parseRowJson(db.prepare('SELECT * FROM bills WHERE id = ?').get(result.lastInsertRowid));
     notifyOrderUpdated();
