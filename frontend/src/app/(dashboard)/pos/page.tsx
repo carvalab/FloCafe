@@ -31,7 +31,7 @@ export default function POSPage() {
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
-  const { customerMandatory, autoPrintKot, billingType } = usePosSettingsStore();
+  const { customerMandatory, autoPrintKot, autoPrintBill, billingType } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -53,6 +53,40 @@ export default function POSPage() {
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const { printBill, printKot } = usePrinterStore();
+  const billingIsPrepaid = billingType === 'prepaid';
+  const shouldTakePaymentNow = billingIsPrepaid || cart.orderType !== 'dine_in';
+
+  const printKotIfEnabled = async (order: Order) => {
+    if (!autoPrintKot) return;
+
+    try {
+      await printKot(order);
+    } catch (err) {
+      console.error('[POS] KOT print failed:', err);
+      const msg = err instanceof Error ? err.message : 'check printer connection';
+      toast.error(`KOT print failed: ${msg}`);
+    }
+  };
+
+  const fetchLatestBill = async (billId: number): Promise<Bill> => {
+    const { data } = await api.get(`/bills/${billId}`);
+    return data.bill as Bill;
+  };
+
+  const printBillForTenant = async (bill: Bill, force = false) => {
+    if (!currentTenant) return;
+    if (!force && !autoPrintBill) return;
+
+    try {
+      await printBill(bill, {
+        business_name: currentTenant.business_name,
+        currency,
+      });
+    } catch {
+      // Non-fatal: print failure should not block the checkout flow.
+      toast.error('Receipt print failed — check printer connection');
+    }
+  };
 
   const refreshTables = async () => {
     if (!isRestaurant) return;
@@ -104,8 +138,8 @@ export default function POSPage() {
       return;
     }
 
-    // Takeaway / delivery / online → collect payment immediately
-    if (cart.orderType !== 'dine_in') {
+    // Prepaid stores and non-dine-in orders collect payment before finishing the order.
+    if (shouldTakePaymentNow) {
       setShowPrepaidCheckout(true);
       return;
     }
@@ -154,15 +188,7 @@ export default function POSPage() {
       setMobileCartOpen(false);
       await refreshTables();
 
-      if (autoPrintKot) {
-        try {
-          await printKot(orderForKot);
-        } catch (err) {
-          console.error('[POS] KOT print failed:', err);
-          const msg = err instanceof Error ? err.message : 'check printer connection';
-          toast.error(`KOT print failed: ${msg}`);
-        }
-      }
+      await printKotIfEnabled(orderForKot);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; error?: string } } };
       toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to place order');
@@ -173,6 +199,7 @@ export default function POSPage() {
 
   // Handle prepaid checkout - place order and pay in one step
   const handlePrepaidCheckout = async (method: string, amount: number) => {
+    const isPrepaidCheckout = shouldTakePaymentNow;
     setShowPrepaidCheckout(false);
     setSubmitting(true);
     try {
@@ -198,6 +225,7 @@ export default function POSPage() {
 
       // Step 3: Record payment
       const paymentRes = await api.post(`/bills/${billData.bill.id}/payment`, { amount, method });
+      const paidBill = (paymentRes.data?.bill || billData.bill) as Bill;
 
       const pointsEarned: number = paymentRes.data?.loyaltyPointsEarned || 0;
       const successMsg = pointsEarned > 0
@@ -209,15 +237,9 @@ export default function POSPage() {
       setMobileCartOpen(false);
       await refreshTables();
 
-      if (autoPrintKot) {
-        try {
-          await printKot(orderData.order as Order);
-        } catch (err) {
-          console.error('[POS] KOT print failed:', err);
-          const msg = err instanceof Error ? err.message : 'check printer connection';
-          toast.error(`KOT print failed: ${msg}`);
-        }
-      }
+      await printKotIfEnabled(orderData.order as Order);
+
+      await printBillForTenant(paidBill, isPrepaidCheckout);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; error?: string } } };
       toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to process order');
@@ -295,14 +317,10 @@ export default function POSPage() {
     setCheckoutTable(null);
     refreshTables();
 
-    if (bill && currentTenant) {
+    if (bill) {
       try {
-        await printBill(bill, {
-          business_name: currentTenant.business_name,
-          currency,
-        });
+        await printBillForTenant(await fetchLatestBill(bill.id));
       } catch {
-        // Non-fatal: print failure should not block the checkout flow.
         toast.error('Receipt print failed — check printer connection');
       }
     }
