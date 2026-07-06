@@ -15,8 +15,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, currentTenant, loading, loadFromStorage } = useAuthStore();
   const router = useRouter();
   const pathname = usePathname();
-  const [needsSetup, setNeedsSetup] = useState(false);
-  const [checkingSetup, setCheckingSetup] = useState(true);
+  const [needsSetup, setNeedsSetup] = useState<boolean | null>(null); // null = still checking
 
   const isPublicPath = PUBLIC_PATHS.some(p => pathname === p || pathname?.startsWith(p + '/'));
 
@@ -24,41 +23,42 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
     loadFromStorage();
   }, [loadFromStorage]);
 
+  // Single effect: determine where to redirect after auth state + setup status are known
   useEffect(() => {
-    if (!isPublicPath && !loading && !user) {
+    if (loading) return; // wait for auth state to load
+    if (isPublicPath) return; // don't redirect from public paths
+
+    // If we don't know setup status yet, fetch it
+    if (needsSetup === null) {
       api.get('/auth/setup/status')
         .then(({ data }) => {
-          if (data.needsSetup) {
-            setNeedsSetup(true);
-            router.push('/setup');
-          }
+          setNeedsSetup(data.needsSetup);
         })
-        .catch(() => {})
-        .finally(() => setCheckingSetup(false));
-    } else {
-      // eslint-disable-next-line react-hooks/set-state-in-effect -- Intentional: transitions auth state machine from checking to ready
-      setCheckingSetup(false);
+        .catch((err) => {
+          console.error('[AuthGuard] Failed to check setup status:', err);
+          // On error, assume no setup needed — let login handle it
+          setNeedsSetup(false);
+        });
+      return; // wait for the result before redirecting
     }
-  }, [isPublicPath, loading, user, router]);
 
-  useEffect(() => {
-    if (isPublicPath) return;
-    if (!checkingSetup && !loading) {
-      if (!user) {
-        if (!needsSetup) {
-          router.push('/auth/login');
-        }
-      } else if (!currentTenant) {
-        router.push('/auth/login?select_tenant=true');
+    // Auth loaded + setup status known + not on public path
+    if (!user) {
+      if (needsSetup) {
+        router.push('/setup');
+      } else {
+        router.push('/auth/login');
       }
+    } else if (!currentTenant) {
+      router.push('/auth/login?select_tenant=true');
     }
-  }, [user, currentTenant, loading, router, pathname, isPublicPath, checkingSetup, needsSetup]);
+  }, [loading, user, currentTenant, isPublicPath, needsSetup, router]);
 
-  if (isPublicPath || needsSetup) {
+  if (isPublicPath || needsSetup === true) {
     return <>{children}</>;
   }
 
-  if (loading || checkingSetup) {
+  if (loading || needsSetup === null) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="flex flex-col items-center gap-3">

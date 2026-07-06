@@ -74,8 +74,8 @@ export default function SetupPage() {
       toast.error('Passwords do not match');
       return;
     }
-    if (form.password.length < 6) {
-      toast.error('Password must be at least 6 characters');
+    if (form.password.length < 8) {
+      toast.error('Password must be at least 8 characters');
       return;
     }
     setLoading(true);
@@ -231,7 +231,7 @@ export default function SetupPage() {
                         type="password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        placeholder="Min 6 characters"
+                        placeholder="Min 8 characters"
                         required
                       />
                     </div>
