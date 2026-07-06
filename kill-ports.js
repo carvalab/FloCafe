@@ -1,38 +1,235 @@
 /**
  * kill-ports.js
- * Zero-dependency cross-platform port killer.
+ * Cross-platform port killer — ONLY kills Flo Desktop processes.
+ * Uses an allowlist approach: identifies Flo by process name/cmdline,
+ * then kills only those processes that hold the target ports.
+ *
  * Usage: node kill-ports.js 3001 3002
  */
-const { exec } = require('child_process');
+const { execSync, exec } = require('child_process');
 const os = require('os');
 
-const ports = process.argv.slice(2);
+// ── Validate args ───────────────────────────────────────────────────────────
+const ports = process.argv.slice(2)
+  .map((p) => parseInt(p, 10))
+  .filter((p) => Number.isInteger(p) && p >= 1 && p <= 65535);
 
 if (ports.length === 0) {
-  console.log('[kill-ports] No ports specified. Usage: node kill-ports.js 3001 3002');
+  console.log('[kill-ports] No valid ports specified. Usage: node kill-ports.js 3001 3002');
   process.exit(0);
 }
 
 const isWindows = os.platform() === 'win32';
+const isMac = os.platform() === 'darwin';
+const isLinux = os.platform() === 'linux';
 
-function killPort(port) {
-  return new Promise((resolve) => {
-    const command = isWindows
-      ? `FOR /F "tokens=5" %a IN ('netstat -aon ^| findstr ":${port} "') DO @taskkill /F /PID %a 2>nul`
-      : `lsof -ti tcp:${port} | xargs kill -9 2>/dev/null`;
+// ── Identity: how to recognize a Flo Desktop process ────────────────────────
+// These patterns match the process command line on all platforms.
+// In dev: `electron .` with app.name = 'flo-desktop'
+// Packaged: binary path contains "Flo Cafe" or "flo-desktop"
+const FLO_PATTERNS = [
+  /flo[_\-]?desktop/i,
+  /Flo\s*Cafe/i,
+  /com\.flo\.desktop/i,
+];
 
-    exec(command, { shell: isWindows ? 'cmd.exe' : '/bin/sh' }, (err) => {
-      if (err && err.code !== 1) {
-        // code 1 just means nothing was using that port — not a real error
-        console.log(`[kill-ports] Port ${port} was already free.`);
-      } else {
-        console.log(`[kill-ports] Cleared port ${port}.`);
+function isFloProcess(cmdline) {
+  if (!cmdline) return false;
+  return FLO_PATTERNS.some((pat) => pat.test(cmdline));
+}
+
+// ── Find processes on a port (cross-platform) ───────────────────────────────
+// Returns Array<{ pid: string, cmdline: string }>
+function getProcessesOnPort(port) {
+  const results = [];
+
+  if (isWindows) {
+    try {
+      // netstat gives PIDs listening on the port
+      const out = execSync(
+        `netstat -aon | findstr "LISTENING" | findstr ":${port} "`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      );
+      const pids = new Set();
+      for (const line of out.split('\n')) {
+        const m = line.trim().match(/(\d+)\s*$/);
+        if (m) pids.add(m[1]);
       }
-      resolve();
+      for (const pid of pids) {
+        try {
+          const cmdOut = execSync(
+            `wmic process where "ProcessId=${pid}" get CommandLine / value 2>nul`,
+            { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+          );
+          const m = cmdOut.match(/CommandLine=(.*)/i);
+          results.push({ pid, cmdline: m?.[1]?.trim() || '' });
+        } catch {
+          results.push({ pid, cmdline: '' });
+        }
+      }
+    } catch { /* port is free */ }
+    return results;
+  }
+
+  // Unix: lsof → ss → fuser fallback
+  if (hasLsof) {
+    try {
+      // -F pC: output pid and command name fields
+      const out = execSync(
+        `lsof -i :${port} -P -n -F pC 2>/dev/null`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      );
+      const pids = new Set();
+      for (const line of out.split('\n')) {
+        if (line.startsWith('p')) pids.add(line.slice(1));
+      }
+      for (const pid of pids) {
+        const cmdline = getCmdline(pid);
+        results.push({ pid, cmdline });
+      }
+      if (results.length > 0) return results;
+    } catch { /* fall through */ }
+  }
+
+  if (hasSs) {
+    try {
+      const out = execSync(
+        `ss -tlnp 'sport = :${port}' 2>/dev/null`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      );
+      const pidMatches = [...out.matchAll(/pid=(\d+)/g)];
+      for (const m of pidMatches) {
+        const pid = m[1];
+        const cmdline = getCmdline(pid);
+        results.push({ pid, cmdline });
+      }
+      if (results.length > 0) return results;
+    } catch { /* fall through */ }
+  }
+
+  if (hasFuser) {
+    try {
+      const out = execSync(
+        `fuser ${port}/tcp 2>/dev/null`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      );
+      for (const pid of out.trim().split(/\s+/)) {
+        if (!pid) continue;
+        const cmdline = getCmdline(pid);
+        results.push({ pid, cmdline });
+      }
+    } catch { /* fall through */ }
+  }
+
+  return results;
+}
+
+// ── Read /proc/<pid>/cmdline (Linux) or ps (macOS) ──────────────────────────
+function getCmdline(pid) {
+  if (isLinux) {
+    try {
+      return execSync(
+        `cat /proc/${pid}/cmdline 2>/dev/null | tr '\\0' ' '`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      ).trim();
+    } catch { return ''; }
+  }
+  if (isMac) {
+    try {
+      return execSync(
+        `ps -p ${pid} -o command= 2>/dev/null`,
+        { encoding: 'utf8', stdio: ['pipe', 'pipe', 'ignore'] }
+      ).trim();
+    } catch { return ''; }
+  }
+  return '';
+}
+
+// ── Detect available tools on Unix ──────────────────────────────────────────
+function hasCommand(cmd) {
+  try {
+    execSync(`command -v ${cmd}`, { stdio: 'ignore' });
+    return true;
+  } catch { return false; }
+}
+
+const hasLsof = !isWindows && hasCommand('lsof');
+const hasSs = !isWindows && hasCommand('ss');
+const hasFuser = !isWindows && hasCommand('fuser');
+
+// ── Graceful kill: SIGTERM → wait → SIGKILL ─────────────────────────────────
+function gracefulKill(pid) {
+  return new Promise((resolve) => {
+    // Try SIGTERM first
+    exec(`kill ${pid} 2>/dev/null`, { shell: '/bin/sh' }, () => {
+      // Wait 2 seconds for graceful shutdown
+      setTimeout(() => {
+        // Check if still alive
+        exec(`kill -0 ${pid} 2>/dev/null`, { shell: '/bin/sh' }, (err) => {
+          if (!err) {
+            // Still alive — escalate to SIGKILL
+            exec(`kill -9 ${pid} 2>/dev/null`, { shell: '/bin/sh' }, () => resolve());
+          } else {
+            resolve();
+          }
+        });
+      }, 2000);
     });
   });
 }
 
+function gracefulKillWindows(pid) {
+  return new Promise((resolve) => {
+    // taskkill without /F sends WM_CLOSE (graceful)
+    exec(`taskkill /PID ${pid} 2>nul`, { shell: 'cmd.exe' }, () => {
+      setTimeout(() => {
+        exec(`taskkill /F /PID ${pid} 2>nul`, { shell: 'cmd.exe' }, () => resolve());
+      }, 2000);
+    });
+  });
+}
+
+// ── Kill a port ─────────────────────────────────────────────────────────────
+async function killPort(port) {
+  const procs = getProcessesOnPort(port);
+
+  if (procs.length === 0) {
+    console.log(`[kill-ports] Port ${port} is free.`);
+    return;
+  }
+
+  const floProcs = procs.filter((p) => isFloProcess(p.cmdline));
+  const otherProcs = procs.filter((p) => !isFloProcess(p.cmdline));
+
+  // Report what we found but won't touch
+  for (const p of otherProcs) {
+    const name = p.cmdline.split(/\s/)[0] || 'unknown';
+    console.log(
+      `[kill-ports] Port ${port}: SKIP — PID ${p.pid} (${name}) is not a Flo process.`
+    );
+  }
+
+  if (floProcs.length === 0) {
+    console.log(
+      `[kill-ports] Port ${port}: no Flo processes found. ${procs.length} other process(es) using this port.`
+    );
+    return;
+  }
+
+  // Kill Flo processes
+  for (const p of floProcs) {
+    const name = p.cmdline.split(/\s/)[0] || 'electron';
+    console.log(`[kill-ports] Port ${port}: killing Flo process PID ${p.pid} (${name})...`);
+    if (isWindows) {
+      await gracefulKillWindows(p.pid);
+    } else {
+      await gracefulKill(p.pid);
+    }
+    console.log(`[kill-ports] Port ${port}: PID ${p.pid} stopped.`);
+  }
+}
+
+// ── Main ────────────────────────────────────────────────────────────────────
 (async () => {
   for (const port of ports) {
     await killPort(port);
