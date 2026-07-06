@@ -182,6 +182,11 @@ async function main() {
   // Start Express server
   const app = express();
   app.use(express.json());
+  // Mock auth middleware — must run before routes
+  app.use((req: any, _res: any, next: any) => {
+    req.user = { id: 1, role: 'owner', name: 'Test Owner' };
+    next();
+  });
   app.use('/api/orders', orderRoutes);
   const server = await listen(app);
   const addr = server.address() as any;
@@ -265,7 +270,7 @@ async function main() {
         }),
       });
       assertEqual(res.status, 400, 'returns 400');
-      assertIncludes(res.data.error, 'positive', 'error mentions positive');
+      assertIncludes(res.data.error, 'non-negative', 'error mentions non-negative');
     }
 
     // ── Test 6: Percentage exceeds max ───────────────────────────────────
@@ -370,8 +375,8 @@ async function main() {
       assertIncludes(res.data.error, 'Order not found', 'error mentions Order not found');
     }
 
-    // ── Test 13: Zero discount value ─────────────────────────────────────
-    console.log('\n13. PATCH /api/orders/:id/discount — zero value rejected');
+    // ── Test 13: Zero discount value removes discount ────────────────────
+    console.log('\n13. PATCH /api/orders/:id/discount — zero value removes discount');
     {
       const res = await request(baseUrl, `/api/orders/${orderId}/discount`, {
         method: 'PATCH',
@@ -380,8 +385,7 @@ async function main() {
           discount_value: 0,
         }),
       });
-      assertEqual(res.status, 400, 'returns 400');
-      assertIncludes(res.data.error, 'positive', 'error mentions positive');
+      assertEqual(res.status, 200, 'returns 200 (zero removes discount)');
     }
   } finally {
     server.close();

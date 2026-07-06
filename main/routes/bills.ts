@@ -1,11 +1,28 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateBillNumber, now, withTxn, getSettingValue, parseRowJson } from '../db';
+import { getDatabase, generateBillNumber, now, withTxn, getSettingValue, parseRowJson, verifyPin } from '../db';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
 import { requireRole } from '../middleware/security';
 
 const router = Router();
+
+// Rate limiting for PIN validation (simple in-memory)
+const pinAttempts = new Map<string, { count: number; resetAt: number }>();
+const PIN_MAX_ATTEMPTS = 5;
+const PIN_WINDOW_MS = 15 * 60 * 1000; // 15 minutes
+
+function checkPinRateLimit(key: string): boolean {
+  const nowMs = Date.now();
+  const entry = pinAttempts.get(key);
+  if (!entry || nowMs > entry.resetAt) {
+    pinAttempts.set(key, { count: 1, resetAt: nowMs + PIN_WINDOW_MS });
+    return true;
+  }
+  if (entry.count >= PIN_MAX_ATTEMPTS) return false;
+  entry.count++;
+  return true;
+}
 
 router.get('/', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
@@ -428,15 +445,44 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
       return res.status(400).json({ error: 'Cannot apply discount to a paid bill' });
     }
 
-    // Check against limits from settings
+    // Check if approval is required
+    const requiresApproval = getSettingValue('discount_requires_approval') === 'true';
+    if (requiresApproval && value > 0) {
+      const { override_pin } = req.body;
+      if (!override_pin) {
+        return res.status(403).json({ error: 'Manager PIN required for discounts', requiresApproval: true });
+      }
+      const clientIp = req.ip || req.socket.remoteAddress || 'unknown';
+      const rateLimitKey = `pin:${clientIp}:bill-discount`;
+      if (!checkPinRateLimit(rateLimitKey)) {
+        return res.status(429).json({ error: 'Too many PIN attempts. Try again in 15 minutes.' });
+      }
+      const user = db.prepare("SELECT * FROM users WHERE pin_hash IS NOT NULL AND role IN ('owner', 'manager')")
+        .all()
+        .find((u: any) => verifyPin(u.pin_hash, override_pin));
+      if (!user) {
+        return res.status(403).json({ error: 'Invalid manager PIN' });
+      }
+    }
+
+    // Check discount mode
+    const discountMode = getSettingValue('discount_mode') || 'both';
+    if (discountMode === 'flat' && type === 'percentage') {
+      return res.status(400).json({ error: 'Percentage discounts are disabled' });
+    }
+    if (discountMode === 'percentage' && type === 'amount') {
+      return res.status(400).json({ error: 'Flat amount discounts are disabled' });
+    }
+
+    // Check against limits from settings (0 = no limit)
     if (type === 'percentage') {
       const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
-      if (value > maxPercentage) {
+      if (maxPercentage > 0 && value > maxPercentage) {
         return res.status(400).json({ error: `discount value exceeds maximum percentage of ${maxPercentage}` });
       }
     } else {
       const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
-      if (value > maxAmount) {
+      if (maxAmount > 0 && value > maxAmount) {
         return res.status(400).json({ error: `discount value exceeds maximum amount of ${maxAmount}` });
       }
     }

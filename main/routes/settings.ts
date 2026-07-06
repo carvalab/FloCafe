@@ -194,6 +194,67 @@ router.put('/loyalty', requireRole('owner', 'manager'), (req: Request, res: Resp
   }
 });
 
+// ─── Discount settings ──────────────────────────────────────────────────────
+
+router.get('/discount', (req: Request, res: Response) => {
+  try {
+    const s = getAllSettings(getDatabase());
+    res.json({
+      discount_max_percentage: parseFloat(s.discount_max_percentage || '50'),
+      discount_max_amount: parseFloat(s.discount_max_amount || '100'),
+      discount_mode: s.discount_mode || 'both',
+      discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const {
+      discount_max_percentage,
+      discount_max_amount,
+      discount_mode,
+      discount_requires_approval,
+    } = req.body;
+
+    // Validate inputs
+    if (discount_max_percentage !== undefined) {
+      const val = parseFloat(discount_max_percentage);
+      if (isNaN(val) || val < 0 || val > 100) {
+        return res.status(400).json({ error: 'discount_max_percentage must be a number between 0 and 100' });
+      }
+    }
+    if (discount_max_amount !== undefined) {
+      const val = parseFloat(discount_max_amount);
+      if (isNaN(val) || val < 0 || val > 999999) {
+        return res.status(400).json({ error: 'discount_max_amount must be a number between 0 and 999999' });
+      }
+    }
+    if (discount_mode !== undefined && !['percentage', 'flat', 'both'].includes(discount_mode)) {
+      return res.status(400).json({ error: 'discount_mode must be "percentage", "flat", or "both"' });
+    }
+
+    const db = getDatabase();
+    upsertSettings(db, {
+      discount_max_percentage,
+      discount_max_amount,
+      discount_mode,
+      discount_requires_approval: discount_requires_approval === true || discount_requires_approval === 'true' ? 'true' : 'false',
+    });
+    const s = getAllSettings(db);
+    res.json({
+      discount_max_percentage: parseFloat(s.discount_max_percentage || '50'),
+      discount_max_amount: parseFloat(s.discount_max_amount || '100'),
+      discount_mode: s.discount_mode || 'both',
+      discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── Cloud Sync settings (must come BEFORE /:key wildcard) ──────────────────
 
 router.get('/cloud', (req: Request, res: Response) => {
