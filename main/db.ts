@@ -575,6 +575,29 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 11,
+    name: 'seed_default_admin',
+    up: () => {
+      // Auto-create a default admin on first launch so the app is always
+      // usable without relying on the frontend setup wizard.  The user can
+      // change their password later via Settings → Profile.
+      const count = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
+      if (count > 0) return; // users already exist — skip
+
+      const adminId = crypto.randomUUID();
+      const hashedPassword = bcrypt.hashSync('admin123', 10);
+      db.prepare(`
+        INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(adminId, 'Admin', 'admin@flo.local', hashedPassword, 'owner', 1, now(), now());
+
+      // Mark onboarding so the setup wizard is skipped
+      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)`).run(now());
+
+      console.log('[DB] Default admin seeded: admin@flo.local / admin123');
+    },
+  },
 ];
 
 function runMigrations(): void {
