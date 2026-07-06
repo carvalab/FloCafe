@@ -224,7 +224,7 @@ export default function POSPage() {
       const { data: billData } = await api.post('/bills/generate', { order_id: orderData.order.id });
 
       // Step 3: Record payment
-      const paymentRes = await api.post(`/bills/${billData.bill.id}/payment`, { amount, method });
+      const paymentRes = await api.post(`/bills/${billData.bill.id}/payment`, { amount: billData.bill.total, method });
       const paidBill = (paymentRes.data?.bill || billData.bill) as Bill;
 
       const pointsEarned: number = paymentRes.data?.loyaltyPointsEarned || 0;
@@ -339,51 +339,51 @@ export default function POSPage() {
 
   return (
     <>
-    <PosTopbar tables={tables} onShowTablePicker={() => setShowTablePicker(true)} />
+      <PosTopbar tables={tables} onShowTablePicker={() => setShowTablePicker(true)} />
 
-    {/* Main content area */}
-    <div className="flex flex-1 min-h-0 overflow-hidden p-4 gap-4">
-      {/* Product Grid — full width on mobile, flex-1 on desktop */}
-      <div className="flex-1 min-w-0 h-full flex flex-col">
-        <ProductGrid
-          categories={categories}
-          products={products}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          search={search}
-          setSearch={setSearch}
-          currency={currency}
-          onProductClick={handleProductClick}
-          sidebarOpen={leftSidebarOpen}
-        />
-      </div>
-
-      {/* Desktop Cart — always open, hidden on mobile */}
-      <div className="hidden md:flex md:w-80 md:shrink-0 h-full">
-        <CartPanel {...cartPanelProps} />
-      </div>
-    </div>
-
-    {/* Mobile: Floating Cart Button + Bottom Sheet — outside flex container */}
-    <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
-      <DrawerTrigger asChild>
-        <button className="fixed bottom-5 right-5 z-40 w-14 h-14 bg-brand text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-hover transition-colors md:hidden">
-          <ShoppingCart size={22} />
-          {itemCount > 0 && (
-            <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
-              {itemCount}
-            </span>
-          )}
-        </button>
-      </DrawerTrigger>
-      <DrawerContent className="max-h-[85vh]">
-        <div className="overflow-y-auto max-h-[80vh] px-2 pb-2">
-          <CartPanel {...cartPanelProps} variant="drawer" />
+      {/* Main content area */}
+      <div className="flex flex-1 min-h-0 overflow-hidden p-4 gap-4">
+        {/* Product Grid — full width on mobile, flex-1 on desktop */}
+        <div className="flex-1 min-w-0 h-full flex flex-col">
+          <ProductGrid
+            categories={categories}
+            products={products}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            search={search}
+            setSearch={setSearch}
+            currency={currency}
+            onProductClick={handleProductClick}
+            sidebarOpen={leftSidebarOpen}
+          />
         </div>
-      </DrawerContent>
-    </Drawer>
 
-    {/* Modals */}
+        {/* Desktop Cart — always open, hidden on mobile */}
+        <div className="hidden md:flex md:w-80 md:shrink-0 h-full">
+          <CartPanel {...cartPanelProps} />
+        </div>
+      </div>
+
+      {/* Mobile: Floating Cart Button + Bottom Sheet — outside flex container */}
+      <Drawer open={mobileCartOpen} onOpenChange={setMobileCartOpen}>
+        <DrawerTrigger asChild>
+          <button className="fixed bottom-5 right-5 z-40 w-14 h-14 bg-brand text-white rounded-full shadow-lg flex items-center justify-center hover:bg-brand-hover transition-colors md:hidden">
+            <ShoppingCart size={22} />
+            {itemCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 bg-red-500 text-white text-xs w-5 h-5 rounded-full flex items-center justify-center font-bold">
+                {itemCount}
+              </span>
+            )}
+          </button>
+        </DrawerTrigger>
+        <DrawerContent className="max-h-[85vh]">
+          <div className="overflow-y-auto max-h-[80vh] px-2 pb-2">
+            <CartPanel {...cartPanelProps} variant="drawer" />
+          </div>
+        </DrawerContent>
+      </Drawer>
+
+      {/* Modals */}
       {isRestaurant && showTablePicker && (
         <TablePickerModal
           tables={tables}
