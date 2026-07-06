@@ -111,7 +111,7 @@ function initTestDb() {
   } catch (error: any) {
     if (isNativeAbiMismatch(error)) {
       console.log('  ⚠ Skipping: better-sqlite3 ABI mismatch (run via Electron)');
-      process.exit(0);
+      process.exit(77); // exit code 77 = skip (GNU convention)
     }
     throw error;
   }

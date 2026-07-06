@@ -70,7 +70,7 @@ async function main() {
     if (isNativeAbiMismatch(error)) {
       console.log('   ⚠ Skipping: better-sqlite3 is not built for this shell Node ABI.');
       console.log(`     Node ${process.version} uses ABI ${process.versions.modules}; rebuild native modules for Node to run this test outside Electron.`);
-      return;
+      process.exit(77); // exit code 77 = skip (GNU convention)
     }
     throw error;
   }

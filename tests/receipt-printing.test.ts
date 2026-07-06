@@ -56,7 +56,7 @@ try {
   if (isNativeAbiMismatch(error)) {
     console.log('   ⚠ Skipping: better-sqlite3 is not built for this shell Node ABI.');
     console.log(`     Node ${process.version} uses ABI ${process.versions.modules}; rebuild native modules for Node to run this test outside Electron.`);
-    process.exit(0);
+    process.exit(77); // exit code 77 = skip (GNU convention)
   }
   console.error('Failed to initialize database:', error.message);
   process.exit(1);

@@ -139,10 +139,10 @@ function getSchemaVersionFromBackup(backupPath: string): number {
 }
 
 // NOTE: This is a simplified reimplementation of the production dataOnlyRestore logic.
-// The production version (main/db.ts) uses ATTACH DATABASE for efficiency, but this
-// test version reads data into memory and inserts it. Both test the same concept:
-// handling schema mismatches between backup and current database.
-// TODO: Consider refactoring to use the production restoreBackup() function directly.
+// The production function (main/db.ts) is NOT exported (private) and uses better-sqlite3,
+// while this test uses node:sqlite (built-in). Both test the same concept: handling schema
+// mismatches between backup and current database. To test the production function directly,
+// it would need to be exported and this test migrated to use better-sqlite3.
 function dataOnlyRestore(backupPath: string, targetDb: Database): { success: boolean; tablesRestored: number; error?: string } {
   if (fs.existsSync(backupPath + '-wal')) fs.unlinkSync(backupPath + '-wal');
   if (fs.existsSync(backupPath + '-shm')) fs.unlinkSync(backupPath + '-shm');
