@@ -75,8 +75,8 @@ async function main() {
     throw error;
   }
 
-  assert.equal(getCurrentSchemaVersion(), 10, 'fresh database migrates to latest schema');
-  assert.equal(count('users'), 0, 'fresh install starts with no users');
+  assert.equal(getCurrentSchemaVersion(), 11, 'fresh database migrates to latest schema');
+  assert.equal(count('users'), 1, 'fresh install auto-seeds default admin');
   assert.equal(count('categories'), 0, 'fresh install starts with no sample categories');
   assert.equal(count('products'), 0, 'fresh install starts with no sample products');
   assert.equal(count('tables'), 0, 'fresh install starts with no sample tables');
@@ -106,36 +106,16 @@ async function main() {
   try {
     const before = await request(baseUrl, '/setup/status');
     assert.equal(before.status, 200);
-    assert.equal(before.data.needsSetup, true);
+    assert.equal(before.data.needsSetup, false, 'default admin is auto-seeded');
     assert.equal(before.data.initialRole, 'owner');
-    console.log('   ✓ setup status reports first-run setup is required');
+    console.log('   ✓ setup status reports setup is not needed (admin auto-seeded)');
 
-    const created = await request(baseUrl, '/setup/initialize', {
-      method: 'POST',
-      body: JSON.stringify({
-        name: 'First Owner',
-        email: 'OWNER@EXAMPLE.COM',
-        password: 'secret123',
-        business_type: 'restaurant',
-        business_name: 'First Outlet',
-        business_address: '42 Test Street',
-        business_phone: '+91 99999 99999',
-      }),
-    });
+    const adminUser = getDatabase().prepare('SELECT email, role FROM users WHERE email = ?').get('admin@flo.local') as { email: string; role: string };
+    assert.ok(adminUser, 'default admin user exists');
+    assert.equal(adminUser.role, 'owner');
+    console.log('   ✓ default admin user exists with owner role');
 
-    assert.equal(created.status, 200, JSON.stringify(created.data));
-    assert.equal(created.data.user.role, 'owner');
-    assert.equal(created.data.user.email, 'owner@example.com');
-    assert.equal(created.data.tenant.business_name, 'First Outlet');
-    assert.equal(created.data.tenants[0].business_name, 'First Outlet');
-    assert.ok(created.data.access_token, 'setup returns a login token');
-    assert.equal(count('users'), 1, 'setup creates exactly one owner user');
-    console.log('   ✓ setup creates the first owner and outlet settings');
-
-    const after = await request(baseUrl, '/setup/status');
-    assert.equal(after.status, 200);
-    assert.equal(after.data.needsSetup, false);
-
+    // Setup initialize should be disabled since a user already exists
     const second = await request(baseUrl, '/setup/initialize', {
       method: 'POST',
       body: JSON.stringify({
