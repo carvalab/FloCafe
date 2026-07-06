@@ -80,7 +80,6 @@ app.use(express.json());
 
 // Replicate requireAuth from server.ts — verifies JWT and attaches decoded
 // payload to req.user so downstream handlers can access it without re-verifying.
-const { Request: Req, Response: Res, NextFunction: Next } = require('express');
 app.use((req: any, res: any, next: any) => {
   if (!req.path.startsWith('/api')) { next(); return; }
   if (req.path === '/api/health') { next(); return; }

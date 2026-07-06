@@ -1,5 +1,5 @@
 /**
- * FloDesktop DB Integrity Audit
+ * FloDesktop DB Integrity Audit (diagnostic tool, not a test)
  *
  * Walks the SQLite file(s) and reports:
  *   - SQLite built-in integrity_check + foreign_key_check
@@ -8,9 +8,13 @@
  *   - Duplicate ids (shouldn't happen under PK, but verify)
  *   - First-run/setup sanity (owner after setup, required settings, PRAGMA user_version)
  *
+ * NOTE: This is a diagnostic utility, not an automated test. It audits
+ * whatever flo.db exists on disk and always exits 0 when no DB is found.
+ * Run manually to check database health, not as part of npm test.
+ *
  * Usage:
- *   npm run test:db-audit
- *   FLO_DB=/path/to/flo.db npm run test:db-audit
+ *   npm run audit:db
+ *   FLO_DB=/path/to/flo.db npm run audit:db
  */
 
 import { DatabaseSync } from 'node:sqlite';

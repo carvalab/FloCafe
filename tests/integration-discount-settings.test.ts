@@ -50,8 +50,10 @@ Module._load = function (request: string, parent: any, isMain: boolean) {
 
 let passed = 0;
 let failed = 0;
+let total = 0;
 
 function assert(condition: boolean, message: string) {
+  total++;
   if (condition) {
     passed++;
     console.log(`  ✓ ${message}`);
@@ -62,6 +64,7 @@ function assert(condition: boolean, message: string) {
 }
 
 function assertEqual(actual: any, expected: any, message: string) {
+  total++;
   const ok = actual === expected;
   if (ok) {
     passed++;
@@ -150,7 +153,7 @@ async function main() {
   } catch (e: any) {
     if (e.message?.includes('ABI')) {
       console.log('  ⚠ Skipping: better-sqlite3 ABI mismatch (run via Electron)');
-      process.exit(0);
+      process.exit(77); // exit code 77 = skip (GNU convention)
     }
     throw e;
   }
@@ -260,7 +263,7 @@ async function main() {
     });
 
     console.log('\n═══════════════════════════════════════════════════════════');
-    console.log(`  Results: ${passed} passed, ${failed} failed`);
+    console.log(`  Results: ${passed}/${total} passed, ${failed} failed`);
     console.log('═══════════════════════════════════════════════════════════\n');
 
     if (failed > 0) process.exit(1);
