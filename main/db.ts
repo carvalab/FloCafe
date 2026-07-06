@@ -648,6 +648,30 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       console.log('[DB] Default admin seeded: admin@flo.local / admin123');
     },
   },
+  {
+    version: 12,
+    name: 'fix_table_integer_ids',
+    up: () => {
+      // Non-destructive migration: convert integer table IDs to strings.
+      // Some tables were created before POST /tables was fixed (Task 1),
+      // so they got SQLite rowid integers instead of 'tbl-...' strings.
+      db.exec(`UPDATE tables SET id = 'tbl-' || id WHERE typeof(id) = 'integer'`);
+    },
+  },
+  {
+    version: 13,
+    name: 'fix_null_table_ids',
+    up: () => {
+      // Fix tables with NULL ids caused by old INSERT without id column.
+      // SQLite stored NULL instead of generating an id.
+      //
+      // Generate string IDs using rowid for existing tables with NULL ids
+      db.exec(`UPDATE tables SET id = 'tbl-' || rowid WHERE id IS NULL`);
+
+      // Also catch any integer ids that slipped through v12
+      db.exec(`UPDATE tables SET id = 'tbl-' || id WHERE typeof(id) = 'integer'`);
+    },
+  },
 ];
 
 function runMigrations(): void {

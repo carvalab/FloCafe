@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware';
 import type { CartItem } from '@/lib/types';
 
 interface HeldOrder {
-  tableId: number;
+  tableId: string;
   items: CartItem[];
   customerId: number | string | null;
   guestCount: number;
@@ -12,12 +12,12 @@ interface HeldOrder {
 }
 
 interface HeldOrdersState {
-  orders: Record<number, HeldOrder>;
-  holdOrder: (tableId: number, items: CartItem[], customerId: number | string | null, guestCount: number, orderNotes?: string) => void;
-  restoreOrder: (tableId: number) => HeldOrder | null;
-  removeHeldOrder: (tableId: number) => void;
-  hasHeldOrder: (tableId: number) => boolean;
-  getHeldOrder: (tableId: number) => HeldOrder | undefined;
+  orders: Record<string, HeldOrder>;
+  holdOrder: (tableId: string, items: CartItem[], customerId: number | string | null, guestCount: number, orderNotes?: string) => void;
+  restoreOrder: (tableId: string) => HeldOrder | null;
+  removeHeldOrder: (tableId: string) => void;
+  hasHeldOrder: (tableId: string) => boolean;
+  getHeldOrder: (tableId: string) => HeldOrder | undefined;
 }
 
 export const useHeldOrdersStore = create<HeldOrdersState>()(
@@ -55,6 +55,24 @@ export const useHeldOrdersStore = create<HeldOrdersState>()(
 
       getHeldOrder: (tableId) => get().orders[tableId],
     }),
-    { name: 'held-orders' }
+    {
+      name: 'held-orders',
+      onRehydrateStorage: () => (state) => {
+        if (!state) return;
+        const migrated: Record<string, HeldOrder> = {};
+        let changed = false;
+        for (const [key, value] of Object.entries(state.orders)) {
+          if (typeof key === 'string' && /^\d+$/.test(key)) {
+            migrated[String(Number(key))] = { ...value, tableId: String(Number(key)) };
+            changed = true;
+          } else {
+            migrated[key] = value;
+          }
+        }
+        if (changed) {
+          useHeldOrdersStore.setState({ orders: migrated });
+        }
+      },
+    }
   )
 );
