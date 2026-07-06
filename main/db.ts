@@ -558,6 +558,23 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 10,
+    name: 'fix_sequences_composite_key',
+    up: () => {
+      // v9 used `name TEXT PRIMARY KEY` but the code needs (name, date) as a
+      // composite key. Drop and recreate with the correct schema.
+      db.exec(`DROP TABLE IF EXISTS sequences`);
+      db.exec(`
+        CREATE TABLE sequences (
+          name TEXT NOT NULL,
+          date TEXT NOT NULL,
+          current_value INTEGER NOT NULL DEFAULT 0,
+          PRIMARY KEY (name, date)
+        )
+      `);
+    },
+  },
 ];
 
 function runMigrations(): void {
