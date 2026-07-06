@@ -118,7 +118,7 @@ router.get('/:id', (req: Request, res: Response) => {
 
 router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
-    const { table_id, customer_id, user_id, type, guest_count, special_instructions, packaging_charge, items } = req.body;
+    const { table_id, customer_id, user_id, type, guest_count, special_instructions, packaging_charge, delivery_charge, items } = req.body;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
@@ -156,10 +156,10 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
 
       const orderResult = db.prepare(`
         INSERT INTO orders (order_number, table_id, customer_id, user_id, type, guest_count, special_instructions,
-          packaging_charge, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          packaging_charge, delivery_charge, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `).run(orderNumber, table_id || null, customer_id || null, user_id || null, type, guest_count || null,
-        special_instructions || null, packaging_charge || 0, now(), now());
+        special_instructions || null, packaging_charge || 0, delivery_charge || 0, now(), now());
 
       const orderId = orderResult.lastInsertRowid;
 
@@ -231,7 +231,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         }
       }
 
-      const preRoundTotal = subtotal + totalTax + (packaging_charge || 0);
+      const preRoundTotal = subtotal + totalTax + (delivery_charge || 0) + (packaging_charge || 0);
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 
@@ -400,7 +400,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
       }
 
-      const preRoundTotal = discountedSubtotal + newTaxAmount + ((order as any).packaging_charge || 0);
+      const preRoundTotal = discountedSubtotal + newTaxAmount + ((order as any).delivery_charge || 0) + ((order as any).packaging_charge || 0);
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 

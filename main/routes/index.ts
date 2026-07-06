@@ -170,8 +170,8 @@ export function registerRoutes(app: Express): void {
           newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
         }
 
-        // BUG #5 FIX: Correct round-off formula
-        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0);
+        // BUG #5 FIX: Correct round-off formula; BUG #24 FIX: include delivery_charge (was missing, causing total mismatch with bill generation)
+        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.delivery_charge || 0) + (order.packaging_charge || 0);
         const roundOff = Math.round(preRoundTotal) - preRoundTotal;
         const total = Math.round(preRoundTotal);
 
@@ -263,8 +263,8 @@ export function registerRoutes(app: Express): void {
           newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
         }
 
-        // BUG #5 FIX: Correct round-off formula
-        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0);
+        // BUG #5 FIX: Correct round-off formula; BUG #24 FIX: include delivery_charge (was missing, causing total mismatch with bill generation)
+        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.delivery_charge || 0) + (order.packaging_charge || 0);
         const roundOff = Math.round(preRoundTotal) - preRoundTotal;
         const total = Math.round(preRoundTotal);
 
