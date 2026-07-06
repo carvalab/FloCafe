@@ -112,6 +112,7 @@ export default function SetupPage() {
         await api.post('/auth/setup/seed', {
           business_type: form.business_type,
           business_name: form.business_name || 'Demo Store',
+          password: 'admin123',
         });
         await login('admin@flo.local', 'admin123');
         toast.success('Demo data loaded!');

@@ -500,7 +500,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveLoyalty = async () => {
+  const saveLoyalty = async (silent = false) => {
     setSavingLoyalty(true);
     try {
       await api.put('/settings/loyalty', {
@@ -513,9 +513,9 @@ export default function SettingsPage() {
         loyalty_min_redemption: loyaltyMinRedemption,
         loyalty_max_redemption_percentage: loyaltyMaxRedemptionPct,
       });
-      toast.success('Loyalty settings saved');
+      if (!silent) toast.success('Loyalty settings saved');
     } catch {
-      toast.error('Failed to save');
+      if (!silent) toast.error('Failed to save');
     } finally {
       setSavingLoyalty(false);
     }
@@ -538,7 +538,7 @@ export default function SettingsPage() {
     }
   };
 
-  const saveBusinessInfo = async () => {
+  const saveBusinessInfo = async (silent = false) => {
     setSavingBusiness(true);
     try {
       await api.put('/settings/business', {
@@ -564,11 +564,20 @@ export default function SettingsPage() {
       posSettings.setBillShowGstn(form.billShowGstn);
       posSettings.setBillingType(form.billingType);
       updateCurrentTenant({ currency: form.currency, timezone: form.timezone });
-      toast.success('Store details saved');
+      if (!silent) toast.success('Store details saved');
     } catch {
-      toast.error('Failed to save');
+      if (!silent) toast.error('Failed to save');
     } finally {
       setSavingBusiness(false);
+    }
+  };
+
+  const saveAllSettings = async () => {
+    try {
+      await Promise.all([saveBusinessInfo(true), saveLoyalty(true)]);
+      toast.success('Settings saved');
+    } catch {
+      toast.error('Failed to save settings');
     }
   };
 
@@ -1117,7 +1126,7 @@ export default function SettingsPage() {
                     Cancel
                   </button>
                   <button
-                    onClick={async () => { await Promise.all([saveBusinessInfo(), saveLoyalty()]); }}
+                    onClick={saveAllSettings}
                     disabled={savingBusiness || savingLoyalty}
                     className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
                     {(savingBusiness || savingLoyalty) ? 'Saving...' : 'Save All'}
