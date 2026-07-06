@@ -57,6 +57,10 @@ function assert(condition: boolean, message: string) {
 try {
   initDatabase();
 } catch (error: any) {
+  if (error?.code === 'ERR_DLOPEN_FAILED' && String(error?.message || '').includes('NODE_MODULE_VERSION')) {
+    console.log('  ⚠ Skipping: better-sqlite3 ABI mismatch (run via Electron)');
+    process.exit(77); // exit code 77 = skip (GNU convention)
+  }
   console.error('Failed to initialize database:', error.message);
   process.exit(1);
 }
