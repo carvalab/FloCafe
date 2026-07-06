@@ -404,6 +404,59 @@ Update item status (KDS workflow).
 
 ---
 
+## Order Discounts
+
+### PATCH `/api/orders/:id/discount`
+Apply order-level discount.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request:**
+```json
+{
+  "discount_type": "percentage",
+  "discount_value": 10,
+  "discount_reason": "Happy hour"
+}
+```
+
+**Validations:**
+- `discount_type`: must be `"percentage"` or `"amount"`
+- `discount_value`: must be positive; cannot exceed store limits (`discount_max_percentage`, `discount_max_amount`)
+- `discount_mode` setting is checked — if `'flat'`, percentage discounts are rejected; if `'percentage'`, flat discounts are rejected
+- If `discount_requires_approval` is true, `override_pin` (manager/owner PIN) is required
+- Order must exist and not be completed/cancelled
+
+**Error (400):**
+```json
+{ "error": "Percentage discounts are disabled" }
+```
+
+**Error (403) — approval required:**
+```json
+{ "error": "Manager PIN required for discounts", "requiresApproval": true }
+```
+
+---
+
+### PATCH `/api/orders/:id/items/:itemId/discount`
+Apply item-level discount.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request:**
+```json
+{
+  "discount_type": "amount",
+  "discount_value": 25,
+  "discount_reason": "Comp item"
+}
+```
+
+**Validations:** Same as order-level discount.
+
+---
+
 ## Bills
 
 ### GET `/api/bills`
@@ -440,6 +493,35 @@ Mark bill as paid.
   "payment_method": "cash",
   "amount_tendered": 500
 }
+```
+
+---
+
+### POST `/api/bills/:id/applyDiscount`
+Apply discount to a bill (owner/manager only).
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request:**
+```json
+{
+  "type": "percentage",
+  "value": 10,
+  "reason": "Happy hour"
+}
+```
+
+**Validations:**
+- `type`: must be `"percentage"` or `"amount"`
+- `value`: must be positive; cannot exceed store limits (`discount_max_percentage`, `discount_max_amount`)
+- `discount_mode` setting is checked — restricts which discount types are allowed
+- If `discount_requires_approval` is true, `override_pin` is required
+- Recalculates tax on discounted subtotal
+- Updates both bill and order in a transaction
+
+**Error (400):**
+```json
+{ "error": "Discount exceeds maximum allowed" }
 ```
 
 ---
@@ -644,6 +726,58 @@ Update business settings.
 
 ### GET `/api/settings/tax`
 Get tax settings.
+
+---
+
+### GET `/api/settings/discount`
+Get discount limits configuration.
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Response (200):**
+```json
+{
+  "discount_max_percentage": 50,
+  "discount_max_amount": 100,
+  "discount_mode": "both",
+  "discount_requires_approval": false
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `discount_max_percentage` | number | Max % for percentage discounts (0 = no limit) |
+| `discount_max_amount` | number | Max flat amount for discounts (0 = no limit) |
+| `discount_mode` | string | `'percentage'`, `'flat'`, or `'both'` — which discount types are allowed |
+| `discount_requires_approval` | boolean | Require manager PIN to apply discounts |
+
+---
+
+### PUT `/api/settings/discount`
+Update discount limits (owner/manager only).
+
+**Headers:** `Authorization: Bearer <token>`
+
+**Request:**
+```json
+{
+  "discount_max_percentage": 30,
+  "discount_max_amount": 200,
+  "discount_mode": "both",
+  "discount_requires_approval": true
+}
+```
+
+**Validation:**
+- `discount_max_percentage`: float, range 0–100 (0 = no limit)
+- `discount_max_amount`: float, range 0–999999 (0 = no limit)
+- `discount_mode`: must be `'percentage'`, `'flat'`, or `'both'`
+- `discount_requires_approval`: boolean
+
+**Error (400):**
+```json
+{ "error": "discount_mode must be \"percentage\", \"flat\", or \"both\"" }
+```
 
 ---
 
