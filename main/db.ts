@@ -74,6 +74,7 @@ export function initDatabase(): void {
   db.pragma('foreign_keys = ON');
 
   runStartupIntegrityCheck();
+  repairSequences();
   autoRepairPaymentDetails();
   autoRepairDefaultPrinter();
 }
@@ -141,6 +142,55 @@ function runStartupIntegrityCheck(): void {
     }
   } catch (err: any) {
     console.error('[DB] Startup integrity check failed:', err.message);
+  }
+}
+
+/** Re-seeds the sequences table from existing order_number and bill_number data.
+ *  Fixes UNIQUE constraint collisions caused by migration v10 dropping and recreating
+ *  the sequences table, which reset counters while old numbered rows still existed. */
+function repairSequences(): void {
+  try {
+    // Extract max sequence per date from order_numbers (format: ORD-YYYYMMDD-NNNN)
+    const orderRows = db.prepare(`
+      SELECT
+        substr(order_number, 5, 8) AS date,
+        MAX(CAST(substr(order_number, 14) AS INTEGER)) AS max_val
+      FROM orders
+      WHERE order_number LIKE 'ORD-%'
+      GROUP BY substr(order_number, 5, 8)
+    `).all() as any[];
+
+    for (const row of orderRows) {
+      if (!row.date || !row.max_val) continue;
+      const existing = db.prepare(`SELECT current_value FROM sequences WHERE name = 'orders' AND date = ?`).get(row.date) as any;
+      if (!existing) {
+        db.prepare(`INSERT INTO sequences (name, date, current_value) VALUES ('orders', ?, ?)`).run(row.date, row.max_val);
+      } else if (existing.current_value < row.max_val) {
+        db.prepare(`UPDATE sequences SET current_value = ? WHERE name = 'orders' AND date = ?`).run(row.max_val, row.date);
+      }
+    }
+
+    // Extract max sequence per date from bill_numbers (format: INV-YYYYMMDD-NNNN)
+    const billRows = db.prepare(`
+      SELECT
+        substr(bill_number, 5, 8) AS date,
+        MAX(CAST(substr(bill_number, 14) AS INTEGER)) AS max_val
+      FROM bills
+      WHERE bill_number LIKE 'INV-%'
+      GROUP BY substr(bill_number, 5, 8)
+    `).all() as any[];
+
+    for (const row of billRows) {
+      if (!row.date || !row.max_val) continue;
+      const existing = db.prepare(`SELECT current_value FROM sequences WHERE name = 'bills' AND date = ?`).get(row.date) as any;
+      if (!existing) {
+        db.prepare(`INSERT INTO sequences (name, date, current_value) VALUES ('bills', ?, ?)`).run(row.date, row.max_val);
+      } else if (existing.current_value < row.max_val) {
+        db.prepare(`UPDATE sequences SET current_value = ? WHERE name = 'bills' AND date = ?`).run(row.max_val, row.date);
+      }
+    }
+  } catch (err) {
+    console.error('[DB] repairSequences failed:', err);
   }
 }
 
