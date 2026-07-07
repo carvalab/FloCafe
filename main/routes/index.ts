@@ -229,6 +229,14 @@ export function registerRoutes(app: Express): void {
         return res.status(404).json({ error: 'Item not found in this order' });
       }
 
+      if (['completed', 'cancelled'].includes(order.status)) {
+        return res.status(400).json({ error: 'Cannot restore items on completed or cancelled orders' });
+      }
+      const paidBill = db.prepare("SELECT id FROM bills WHERE order_id = ? AND payment_status = 'paid'").get(orderId);
+      if (paidBill) {
+        return res.status(400).json({ error: 'Cannot restore items on a paid order' });
+      }
+
       // BUG #17 FIX: Wrap restore + total recalc in transaction
       const result = withTxn(() => {
         // Restore - mark as pending

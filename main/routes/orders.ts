@@ -684,20 +684,19 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
         discountAmount = Math.round(discountAmount * 100) / 100;
       }
 
-      // BUG #11 FIX: Recalculate tax from scratch (not ratio) so removing discount restores original tax
-      let newTaxAmount = order.tax_amount || 0;
+      // Always recalculate tax from item-level data (not by scaling the already-discounted
+      // order.tax_amount from the DB), otherwise repeated discount updates compound the
+      // reduction each time this endpoint is called.
+      const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
+      let freshTax = 0;
+      for (const item of activeItems) {
+        freshTax += item.tax_amount || 0;
+      }
+      let newTaxAmount = freshTax;
       if (discountAmount > 0 && order.subtotal > 0) {
         const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
         const taxRatio = discountedSubtotal / order.subtotal;
-        newTaxAmount = Math.round((order.tax_amount || 0) * taxRatio * 100) / 100;
-      } else if (discount_value === 0) {
-        // Removing discount: recalculate tax from items to restore original
-        const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
-        let freshTax = 0;
-        for (const item of activeItems) {
-          freshTax += item.tax_amount || 0;
-        }
-        newTaxAmount = freshTax;
+        newTaxAmount = Math.round(freshTax * taxRatio * 100) / 100;
       }
 
       const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);

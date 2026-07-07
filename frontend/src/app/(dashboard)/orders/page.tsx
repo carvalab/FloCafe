@@ -750,13 +750,15 @@ export default function OrdersPage() {
                               {item.quantity}x {item.product_name}
                             </span>
                           </div>
-                          <button
-                            onClick={() => restoreItem(order.id, item.id)}
-                            className="p-1 rounded hover:bg-green-50 text-green-400 hover:text-green-600"
-                            title="Restore"
-                          >
-                            <RotateCcw size={12} />
-                          </button>
+                          {!paid && order.status !== 'completed' && order.status !== 'cancelled' && (
+                            <button
+                              onClick={() => restoreItem(order.id, item.id)}
+                              className="p-1 rounded hover:bg-green-50 text-green-400 hover:text-green-600"
+                              title="Restore"
+                            >
+                              <RotateCcw size={12} />
+                            </button>
+                          )}
                         </div>
                       ))}
                     </div>
