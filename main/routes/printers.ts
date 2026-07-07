@@ -205,8 +205,8 @@ router.post('/:id/test', requireRole('owner', 'manager'), async (req: Request, r
 // POST /api/printers/print-bill — print bill via backend (desktop app)
 router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
   try {
-    const { billId, orderId, useUnicode = false } = req.body;
-    console.log('[Print Bill] Request:', { billId, orderId, useUnicode });
+    const { billId, orderId, useUnicode = false, isReprint = false } = req.body;
+    console.log('[Print Bill] Request:', { billId, orderId, useUnicode, isReprint });
     
     if (!billId && !orderId) {
       console.log('[Print Bill] Error: No billId or orderId provided');
@@ -273,7 +273,7 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
 
     // Use existing printReceipt function with template support
     console.log('[Print Bill] Calling printReceipt...');
-    const success = await printReceipt(order, bill, business, billTemplate?.value || 'compact', useUnicode);
+    const success = await printReceipt(order, bill, business, billTemplate?.value || 'compact', useUnicode, isReprint);
     console.log('[Print Bill] Print result:', success);
 
     if (success) {

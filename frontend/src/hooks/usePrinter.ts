@@ -101,10 +101,12 @@ export const usePrinterStore = create<PrinterState>()(
             printerUseUnicode,
           } = usePosSettingsStore.getState();
 
+          const isReprint = opts?.isReprint ?? false;
+
           const hw = get().hardwarePrinter;
           if (hw && get().printMethod === 'escpos') {
             try {
-              await api.post('/printers/print-bill', { billId: bill.id, useUnicode: printerUseUnicode });
+              await api.post('/printers/print-bill', { billId: bill.id, useUnicode: printerUseUnicode, isReprint });
               return;
             } catch (err: unknown) {
               const e = err as { response?: { data?: { error?: string } }; message?: string };
@@ -124,6 +126,7 @@ export const usePrinterStore = create<PrinterState>()(
               footerNote: billFooterMessage || undefined,
               businessName: billShowName ? tenant.business_name : undefined,
               useUnicode: printerUseUnicode,
+              isReprint,
             });
             return;
           }
@@ -139,6 +142,7 @@ export const usePrinterStore = create<PrinterState>()(
             footerNote: billFooterMessage || undefined,
             showTaxBreakdown: billShowGstn,
             useUnicode: printerUseUnicode,
+            isReprint,
           };
 
           let bytes: Uint8Array;

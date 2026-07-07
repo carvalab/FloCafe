@@ -12,6 +12,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import type { OrderItem, Table, Product, Customer } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
+import { usePrinterStore } from '@/hooks/usePrinter';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
   pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
@@ -56,6 +57,7 @@ interface DiscountModal {
 
 export default function OrdersPage() {
   const { currentTenant } = useAuthStore();
+  const { printBill } = usePrinterStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -300,13 +302,27 @@ export default function OrdersPage() {
   };
 
   const handlePrint = async (billId: number) => {
+    const order = orders.find((o) => o.bill?.id === billId);
+    if (!order?.bill) {
+      toast.error('Bill not found');
+      return;
+    }
+    const isReprint = (printHistory[billId]?.length ?? 0) > 0;
     setPrintingBillId(billId);
     try {
-      await api.post(`/bills/${billId}/print`, { print_type: 'receipt' });
-      toast.success('Receipt printed successfully');
+      // Actually attempt the print first — only log/report success if the printer accepted the job,
+      // otherwise a disconnected printer would silently report "success" (it was only logging before).
+      await printBill(
+        { ...order.bill, order },
+        { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' },
+        { isReprint }
+      );
+      await api.post(`/bills/${billId}/print`, { print_type: isReprint ? 'reprint' : 'receipt' });
+      toast.success(isReprint ? 'Receipt reprinted successfully' : 'Receipt printed successfully');
       fetchPrintHistory(billId);
-    } catch {
-      toast.error('Failed to print receipt');
+    } catch (err: unknown) {
+      const msg = err instanceof Error ? err.message : 'check printer connection';
+      toast.error(`Failed to print receipt: ${msg}`);
     } finally {
       setPrintingBillId(null);
       setConfirmPrintBillId(null);
@@ -800,7 +816,11 @@ export default function OrdersPage() {
                         size="sm"
                       >
                         <Printer size={14} className="mr-1.5" />
-                        {printingBillId === order.bill.id ? 'Printing...' : 'Print'}
+                        {printingBillId === order.bill.id
+                          ? 'Printing...'
+                          : (printHistory[order.bill.id]?.length ?? 0) > 0
+                            ? 'Reprint'
+                            : 'Print'}
                       </Button>
                     )}
                     {showCheckout(order) && (
@@ -866,8 +886,14 @@ export default function OrdersPage() {
       {confirmPrintBillId !== null && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-2">Print Receipt</h2>
-            <p className="text-sm text-gray-600 mb-6">Are you sure you want to print this receipt?</p>
+            <h2 className="text-lg font-bold text-gray-900 mb-2">
+              {(printHistory[confirmPrintBillId]?.length ?? 0) > 0 ? 'Reprint Receipt' : 'Print Receipt'}
+            </h2>
+            <p className="text-sm text-gray-600 mb-6">
+              {(printHistory[confirmPrintBillId]?.length ?? 0) > 0
+                ? 'This receipt was already printed. The reprint will be marked with a "REPRINT" banner.'
+                : 'Are you sure you want to print this receipt?'}
+            </p>
             <div className="flex justify-end gap-2">
               <Button
                 variant="outline"
@@ -882,7 +908,11 @@ export default function OrdersPage() {
                 disabled={printingBillId === confirmPrintBillId}
               >
                 <Printer size={14} className="mr-1.5" />
-                {printingBillId === confirmPrintBillId ? 'Printing...' : 'Confirm Print'}
+                {printingBillId === confirmPrintBillId
+                  ? 'Printing...'
+                  : (printHistory[confirmPrintBillId]?.length ?? 0) > 0
+                    ? 'Confirm Reprint'
+                    : 'Confirm Print'}
               </Button>
             </div>
           </div>

@@ -34,6 +34,22 @@ export interface ReceiptOptions {
   showTaxBreakdown?: boolean;
   /** If false (default), replace ₹/€/£/etc. with ASCII (Rs, EUR, GBP…). */
   useUnicode?: boolean;
+  /** Print a large "REPRINT" banner at the top so a reprinted receipt can't be mistaken for the original. */
+  isReprint?: boolean;
+}
+
+function printReprintBanner(enc: ReceiptPrinterEncoder): void {
+  enc
+    .align('center')
+    .bold(true)
+    .width(2)
+    .height(2)
+    .text('** REPRINT **')
+    .width(1)
+    .height(1)
+    .bold(false)
+    .newline()
+    .align('left');
 }
 
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
@@ -104,6 +120,7 @@ export function buildClassicReceiptBytes(
     phone,
     showTaxBreakdown = false,
     useUnicode = false,
+    isReprint = false,
   } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
@@ -112,9 +129,11 @@ export function buildClassicReceiptBytes(
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
 
+  enc.initialize();
+  if (isReprint) printReprintBanner(enc);
+
   // Header
   enc
-    .initialize()
     .align('center')
     .bold(true)
     .width(2)
@@ -251,7 +270,7 @@ export function buildCompactReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote, useUnicode = false } = opts;
+  const { paperWidth = 58, footerNote, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
   const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
@@ -259,9 +278,11 @@ export function buildCompactReceiptBytes(
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
 
+  enc.initialize();
+  if (isReprint) printReprintBanner(enc);
+
   // Header
   enc
-    .initialize()
     .align('center')
     .bold(true)
     .text(truncate(tenant.business_name, cols))
@@ -346,7 +367,7 @@ export function buildDetailedReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false } = opts;
+  const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
   const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
@@ -354,9 +375,11 @@ export function buildDetailedReceiptBytes(
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
 
+  enc.initialize();
+  if (isReprint) printReprintBanner(enc);
+
   // Header
   enc
-    .initialize()
     .align('center')
     .bold(true)
     .width(2)

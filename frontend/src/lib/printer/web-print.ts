@@ -20,6 +20,8 @@ export interface WebPrintOptions {
   footerNote?: string;
   businessName?: string;
   useUnicode?: boolean;
+  /** Show a large "REPRINT" banner so a reprinted bill can't be mistaken for the original. */
+  isReprint?: boolean;
 }
 
 /**
@@ -30,9 +32,9 @@ export function printWebBill(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: WebPrintOptions = {}
 ): void {
-  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false } = opts;
+  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false, isReprint = false } = opts;
 
-  const html = generateBillHtml(bill, tenant, { paperSize, includeGst, gstin, address, phone, footerNote, businessName, useUnicode });
+  const html = generateBillHtml(bill, tenant, { paperSize, includeGst, gstin, address, phone, footerNote, businessName, useUnicode, isReprint });
 
   // Create a new window with the bill HTML
   const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -61,7 +63,7 @@ export function generateBillHtml(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: WebPrintOptions = {}
 ): string {
-  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false } = opts;
+  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false, isReprint = false } = opts;
   const displayName = businessName ?? tenant.business_name;
   const rawCurrency = tenant.currency ?? '₹';
   const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
@@ -96,6 +98,7 @@ export function generateBillHtml(
 </head>
 <body>
   <div class="bill-container">
+    ${isReprint ? `<div class="reprint-banner">** REPRINT **</div>` : ''}
     <!-- Header -->
     <div class="header">
       ${displayName ? `<h1>${displayName}</h1>` : ''}
@@ -207,6 +210,7 @@ function getPaperStyles(size: PaperSize): string {
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Helvetica Neue', Arial, sans-serif; font-size: 12px; line-height: 1.4; color: #333; }
     .bill-container { max-width: 100%; margin: 0 auto; }
+    .reprint-banner { text-align: center; font-size: 22px; font-weight: bold; letter-spacing: 2px; color: #c00; border: 3px solid #c00; padding: 6px; margin-bottom: 15px; }
     .header { text-align: center; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ccc; }
     .header h1 { font-size: 24px; margin-bottom: 5px; }
     .bill-details { margin-bottom: 15px; }

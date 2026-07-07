@@ -424,9 +424,9 @@ export async function initPrinter(): Promise<void> {
   }
 }
 
-export async function printReceipt(order: any, bill: any, business?: any, template?: string, useUnicode: boolean = false): Promise<boolean> {
+export async function printReceipt(order: any, bill: any, business?: any, template?: string, useUnicode: boolean = false, isReprint: boolean = false): Promise<boolean> {
   try {
-    console.log('[Printer] printReceipt called, template:', template, 'useUnicode:', useUnicode);
+    console.log('[Printer] printReceipt called, template:', template, 'useUnicode:', useUnicode, 'isReprint:', isReprint);
     const printer = getPrinterConfig();
     if (!printer) {
       console.log('[Printer] No printer configured');
@@ -439,7 +439,7 @@ export async function printReceipt(order: any, bill: any, business?: any, templa
 
     let data: Buffer;
     try {
-      data = formatReceipt(order, bill, business, template, cols, useUnicode);
+      data = formatReceipt(order, bill, business, template, cols, useUnicode, isReprint);
       console.log('[Printer] Receipt data length:', data.length, 'bytes');
       console.log('[Printer] First 100 bytes:', Array.from(data.slice(0, 100)).map(b => b.toString(16)).join(' '));
     } catch (err) {
@@ -501,7 +501,7 @@ function getPrinterConfig(): any {
   return db.prepare('SELECT * FROM printers WHERE is_default = 1').get();
 }
 
-export function formatReceipt(order: any, bill: any, business?: any, template?: string, cols: number = 48, useUnicode: boolean = false): Buffer {
+export function formatReceipt(order: any, bill: any, business?: any, template?: string, cols: number = 48, useUnicode: boolean = false, isReprint: boolean = false): Buffer {
   console.log('[Printer] formatReceipt - template:', template);
   console.log('[Printer] formatReceipt - order:', order?.order_number, 'bill:', bill?.bill_number);
   console.log('[Printer] formatReceipt - items count:', order?.items?.length || 0, 'cols:', cols);
@@ -512,11 +512,11 @@ export function formatReceipt(order: any, bill: any, business?: any, template?: 
   try {
     switch (tpl) {
       case 'classic':
-        return formatClassicReceipt(order, bill, biz, cols, useUnicode);
+        return formatClassicReceipt(order, bill, biz, cols, useUnicode, isReprint);
       case 'detailed':
-        return formatDetailedReceipt(order, bill, biz, cols, useUnicode);
+        return formatDetailedReceipt(order, bill, biz, cols, useUnicode, isReprint);
       default:
-        return formatCompactReceipt(order, bill, biz, cols, useUnicode);
+        return formatCompactReceipt(order, bill, biz, cols, useUnicode, isReprint);
     }
   } catch (err) {
     console.error('[Printer] formatReceipt error:', err);
@@ -524,7 +524,7 @@ export function formatReceipt(order: any, bill: any, business?: any, template?: 
   }
 }
 
-function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
+function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false, isReprint: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
 
@@ -535,6 +535,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   const amtLen = 10;
 
   lines.push('{INIT}');
+  if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store') + '{/BOLD}{/CENTER}');
   lines.push(bar);
   lines.push('Bill #: ' + (bill.bill_number || order.order_number));
@@ -589,7 +590,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   return buildEscPos(lines, useUnicode);
 }
 
-function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
+function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false, isReprint: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
 
@@ -600,6 +601,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   const amtLen = 10;
 
   lines.push('{INIT}');
+  if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store') + '{/BOLD}{/CENTER}');
   lines.push(bar);
   lines.push('Bill #: ' + (bill.bill_number || order.order_number));
@@ -654,16 +656,17 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   return buildEscPos(lines, useUnicode);
 }
 
-function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false): Buffer {
+function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false, isReprint: boolean = false): Buffer {
   const lines: string[] = [];
   const date = new Date(order.created_at);
-  
+
   const bar = '='.repeat(cols);
   const dash = '-'.repeat(cols);
-  
+
   const itemNameLen = cols === 42 ? 22 : 28;
 
   lines.push('{INIT}');
+  if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store').toUpperCase() + '{/BOLD}{/CENTER}');
   lines.push(bar);
   lines.push('{CENTER}TAX INVOICE{/CENTER}');
