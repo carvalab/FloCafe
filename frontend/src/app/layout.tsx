@@ -3,6 +3,7 @@ import { Geist, Geist_Mono } from "next/font/google";
 import { Toaster } from "react-hot-toast";
 import "./globals.css";
 import MenuActionHandler from "@/components/layout/MenuActionHandler";
+import AuthGuard from "@/components/layout/AuthGuard";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -16,7 +17,7 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: "Flo",
-  description: "Smart Point of Sale for restaurants, salons, and retail",
+  description: "Smart Point of Sale for restaurants",
   manifest: "/manifest.json",
   appleWebApp: {
     capable: true,
@@ -54,7 +55,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <MenuActionHandler />
-        {children}
+        <AuthGuard>{children}</AuthGuard>
         <Toaster position="top-right" />
         <script
           dangerouslySetInnerHTML={{

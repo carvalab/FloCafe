@@ -66,6 +66,7 @@ function businessShape(s: Record<string, string>) {
     business_address: s.business_address || '',
     business_phone: s.business_phone || '',
     billing_type: s.billing_type || 'postpaid',
+    tables_required: s.tables_required !== 'false',
     bill_show_name: s.bill_show_name !== 'false',
     bill_show_address: s.bill_show_address !== 'false',
     bill_show_phone: s.bill_show_phone !== 'false',
@@ -101,13 +102,13 @@ router.get('/business', (req: Request, res: Response) => {
 router.put('/business', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { business_name, timezone, currency, country, gstin, state_code,
-      business_address, business_phone, billing_type,
+      business_address, business_phone, billing_type, tables_required,
       bill_show_name, bill_show_address, bill_show_phone, bill_show_gstn } = req.body;
 
     const db = getDatabase();
     upsertSettings(db, {
       business_name, timezone, currency, country, gstin, state_code,
-      business_address, business_phone, billing_type,
+      business_address, business_phone, billing_type, tables_required,
       bill_show_name, bill_show_address, bill_show_phone, bill_show_gstn,
     });
 
@@ -330,7 +331,7 @@ router.post('/cloud/test', requireRole('owner', 'manager'), async (_req: Request
 const ALLOWED_WILDCARD_KEYS = new Set([
   'business_name', 'timezone', 'currency', 'country',
   'state_code', 'business_address', 'business_phone',
-  'billing_type', 'bill_show_name', 'bill_show_address',
+  'billing_type', 'tables_required', 'bill_show_name', 'bill_show_address',
   'bill_show_phone', 'bill_show_gstn',
   'tax_scheme',
   'loyalty_enabled', 'loyalty_expiry_months', 'loyalty_points_per_currency', 'loyalty_redemption_rate',

@@ -1,5 +1,6 @@
 'use client';
 
+import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
@@ -14,7 +15,9 @@ import {
   PanelLeft,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
+import { usePosSettingsStore } from '@/store/pos-settings';
 import { getLandingPage } from '@/components/layout/AuthGuard';
+import api from '@/lib/api';
 import {
   Sidebar,
   SidebarContent,
@@ -43,16 +46,27 @@ const ALL_NAV_ITEMS = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { currentTenant, logout } = useAuthStore();
+  const { tablesRequired, setTablesRequired } = usePosSettingsStore();
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const closeMobile = () => { if (isMobile) setOpenMobile(false); };
 
   const role = currentTenant?.role || 'cashier';
   const businessType = currentTenant?.business_type || 'restaurant';
-  const navItems = ALL_NAV_ITEMS.filter((item) =>
-    item.roles.includes(role) &&
-    (item.businessTypes === null || item.businessTypes.includes(businessType))
-  );
+  const navItems = ALL_NAV_ITEMS.filter((item) => {
+    if (item.href === '/tables' && !tablesRequired) return false;
+    return item.roles.includes(role)
+      && (item.businessTypes === null || item.businessTypes.includes(businessType));
+  });
   const homeHref = getLandingPage(role, businessType);
+
+  useEffect(() => {
+    if (!currentTenant) return;
+    api.get('/settings/business')
+      .then((res) => {
+        setTablesRequired(typeof res.data.tables_required === 'boolean' ? res.data.tables_required : true);
+      })
+      .catch(() => {});
+  }, [currentTenant, setTablesRequired]);
 
   return (
     <Sidebar collapsible="icon">

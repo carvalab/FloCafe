@@ -1,4 +1,4 @@
-const CACHE_NAME = 'flo-v16';
+const CACHE_NAME = 'flo-v17';
 const PRECACHE_URLS = [
   '/dashboard',
   '/pos',
@@ -29,8 +29,13 @@ self.addEventListener('fetch', (event) => {
 
   const url = new URL(event.request.url);
 
-  // Never cache API calls — always go to network
-  if (url.pathname.startsWith('/api') || url.hostname !== self.location.hostname) return;
+  // Never cache API/setup/auth calls — these must reflect current DB state.
+  if (
+    url.hostname !== self.location.hostname ||
+    url.pathname.startsWith('/api') ||
+    url.pathname.startsWith('/auth') ||
+    url.pathname.startsWith('/setup')
+  ) return;
 
   event.respondWith(
     fetch(event.request)

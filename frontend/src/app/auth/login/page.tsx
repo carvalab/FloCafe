@@ -23,6 +23,13 @@ function LoginContent() {
   const [loginError, setLoginError] = useState<string | null>(null);
 
   useEffect(() => {
+    fetch('/api/auth/setup/status')
+      .then(r => r.json())
+      .then(data => {
+        if (data.needsSetup) router.replace('/setup');
+      })
+      .catch(() => {});
+
     fetch('/api/health')
       .then(r => r.json())
       .then(data => {
@@ -31,7 +38,7 @@ function LoginContent() {
         }
       })
       .catch(() => {});
-  }, []);
+  }, [router]);
 
   useEffect(() => {
     loadFromStorage();

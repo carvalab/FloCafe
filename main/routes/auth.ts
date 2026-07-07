@@ -8,7 +8,9 @@ import { getCurrentSchemaVersion, getDatabase, now } from '../db';
 const router = Router();
 const JWT_EXPIRES_IN = '24h';
 const INITIAL_ADMIN_ROLE = 'owner';
-const VALID_BUSINESS_TYPES = new Set(['retail', 'restaurant', 'salon']);
+const VALID_BUSINESS_TYPES = new Set(['restaurant']);
+const VALID_SETUP_PROFILES = new Set(['empty', 'express', 'demo']);
+const VALID_SERVICE_MODELS = new Set(['qsr', 'finedine']);
 const LOCAL_SETUP_HOSTS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /**
@@ -70,6 +72,7 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
     currency: s.currency || 'INR',
     currency_symbol: s.currency_symbol || '₹',
     timezone: s.timezone || 'Asia/Kolkata',
+    service_model: s.service_model || 'finedine',
     plan: 'desktop',
     status: 'active',
     role: userRole,  // user's role — AuthGuard uses this for routing
@@ -106,6 +109,102 @@ function currencySymbolFor(currency: string): string {
     case 'EUR': return '€';
     case 'GBP': return '£';
     default: return currency;
+  }
+}
+
+function insertCategory(db: ReturnType<typeof getDatabase>, id: string, name: string, color: string, icon: string, sortOrder: number): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO categories (id, name, color, icon, sort_order, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(id, name, color, icon, sortOrder, now(), now());
+}
+
+function insertProduct(db: ReturnType<typeof getDatabase>, id: string, categoryId: string, name: string, price: number, sortOrder: number): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(id, categoryId, name, price, sortOrder, now(), now());
+}
+
+function insertTable(db: ReturnType<typeof getDatabase>, id: string, number: string, capacity: number): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO tables (id, number, capacity, status, created_at, updated_at)
+    VALUES (?, ?, ?, 'available', ?, ?)
+  `).run(id, number, capacity, now(), now());
+}
+
+function insertCustomer(db: ReturnType<typeof getDatabase>, id: string, name: string, phone: string): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO customers (id, name, phone, country_code, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, '+91', 1, ?, ?)
+  `).run(id, name, phone, now(), now());
+}
+
+function insertStaffUser(db: ReturnType<typeof getDatabase>, id: string, name: string, email: string, role: string, password: string): void {
+  db.prepare(`
+    INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 1, ?, ?)
+  `).run(id, name, email, bcrypt.hashSync(password, 10), role, now(), now());
+}
+
+function seedExpressRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string): void {
+  insertCategory(db, 'cat-express-food', 'Food', '#F97316', '🍽️', 1);
+  insertCategory(db, 'cat-express-beverages', 'Beverages', '#0EA5E9', '🥤', 2);
+
+  insertProduct(db, 'prod-express-meal', 'cat-express-food', 'Meal', 150, 1);
+  insertProduct(db, 'prod-express-snack', 'cat-express-food', 'Snack', 80, 2);
+  insertProduct(db, 'prod-express-tea', 'cat-express-beverages', 'Tea', 25, 1);
+  insertProduct(db, 'prod-express-coffee', 'cat-express-beverages', 'Coffee', 40, 2);
+
+  if (serviceModel === 'finedine') {
+    insertTable(db, 'tbl-express-1', 'T1', 4);
+    insertTable(db, 'tbl-express-2', 'T2', 4);
+    insertTable(db, 'tbl-express-3', 'T3', 6);
+  }
+}
+
+function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string): void {
+  const cats = [
+    ['cat-demo-starters', 'Starters', '#FF6B6B', '🍔', 1],
+    ['cat-demo-main', 'Main Course', '#4ECDC4', '🍛', 2],
+    ['cat-demo-beverages', 'Beverages', '#45B7D1', '🥤', 3],
+    ['cat-demo-desserts', 'Desserts', '#96CEB4', '🍰', 4],
+  ] as const;
+  for (const [id, name, color, icon, sort] of cats) insertCategory(db, id, name, color, icon, sort);
+
+  const products = [
+    ['prod-demo-paneer-tikka', 'cat-demo-starters', 'Paneer Tikka', 250, 1],
+    ['prod-demo-chicken-wings', 'cat-demo-starters', 'Chicken Wings', 280, 2],
+    ['prod-demo-butter-chicken', 'cat-demo-main', 'Butter Chicken', 320, 1],
+    ['prod-demo-dal-makhani', 'cat-demo-main', 'Dal Makhani', 220, 2],
+    ['prod-demo-jeera-rice', 'cat-demo-main', 'Jeera Rice', 150, 3],
+    ['prod-demo-cola', 'cat-demo-beverages', 'Cola', 60, 1],
+    ['prod-demo-lemon-soda', 'cat-demo-beverages', 'Lemon Soda', 70, 2],
+    ['prod-demo-gulab-jamun', 'cat-demo-desserts', 'Gulab Jamun', 80, 1],
+  ] as const;
+  for (const [id, categoryId, name, price, sort] of products) insertProduct(db, id, categoryId, name, price, sort);
+
+  if (serviceModel === 'finedine') {
+    insertTable(db, 'tbl-demo-1', 'T1', 4);
+    insertTable(db, 'tbl-demo-2', 'T2', 4);
+    insertTable(db, 'tbl-demo-3', 'T3', 6);
+    insertTable(db, 'tbl-demo-4', 'T4', 2);
+  }
+
+  insertCustomer(db, 'cust-demo-1', 'Aarav Sharma', '9876543210');
+  insertCustomer(db, 'cust-demo-2', 'Maya Iyer', '9876543211');
+  insertCustomer(db, 'cust-demo-3', 'Kabir Khan', '9876543212');
+
+  insertStaffUser(db, 'user-demo-manager', 'Demo Manager', 'manager@flo.local', 'manager', 'demo12345');
+  insertStaffUser(db, 'user-demo-cashier', 'Demo Cashier', 'cashier@flo.local', 'cashier', 'demo12345');
+  insertStaffUser(db, 'user-demo-chef', 'Demo Chef', 'chef@flo.local', 'chef', 'demo12345');
+}
+
+function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string): void {
+  if (profile === 'express') {
+    seedExpressRestaurant(db, serviceModel);
+  } else if (profile === 'demo') {
+    seedDemoRestaurant(db, serviceModel);
   }
 }
 
@@ -329,8 +428,8 @@ router.post('/password/change', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'Current password is incorrect' });
     }
 
-    if (String(password).length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (!password) {
+      return res.status(400).json({ error: 'Password is required' });
     }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
@@ -372,6 +471,8 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       name,
       password,
       business_type = 'restaurant',
+      setup_profile = 'express',
+      service_model = 'qsr',
       business_name,
       store_name,
       country = 'IN',
@@ -390,6 +491,8 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
     const email = normalizeEmail(req.body.email);
     const displayName = String(name || '').trim();
     const normalizedBusinessType = String(business_type || 'restaurant').trim();
+    const normalizedSetupProfile = String(setup_profile || 'express').trim().toLowerCase();
+    const normalizedServiceModel = String(service_model || 'qsr').trim().toLowerCase();
     const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
     const storeName = String(store_name || business_name || '').trim();
     const resolvedStoreName = storeName || 'Store';
@@ -404,12 +507,16 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       return res.status(400).json({ error: 'A valid email is required' });
     }
 
-    if (String(password).length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
+      return res.status(400).json({ error: 'FloCafe setup only supports restaurant businesses' });
     }
 
-    if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
-      return res.status(400).json({ error: 'Invalid business type' });
+    if (!VALID_SETUP_PROFILES.has(normalizedSetupProfile)) {
+      return res.status(400).json({ error: 'Invalid setup profile' });
+    }
+
+    if (!VALID_SERVICE_MODELS.has(normalizedServiceModel)) {
+      return res.status(400).json({ error: 'Invalid service model' });
     }
 
     const db = getDatabase();
@@ -453,9 +560,14 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         gstin,
         state_code,
         tax_registered,
-        billing_type,
+        billing_type: billing_type || (normalizedServiceModel === 'qsr' ? 'prepaid' : 'postpaid'),
+        tables_required: normalizedServiceModel === 'finedine' ? 'true' : 'false',
+        service_model: normalizedServiceModel,
+        setup_profile: normalizedSetupProfile,
         onboarding_completed: 'true',
       });
+
+      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel);
     })();
 
     const token = jwt.sign(
@@ -485,118 +597,11 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 });
 
 // ── POST /api/auth/setup/seed ───────────────────────────────────────────────────
-// Seeds demo data for the selected business type
+// Legacy endpoint retained only to return a clear error. First-run setup must
+// create the owner through /setup/initialize and pass the selected seed profile.
 
 router.post('/setup/seed', (req: Request, res: Response) => {
-  try {
-    if (!requireLocalSetup(req, res)) return;
-
-    const { business_type, business_name, password } = req.body;
-    const normalizedBusinessType = String(business_type || 'restaurant').trim();
-
-    if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
-      return res.status(400).json({ error: 'Invalid business type' });
-    }
-
-    if (!password || String(password).length < 8) {
-      return res.status(400).json({ error: 'Password must be at least 8 characters' });
-    }
-
-    const db = getDatabase();
-
-    // ── Security: only allowed during first-run (no users exist yet) ──────────
-    const userCount = getUserCount(db);
-    if (userCount > 0) {
-      return res.status(403).json({ error: 'Setup already complete. This endpoint is disabled.' });
-    }
-    // ─────────────────────────────────────────────────────────────────────────
-
-    if (business_name) {
-      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_name', ?, ?)`).run(business_name, now());
-    }
-    db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', ?, ?)`).run(normalizedBusinessType, now());
-    db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)`).run(now());
-
-    const hashedPassword = bcrypt.hashSync(String(password), 10);
-    const ownerId = uuidv4();
-    db.prepare(`
-      INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(ownerId, 'Owner', 'admin@flo.local', hashedPassword, 'owner', 1, now(), now());
-
-    if (normalizedBusinessType === 'restaurant') {
-      const cats = [
-        ['cat-1', 'Starters', '#FF6B6B', '🍔', 1],
-        ['cat-2', 'Main Course', '#4ECDC4', '🍛', 2],
-        ['cat-3', 'Beverages', '#45B7D1', '🥤', 3],
-        ['cat-4', 'Desserts', '#96CEB4', '🍰', 4],
-      ];
-      for (const [id, name, color, icon, sort] of cats) {
-        db.prepare(`INSERT OR IGNORE INTO categories (id, name, color, icon, sort_order) VALUES (?, ?, ?, ?, ?)`).run(id, name, color, icon, sort);
-      }
-      const products = [
-        ['prod-1', 'cat-1', 'Paneer Tikka', 250, 1],
-        ['prod-2', 'cat-1', 'Chicken Wings', 280, 2],
-        ['prod-3', 'cat-2', 'Butter Chicken', 320, 1],
-        ['prod-4', 'cat-2', 'Dal Makhani', 220, 2],
-        ['prod-5', 'cat-2', 'Jeera Rice', 150, 3],
-        ['prod-6', 'cat-3', 'Cola', 60, 1],
-        ['prod-7', 'cat-3', 'Lemon Soda', 70, 2],
-        ['prod-8', 'cat-4', 'Gulab Jamun', 80, 1],
-      ];
-      for (const [id, catId, name, price, sort] of products) {
-        db.prepare(`INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active) VALUES (?, ?, ?, ?, ?, 1)`).run(id, catId, name, price, sort);
-      }
-      const tables = [['tbl-1', 'T1', 4], ['tbl-2', 'T2', 4], ['tbl-3', 'T3', 6]];
-      for (const [id, number, capacity] of tables) {
-        db.prepare(`INSERT OR IGNORE INTO tables (id, number, capacity) VALUES (?, ?, ?)`).run(id, number, capacity);
-      }
-    } else if (normalizedBusinessType === 'retail') {
-      const cats = [
-        ['cat-1', 'Electronics', '#3B82F6', '📱', 1],
-        ['cat-2', 'Clothing', '#8B5CF6', '👕', 2],
-        ['cat-3', 'Groceries', '#10B981', '🛒', 3],
-      ];
-      for (const [id, name, color, icon, sort] of cats) {
-        db.prepare(`INSERT OR IGNORE INTO categories (id, name, color, icon, sort_order) VALUES (?, ?, ?, ?, ?)`).run(id, name, color, icon, sort);
-      }
-      const products = [
-        ['prod-1', 'cat-1', 'USB Cable', 199, 1],
-        ['prod-2', 'cat-1', 'Phone Case', 349, 2],
-        ['prod-3', 'cat-2', 'T-Shirt', 599, 1],
-        ['prod-4', 'cat-2', 'Jeans', 1299, 2],
-        ['prod-5', 'cat-3', 'Rice 5kg', 450, 1],
-        ['prod-6', 'cat-3', 'Cooking Oil 1L', 180, 2],
-      ];
-      for (const [id, catId, name, price, sort] of products) {
-        db.prepare(`INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active) VALUES (?, ?, ?, ?, ?, 1)`).run(id, catId, name, price, sort);
-      }
-    } else if (normalizedBusinessType === 'salon') {
-      const cats = [
-        ['cat-1', 'Hair', '#EC4899', '✂️', 1],
-        ['cat-2', 'Facial', '#F59E0B', '💆', 2],
-        ['cat-3', 'Massage', '#6366F1', '🧘', 3],
-      ];
-      for (const [id, name, color, icon, sort] of cats) {
-        db.prepare(`INSERT OR IGNORE INTO categories (id, name, color, icon, sort_order) VALUES (?, ?, ?, ?, ?)`).run(id, name, color, icon, sort);
-      }
-      const products = [
-        ['prod-1', 'cat-1', 'Haircut', 250, 1],
-        ['prod-2', 'cat-1', 'Hair Coloring', 1500, 2],
-        ['prod-3', 'cat-2', 'Classic Facial', 800, 1],
-        ['prod-4', 'cat-2', 'Gold Facial', 2000, 2],
-        ['prod-5', 'cat-3', 'Body Massage', 1200, 1],
-      ];
-      for (const [id, catId, name, price, sort] of products) {
-        db.prepare(`INSERT OR IGNORE INTO products (id, category_id, name, price, sort_order, is_active) VALUES (?, ?, ?, ?, ?, 1)`).run(id, catId, name, price, sort);
-      }
-    }
-
-    res.json({ message: 'Demo data seeded successfully' });
-  } catch (error: any) {
-    console.error('[Auth] Seed error:', error);
-    res.status(500).json({ error: error.message });
-  }
+  res.status(410).json({ error: 'Use /api/auth/setup/initialize with setup_profile and owner details.' });
 });
 
 export const authRoutes = router;

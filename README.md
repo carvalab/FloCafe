@@ -155,14 +155,11 @@ Download the installer for your platform from [Releases](https://github.com/Free
 
 ### 2. First Launch
 
-On first run, the app initializes the SQLite database. Optionally load demo data.
+On first run, the app initializes the SQLite database and asks you to create the first owner account.
 
 ### 3. Login
 
-| Role | Email | Password |
-|------|-------|----------|
-| Admin/Owner | `admin@flo.local` | `admin123` |
-| Kitchen (KDS) | `chef@flo.local` | `chef123` |
+Use the owner email and password created during first launch.
 
 ### 4. Configure Printer (Optional)
 
@@ -258,13 +255,6 @@ FloCafe/
 ├── dev-server.js           # Headless backend for dev
 └── server.js               # Standalone Express server
 ```
-
-### Default Credentials
-
-| Role | Email | Password |
-|------|-------|----------|
-| Admin | `admin@flo.local` | `admin123` |
-| Kitchen | `chef@flo.local` | `chef123` |
 
 ## Troubleshooting
 

@@ -12,7 +12,8 @@ export interface Tenant {
   business_name: string;
   slug: string;
   database_name: string;
-  business_type: 'restaurant' | 'salon' | 'retail';
+  business_type: 'restaurant';
+  service_model?: 'qsr' | 'finedine';
   country: string;
   currency: string;
   timezone: string;

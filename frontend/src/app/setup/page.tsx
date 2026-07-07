@@ -1,123 +1,123 @@
 'use client';
 
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { ShoppingCart, UtensilsCrossed, Scissors, Sparkles, ArrowRight, ArrowLeft, Check } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Database, Sparkles, UtensilsCrossed } from 'lucide-react';
 import toast from 'react-hot-toast';
 
-const BUSINESS_TYPES = [
+type SetupProfile = 'empty' | 'express' | 'demo';
+type ServiceModel = 'qsr' | 'finedine';
+
+const SETUP_PROFILES: Array<{
+  value: SetupProfile;
+  label: string;
+  badge?: string;
+  description: string;
+  details: string;
+}> = [
   {
-    type: 'retail',
-    label: 'Retail Store',
-    description: 'For shops selling physical products',
-    icon: ShoppingCart,
-    color: 'bg-blue-500',
+    value: 'empty',
+    label: 'Empty',
+    description: 'Owner account and required settings only.',
+    details: 'Use this when the client wants to enter every product, table, and customer manually.',
   },
   {
-    type: 'restaurant',
-    label: 'Restaurant',
-    description: 'For food service with table & order management',
-    icon: UtensilsCrossed,
-    color: 'bg-orange-500',
+    value: 'express',
+    label: 'Express',
+    badge: 'Recommended',
+    description: 'Minimal ready-to-sell restaurant setup.',
+    details: 'Seeds basic food and beverage categories, a few starter products, and tables for FineDine.',
   },
   {
-    type: 'salon',
-    label: 'Salon & Spa',
-    description: 'For beauty and wellness services',
-    icon: Scissors,
-    color: 'bg-pink-500',
+    value: 'demo',
+    label: 'Demo',
+    description: 'Sample data for training and testing.',
+    details: 'Seeds products, tables, sample customers, and staff users so the client can explore the system.',
+  },
+];
+
+const SERVICE_MODELS: Array<{
+  value: ServiceModel;
+  label: string;
+  description: string;
+  details: string;
+}> = [
+  {
+    value: 'qsr',
+    label: 'QSR',
+    description: 'Prepaid counter service',
+    details: 'Best for quick-service restaurants where payment is taken before fulfilment.',
+  },
+  {
+    value: 'finedine',
+    label: 'FineDine',
+    description: 'Table management and postpaid billing',
+    details: 'Best for restaurants that seat guests, manage tables, and collect payment after service.',
   },
 ];
 
 export default function SetupPage() {
-  const router = useRouter();
-  const { login, loadFromStorage } = useAuthStore();
+  const { logout } = useAuthStore();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
-  const [setupMode, setSetupMode] = useState<'fresh' | 'demo' | null>(null);
+  const [profile, setProfile] = useState<SetupProfile>('express');
+  const [serviceModel, setServiceModel] = useState<ServiceModel>('qsr');
   const [form, setForm] = useState({
     name: '',
     email: '',
     password: '',
     confirmPassword: '',
     business_name: '',
-    business_type: 'retail' as 'retail' | 'restaurant' | 'salon',
   });
+  const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
+  const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
-  const handleStartFresh = () => {
-    setSetupMode('fresh');
-    setStep(2);
+  const completeSetup = () => {
+    logout();
+    toast.success('Setup complete');
+    window.location.replace('/auth/login');
   };
 
-  const handleUseDemo = () => {
-    setSetupMode('demo');
-    setStep(3);
-  };
-
-  const completeSetup = (data: { access_token: string; tenant: Record<string, unknown> }) => {
-    localStorage.setItem('token', data.access_token);
-    localStorage.setItem('tenant', JSON.stringify(data.tenant));
-    loadFromStorage();
-    toast.success(setupMode === 'fresh' ? 'Account created successfully!' : 'Demo data loaded!');
-    router.push('/pos');
-  };
-
-  const handleAdminSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const validateOwner = () => {
+    if (!form.name.trim() || !form.email.trim() || !form.password) {
+      toast.error('Name, email, and password are required');
+      return false;
+    }
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match');
+      return false;
+    }
+    return true;
+  };
+
+  const handleOwnerSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (validateOwner()) setStep(2);
+  };
+
+  const handleCompleteSetup = async () => {
+    if (!validateOwner()) {
+      setStep(1);
       return;
     }
-    if (form.password.length < 8) {
-      toast.error('Password must be at least 8 characters');
-      return;
-    }
+
     setLoading(true);
     try {
-      const { data } = await api.post('/auth/setup/initialize', {
+      await api.post('/auth/setup/initialize', {
         name: form.name,
         email: form.email,
         password: form.password,
-        business_type: form.business_type,
+        business_type: 'restaurant',
         business_name: form.business_name || undefined,
+        setup_profile: profile,
+        service_model: serviceModel,
       });
-      completeSetup(data);
-    } catch (err: unknown) {
-      const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error.response?.data?.error || 'Failed to create account');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleBusinessTypeSubmit = async () => {
-    setLoading(true);
-    try {
-      if (setupMode === 'fresh') {
-        const { data } = await api.post('/auth/setup/initialize', {
-          name: form.name,
-          email: form.email,
-          password: form.password,
-          business_type: form.business_type,
-          business_name: form.business_name || undefined,
-        });
-        completeSetup(data);
-      } else {
-        await api.post('/auth/setup/seed', {
-          business_type: form.business_type,
-          business_name: form.business_name || 'Demo Store',
-          password: 'admin123',
-        });
-        await login('admin@flo.local', 'admin123');
-        toast.success('Demo data loaded!');
-        router.push('/pos');
-      }
+      completeSetup();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
       toast.error(error.response?.data?.error || 'Failed to complete setup');
@@ -128,11 +128,11 @@ export default function SetupPage() {
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-background to-muted px-4 py-12">
-      <div className="w-full max-w-xl">
+      <div className="w-full max-w-2xl">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Flo" width={80} height={52} className="mx-auto mb-4" />
-          <h1 className="text-3xl font-bold">Welcome to Flo</h1>
-          <p className="text-muted-foreground mt-2">Let&apos;s get you set up in a few steps</p>
+          <h1 className="text-3xl font-bold">Welcome to FloCafe</h1>
+          <p className="text-muted-foreground mt-2">Create the owner account and choose the restaurant setup.</p>
         </div>
 
         <div className="flex justify-center gap-2 mb-8">
@@ -151,79 +151,33 @@ export default function SetupPage() {
             {step === 1 && (
               <div className="space-y-6">
                 <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">How would you like to start?</h2>
-                  <p className="text-muted-foreground text-sm">Choose how to set up your store</p>
+                  <h2 className="text-xl font-semibold mb-2">Create Owner Account</h2>
+                  <p className="text-muted-foreground text-sm">This first user gets full owner access on this POS.</p>
                 </div>
 
-                <div className="grid gap-4">
-                  <button
-                    onClick={handleStartFresh}
-                    className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-left group"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Sparkles className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-semibold">Start Fresh</div>
-                      <div className="text-sm text-muted-foreground">Create your account and add your own products</div>
-                    </div>
-                    <ArrowRight className="w-5 h-5 ml-auto text-muted-foreground" />
-                  </button>
-
-                  <button
-                    onClick={handleUseDemo}
-                    className="flex items-center gap-4 p-4 border-2 border-gray-200 rounded-xl hover:border-primary hover:bg-primary/5 transition-all text-left group"
-                  >
-                    <div className="w-12 h-12 rounded-xl bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
-                      <Check className="w-6 h-6 text-primary" />
-                    </div>
-                    <div>
-                      <div className="font-semibold">Load Demo Data</div>
-                      <div className="text-sm text-muted-foreground">Get started quickly with sample products and settings</div>
-                    </div>
-                    <ArrowRight className="w-5 h-5 ml-auto text-muted-foreground" />
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {step === 2 && setupMode === 'fresh' && (
-              <div className="space-y-6">
-                <button
-                  onClick={() => setStep(1)}
-                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                >
-                  <ArrowLeft className="w-4 h-4" /> Back
-                </button>
-
-                <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">Create Admin Account</h2>
-                  <p className="text-muted-foreground text-sm">This account will have full access to your store</p>
-                </div>
-
-                <form onSubmit={handleAdminSubmit} className="space-y-4">
+                <form onSubmit={handleOwnerSubmit} className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="name">Your Name</Label>
+                    <Label htmlFor="name">Owner Name</Label>
                     <Input
                       id="name"
                       value={form.name}
                       onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      placeholder="John Doe"
+                      placeholder="Owner name"
                       required
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="email">Email</Label>
+                    <Label htmlFor="email">Owner Email</Label>
                     <Input
                       id="email"
                       type="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
-                      placeholder="john@store.com"
+                      placeholder="owner@restaurant.com"
                       required
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="password">Password</Label>
                       <Input
@@ -231,7 +185,7 @@ export default function SetupPage() {
                         type="password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        placeholder="Min 8 characters"
+                        placeholder="Enter password"
                         required
                       />
                     </div>
@@ -247,74 +201,123 @@ export default function SetupPage() {
                       />
                     </div>
                   </div>
+                  {passwordsEntered && (
+                    <p className={`text-xs font-medium ${passwordsMatch ? 'text-green-600' : 'text-red-600'}`}>
+                      {passwordsMatch ? 'Passwords match' : 'Passwords do not match'}
+                    </p>
+                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="business_name">Restaurant Name</Label>
+                    <Input
+                      id="business_name"
+                      value={form.business_name}
+                      onChange={(e) => setForm({ ...form, business_name: e.target.value })}
+                      placeholder="Restaurant name"
+                    />
+                  </div>
 
-                  <Button type="submit" disabled={loading} className="w-full" size="lg">
-                    {loading ? 'Creating Account...' : 'Continue'}
+                  <Button type="submit" disabled={!passwordsMatch} className="w-full" size="lg">
+                    Continue <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </form>
               </div>
             )}
 
-            {step === 3 && (
+            {step === 2 && (
               <div className="space-y-6">
-                {setupMode === 'fresh' && (
-                  <button
-                    onClick={() => setStep(2)}
-                    className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-                  >
-                    <ArrowLeft className="w-4 h-4" /> Back
-                  </button>
-                )}
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
 
                 <div className="text-center">
-                  <h2 className="text-xl font-semibold mb-2">What type of store are you setting up?</h2>
-                  <p className="text-muted-foreground text-sm">This helps us customize the experience for you</p>
+                  <h2 className="text-xl font-semibold mb-2">Choose Setup Data</h2>
+                  <p className="text-muted-foreground text-sm">Select how much data should be created on first launch.</p>
                 </div>
 
-                <div className="space-y-3">
-                  {BUSINESS_TYPES.map((bt) => {
-                    const Icon = bt.icon;
-                    const isSelected = form.business_type === bt.type;
+                <div className="grid gap-4">
+                  {SETUP_PROFILES.map((item) => {
+                    const selected = profile === item.value;
+                    const Icon = item.value === 'demo' ? Database : item.value === 'express' ? Sparkles : UtensilsCrossed;
                     return (
                       <button
-                        key={bt.type}
-                        onClick={() => setForm({ ...form, business_type: bt.type as 'retail' | 'restaurant' | 'salon' })}
-                        className={`w-full flex items-center gap-4 p-4 rounded-xl border-2 transition-all text-left ${
-                          isSelected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        key={item.value}
+                        onClick={() => setProfile(item.value)}
+                        className={`p-4 rounded-xl border-2 text-left transition-all ${
+                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
                         }`}
                       >
-                        <div className={`w-12 h-12 rounded-xl ${bt.color} flex items-center justify-center`}>
-                          <Icon className="w-6 h-6 text-white" />
+                        <div className="flex items-start gap-4">
+                          <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center">
+                            <Icon className="w-5 h-5 text-primary" />
+                          </div>
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="font-semibold">{item.label}</span>
+                              {item.badge && (
+                                <span className="rounded-full bg-primary px-2 py-0.5 text-xs text-primary-foreground">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </div>
+                            <div className="text-sm text-muted-foreground mt-1">{item.description}</div>
+                            <div className="text-xs text-muted-foreground mt-2">{item.details}</div>
+                          </div>
+                          {selected && <Check className="w-5 h-5 text-primary" />}
                         </div>
-                        <div className="flex-1">
-                          <div className="font-semibold">{bt.label}</div>
-                          <div className="text-sm text-muted-foreground">{bt.description}</div>
-                        </div>
-                        {isSelected && <Check className="w-5 h-5 text-primary" />}
                       </button>
                     );
                   })}
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="business_name">Store Name (optional)</Label>
-                  <Input
-                    id="business_name"
-                    value={form.business_name}
-                    onChange={(e) => setForm({ ...form, business_name: e.target.value })}
-                    placeholder="My Awesome Store"
-                  />
+                <Button onClick={() => setStep(3)} className="w-full" size="lg">
+                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-6">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+
+                <div className="text-center">
+                  <h2 className="text-xl font-semibold mb-2">Choose Restaurant Flow</h2>
+                  <p className="text-muted-foreground text-sm">FloCafe is restaurant-only. Pick the billing model for this outlet.</p>
                 </div>
 
-                <Button
-                  onClick={handleBusinessTypeSubmit}
-                  disabled={loading}
-                  className="w-full"
-                  size="lg"
-                >
-                  {loading ? (
-                    setupMode === 'fresh' ? 'Creating Account...' : 'Loading Demo Data...'
-                  ) : (
+                <div className="grid gap-4 md:grid-cols-2">
+                  {SERVICE_MODELS.map((item) => {
+                    const selected = serviceModel === item.value;
+                    return (
+                      <button
+                        key={item.value}
+                        onClick={() => setServiceModel(item.value)}
+                        className={`p-5 rounded-xl border-2 text-left transition-all ${
+                          selected ? 'border-primary bg-primary/5' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <div className="font-semibold text-lg">{item.label}</div>
+                            <div className="text-sm text-muted-foreground mt-1">{item.description}</div>
+                            <div className="text-xs text-muted-foreground mt-3">{item.details}</div>
+                          </div>
+                          {selected && <Check className="w-5 h-5 text-primary shrink-0" />}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+
+                <Button onClick={handleCompleteSetup} disabled={loading} className="w-full" size="lg">
+                  {loading ? 'Completing Setup...' : (
                     <>
                       Complete Setup <ArrowRight className="w-4 h-4 ml-2" />
                     </>

@@ -45,7 +45,7 @@ export function getDbHealth(): { ok: boolean; error?: string } {
 }
 
 export function getDbPath(): string {
-  const userDataPath = app.isPackaged ? app.getPath('userData') : path.join(__dirname, '../../');
+  const userDataPath = app.isPackaged ? app.getPath('userData') : path.join(__dirname, '../');
   return path.join(userDataPath, 'flo.db');
 }
 
@@ -627,25 +627,10 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
   },
   {
     version: 11,
-    name: 'seed_default_admin',
+    name: 'first_run_setup_uses_welcome_form',
     up: () => {
-      // Auto-create a default admin on first launch so the app is always
-      // usable without relying on the frontend setup wizard.  The user can
-      // change their password later via Settings → Profile.
-      const count = (db.prepare('SELECT COUNT(*) as c FROM users').get() as { c: number }).c;
-      if (count > 0) return; // users already exist — skip
-
-      const adminId = crypto.randomUUID();
-      const hashedPassword = bcrypt.hashSync('admin123', 10);
-      db.prepare(`
-        INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(adminId, 'Admin', 'admin@flo.local', hashedPassword, 'owner', 1, now(), now());
-
-      // Mark onboarding so the setup wizard is skipped
-      db.prepare(`INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('onboarding_completed', 'true', ?)`).run(now());
-
-      console.log('[DB] Default admin seeded: admin@flo.local / admin123');
+      // Intentionally no-op. Fresh installs must remain uninitialized so the
+      // local welcome form can create the first owner account.
     },
   },
   {
@@ -1033,6 +1018,9 @@ function seedInstallDefaults(): void {
   insert('state_code', '');
   insert('tax_scheme', 'regular');
   insert('billing_type', 'postpaid');
+  insert('tables_required', 'true');
+  insert('service_model', 'finedine');
+  insert('setup_profile', '');
   insert('loyalty_expiry_days', '365');
   insert('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
   insert('cloud_connected', 'false');

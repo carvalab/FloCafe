@@ -375,11 +375,13 @@ export default function SettingsPage() {
   type BusinessForm = {
     businessName: string; countryCode: string; timezone: string; currency: string;
     billingType: 'postpaid' | 'prepaid';
+    tablesRequired: boolean;
     gstin: string; businessAddress: string; businessPhone: string;
     billShowName: boolean; billShowAddress: boolean; billShowPhone: boolean; billShowGstn: boolean;
   };
   const [savedBusiness, setSavedBusiness] = useState<BusinessForm>({
     businessName: '', countryCode: '', timezone: '', currency: '', billingType: 'postpaid',
+    tablesRequired: true,
     gstin: '', businessAddress: '', businessPhone: '',
     billShowName: true, billShowAddress: true, billShowPhone: true, billShowGstn: false,
   });
@@ -446,6 +448,7 @@ export default function SettingsPage() {
         timezone: d.timezone || '',
         currency: d.currency || '',
         billingType: d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid',
+        tablesRequired: typeof d.tables_required === 'boolean' ? d.tables_required : true,
         gstin: d.gstin || '',
         businessAddress: d.business_address || '',
         businessPhone: d.business_phone || '',
@@ -465,6 +468,7 @@ export default function SettingsPage() {
       if (d.business_address) posSettings.setBillAddress(d.business_address);
       if (d.business_phone) posSettings.setBillPhone(d.business_phone);
       posSettings.setBillingType(d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
+      posSettings.setTablesRequired(typeof d.tables_required === 'boolean' ? d.tables_required : true);
     }).catch(() => {});
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -546,6 +550,7 @@ export default function SettingsPage() {
         timezone: form.timezone,
         currency: form.currency,
         billing_type: form.billingType,
+        tables_required: form.tablesRequired,
         gstin: form.gstin,
         business_address: form.businessAddress,
         business_phone: form.businessPhone,
@@ -563,6 +568,7 @@ export default function SettingsPage() {
       posSettings.setBillShowPhone(form.billShowPhone);
       posSettings.setBillShowGstn(form.billShowGstn);
       posSettings.setBillingType(form.billingType);
+      posSettings.setTablesRequired(form.tablesRequired);
       updateCurrentTenant({ currency: form.currency, timezone: form.timezone });
       if (!silent) toast.success('Store details saved');
     } catch {
@@ -730,6 +736,21 @@ export default function SettingsPage() {
                     </select>
                   ) : (
                     <p className="font-medium text-gray-900 capitalize">{form.billingType}</p>
+                  )}
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">Tables Required</label>
+                  {isAdmin ? (
+                    <select
+                      value={form.tablesRequired ? 'yes' : 'no'}
+                      onChange={(e) => setForm((p) => ({ ...p, tablesRequired: e.target.value === 'yes' }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                    >
+                      <option value="yes">Yes – require table for dine-in</option>
+                      <option value="no">No – table selection is optional</option>
+                    </select>
+                  ) : (
+                    <p className="font-medium text-gray-900">{form.tablesRequired ? 'Yes' : 'No'}</p>
                   )}
                 </div>
                 <div>

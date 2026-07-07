@@ -31,7 +31,7 @@ export default function POSPage() {
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
-  const { customerMandatory, autoPrintKot, autoPrintBill, billingType } = usePosSettingsStore();
+  const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, setBillingType, setTablesRequired } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
 
   const [categories, setCategories] = useState<Category[]>([]);
@@ -115,6 +115,16 @@ export default function POSPage() {
     fetchData();
   }, [isRestaurant]);
 
+  useEffect(() => {
+    api.get('/settings/business')
+      .then((res) => {
+        const d = res.data;
+        setBillingType(d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
+        setTablesRequired(typeof d.tables_required === 'boolean' ? d.tables_required : true);
+      })
+      .catch(() => {});
+  }, [setBillingType, setTablesRequired]);
+
   const handleProductClick = (product: Product) => {
     // Always open modal so user can add notes and adjust quantity
     setAddonProduct(product);
@@ -133,7 +143,7 @@ export default function POSPage() {
       setShowCustomerPrompt(true);
       return;
     }
-    if (isRestaurant && cart.orderType === 'dine_in' && !cart.tableId) {
+    if (isRestaurant && cart.orderType === 'dine_in' && tablesRequired && !cart.tableId) {
       setShowTablePicker(true);
       return;
     }

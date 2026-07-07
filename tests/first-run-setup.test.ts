@@ -76,7 +76,7 @@ async function main() {
   }
 
   assert.equal(getCurrentSchemaVersion(), 13, 'fresh database migrates to latest schema');
-  assert.equal(count('users'), 1, 'fresh install auto-seeds default admin');
+  assert.equal(count('users'), 0, 'fresh install starts without users');
   assert.equal(count('categories'), 0, 'fresh install starts with no sample categories');
   assert.equal(count('products'), 0, 'fresh install starts with no sample products');
   assert.equal(count('tables'), 0, 'fresh install starts with no sample tables');
@@ -85,7 +85,7 @@ async function main() {
   assert.match(setting('cloud_pos_hash') || '', /^pos_[a-f0-9]{40}$/, 'fresh install has a POS hash');
   assert.ok((setting('cloud_device_secret') || '').length >= 32, 'fresh install has a local cloud secret');
   assert.equal(count('cloud_sync_outbox'), 0, 'fresh install starts with an empty cloud outbox');
-  console.log('   ✓ fresh database has schema/default settings only');
+  console.log('   ✓ fresh database has schema/default settings only and awaits setup');
 
   const api = express();
   api.use(express.json());
@@ -106,14 +106,39 @@ async function main() {
   try {
     const before = await request(baseUrl, '/setup/status');
     assert.equal(before.status, 200);
-    assert.equal(before.data.needsSetup, false, 'default admin is auto-seeded');
+    assert.equal(before.data.needsSetup, true, 'fresh install needs setup');
     assert.equal(before.data.initialRole, 'owner');
-    console.log('   ✓ setup status reports setup is not needed (admin auto-seeded)');
+    console.log('   ✓ setup status reports setup is needed');
 
-    const adminUser = getDatabase().prepare('SELECT email, role FROM users WHERE email = ?').get('admin@flo.local') as { email: string; role: string };
-    assert.ok(adminUser, 'default admin user exists');
-    assert.equal(adminUser.role, 'owner');
-    console.log('   ✓ default admin user exists with owner role');
+    const first = await request(baseUrl, '/setup/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'First Owner',
+        email: 'owner@example.com',
+        password: 'x',
+        business_type: 'restaurant',
+        business_name: 'First Cafe',
+        setup_profile: 'express',
+        service_model: 'qsr',
+      }),
+    });
+
+    assert.equal(first.status, 200);
+    assert.equal(first.data.user.email, 'owner@example.com');
+    assert.equal(first.data.user.role, 'owner');
+    assert.equal(count('users'), 1, 'setup creates the first owner');
+    assert.equal(setting('business_name'), 'First Cafe');
+    assert.equal(setting('business_type'), 'restaurant');
+    assert.equal(setting('setup_profile'), 'express');
+    assert.equal(setting('service_model'), 'qsr');
+    assert.equal(setting('billing_type'), 'prepaid');
+    assert.equal(setting('tables_required'), 'false');
+    assert.equal(setting('onboarding_completed'), 'true');
+    assert.equal(count('categories'), 2, 'express setup seeds minimal categories');
+    assert.equal(count('products'), 4, 'express setup seeds minimal products');
+    assert.equal(count('tables'), 0, 'qsr express setup does not seed dine-in tables');
+    assert.equal(count('customers'), 0, 'express setup does not seed demo customers');
+    console.log('   ✓ setup endpoint creates owner and applies express QSR setup');
 
     // Setup initialize should be disabled since a user already exists
     const second = await request(baseUrl, '/setup/initialize', {
@@ -121,7 +146,7 @@ async function main() {
       body: JSON.stringify({
         name: 'Second Owner',
         email: 'second@example.com',
-        password: 'secret123',
+        password: 'x',
         business_type: 'restaurant',
       }),
     });

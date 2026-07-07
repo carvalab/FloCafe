@@ -161,7 +161,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
 
     if (variant === 'topbar') {
       return (
-        <div className="flex items-center gap-2 px-3 py-1.5 bg-brand-light rounded-lg min-w-0 w-full">
+        <div className="h-10 flex items-center gap-2 px-3 bg-brand-light rounded-lg min-w-0 w-full">
           <div className="flex-1 min-w-0 flex items-center gap-x-2 flex-wrap">
             <span className="font-semibold text-brand text-sm truncate">{customer.name}</span>
             <span className="text-brand/70 text-xs shrink-0">{customer.phone}</span>
@@ -192,9 +192,8 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   // ── Topbar variant ─────────────────────────────────────────────────────────
   if (variant === 'topbar') {
     return (
-      <div className="space-y-1 w-full min-w-0">
-        {/* Row 1: phone + name + action */}
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="relative w-full min-w-0">
+        <div className="h-10 flex items-center gap-2 min-w-0">
           <input
             type="tel"
             inputMode="tel"
@@ -202,7 +201,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             onChange={handlePhoneChange}
             onFocus={handlePhoneFocus}
             placeholder="Phone"
-            className="w-44 shrink-0 px-3 py-1.5 text-sm border border-amber-400 bg-amber-50 placeholder:text-amber-600/70 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
+            className="h-10 w-44 shrink-0 px-3 text-sm border border-amber-400 bg-amber-50 placeholder:text-amber-600/70 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
           />
           <input
             ref={nameRef}
@@ -214,7 +213,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             }}
             readOnly={!!matched}
             placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
-            className={`w-48 shrink-0 px-3 py-1.5 text-sm border rounded-lg focus:ring-2 outline-none transition-colors duration-150 ${
+            className={`h-10 w-48 shrink-0 px-3 text-sm border rounded-lg focus:ring-2 outline-none transition-colors duration-150 ${
               matched
                 ? 'border-gray-200 bg-gray-50 cursor-pointer focus:ring-brand/20 focus:border-brand'
                 : 'border-indigo-200 bg-indigo-50 placeholder:text-indigo-400/80 focus:ring-indigo-200 focus:border-indigo-400'
@@ -224,7 +223,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
           {matched && (
             <button
               onClick={handleSelectMatched}
-              className="shrink-0 px-2.5 py-1.5 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover whitespace-nowrap"
+              className="h-10 shrink-0 px-3 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover whitespace-nowrap"
             >
               Select
             </button>
@@ -233,26 +232,22 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             <button
               onClick={handleCreate}
               disabled={creating}
-              className="shrink-0 px-2.5 py-1.5 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
+              className="h-10 shrink-0 px-3 bg-brand text-white text-xs rounded-lg hover:bg-brand-hover disabled:opacity-50 whitespace-nowrap"
             >
               {creating ? '…' : 'Add'}
             </button>
           )}
         </div>
 
-        {/* Row 2: status + tags — always rendered to reserve height and prevent layout shift */}
-        <div className="h-4 flex items-center flex-wrap gap-x-2 gap-y-1 overflow-hidden">
-          {searched && (
-            matched ? (
-              <>
-                <span className="text-xs text-green-600 font-medium">Customer found</span>
-                {matched.tag_counts && <TagBadges counts={matched.tag_counts} />}
-              </>
+        {searched && (
+          <div className="absolute left-0 top-full mt-1 z-20 rounded-md border border-gray-100 bg-white px-2 py-1 shadow-sm">
+            {matched ? (
+              <span className="text-xs text-green-600 font-medium">Customer found</span>
             ) : (
-              <span className="text-xs text-red-500 font-medium">New customer — enter name above</span>
-            )
-          )}
-        </div>
+              <span className="text-xs text-red-500 font-medium">New customer — enter name</span>
+            )}
+          </div>
+        )}
       </div>
     );
   }
