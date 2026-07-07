@@ -21,7 +21,7 @@ import CustomerSearch from '@/components/pos/CustomerSearch';
 import TablePickerModal from '@/components/pos/TablePickerModal';
 import TableCheckoutModal from '@/components/pos/TableCheckoutModal';
 import PaymentModal from '@/components/pos/PaymentModal';
-import PrepaidCheckoutModal from '@/components/pos/PrepaidCheckoutModal';
+import PrepaidCheckoutModal, { type PrepaidPayment, type PrepaidDiscount } from '@/components/pos/PrepaidCheckoutModal';
 import PosTopbar from '@/components/pos/PosTopbar';
 import { usePrinterStore } from '@/hooks/usePrinter';
 import { getCurrencySymbol } from '@/lib/countries';
@@ -208,7 +208,7 @@ export default function POSPage() {
   };
 
   // Handle prepaid checkout - place order and pay in one step
-  const handlePrepaidCheckout = async (method: string, amount: number) => {
+  const handlePrepaidCheckout = async (payments: PrepaidPayment[], walletAmount: number, discount: PrepaidDiscount | null) => {
     const isPrepaidCheckout = shouldTakePaymentNow;
     setShowPrepaidCheckout(false);
     setSubmitting(true);
@@ -229,15 +229,38 @@ export default function POSPage() {
           special_instructions: item.special_instructions || null,
         })),
       });
+      const orderId = orderData.order.id;
 
-      // Step 2: Generate bill
-      const { data: billData } = await api.post('/bills/generate', { order_id: orderData.order.id });
+      // Step 2: Apply discount to the order before the bill is generated, so the
+      // bill picks up the already-discounted totals (tax recalculated on net payable amount).
+      if (discount && discount.value > 0) {
+        await api.patch(`/orders/${orderId}/discount`, {
+          discount_type: discount.type,
+          discount_value: discount.value,
+          discount_reason: discount.reason,
+          override_pin: discount.override_pin,
+        });
+      }
 
-      // Step 3: Record payment
-      const paymentRes = await api.post(`/bills/${billData.bill.id}/payment`, { amount: billData.bill.total, method });
-      const paidBill = (paymentRes.data?.bill || billData.bill) as Bill;
+      // Step 3: Generate bill
+      const { data: billData } = await api.post('/bills/generate', { order_id: orderId });
+      const billId = billData.bill.id;
 
-      const pointsEarned: number = paymentRes.data?.loyaltyPointsEarned || 0;
+      // Step 4: Record payment(s) — cash/card/upi splits, then wallet redemption
+      let paidBill: Bill = billData.bill;
+      let pointsEarned = 0;
+      for (const p of payments) {
+        if (!p.amount || p.amount <= 0) continue;
+        const res = await api.post(`/bills/${billId}/payment`, { amount: p.amount, method: p.method, customer_id: cart.customerId });
+        paidBill = res.data?.bill || paidBill;
+        if (res.data?.loyaltyPointsEarned > 0) pointsEarned = res.data.loyaltyPointsEarned;
+      }
+      if (walletAmount > 0) {
+        const res = await api.post(`/bills/${billId}/payment`, { amount: walletAmount, method: 'wallet', customer_id: cart.customerId });
+        paidBill = res.data?.bill || paidBill;
+        if (res.data?.loyaltyPointsEarned > 0) pointsEarned = res.data.loyaltyPointsEarned;
+      }
+
       const successMsg = pointsEarned > 0
         ? `Order #${orderData.order.order_number} paid! ${pointsEarned} loyalty points credited.`
         : `Order #${orderData.order.order_number} paid!`;

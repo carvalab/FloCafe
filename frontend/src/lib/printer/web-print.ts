@@ -7,6 +7,7 @@
 
 import type { Bill, Tenant } from '@/lib/types';
 import toast from 'react-hot-toast';
+import { normalizeCurrencyToAscii } from './unicode';
 
 export type PaperSize = 'a4' | 'a5' | 'thermal58' | 'thermal80';
 
@@ -18,6 +19,7 @@ export interface WebPrintOptions {
   phone?: string;
   footerNote?: string;
   businessName?: string;
+  useUnicode?: boolean;
 }
 
 /**
@@ -28,11 +30,9 @@ export function printWebBill(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: WebPrintOptions = {}
 ): void {
-  const { paperSize = 'a4', includeGst = false, gstin, address, phone } = opts;
-  const currency = tenant.currency ?? '₹';
-  const order = bill.order;
+  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false } = opts;
 
-  const html = generateBillHtml(bill, tenant, { paperSize, includeGst, gstin, address, phone });
+  const html = generateBillHtml(bill, tenant, { paperSize, includeGst, gstin, address, phone, footerNote, businessName, useUnicode });
 
   // Create a new window with the bill HTML
   const printWindow = window.open('', '_blank', 'width=800,height=600');
@@ -61,9 +61,10 @@ export function generateBillHtml(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: WebPrintOptions = {}
 ): string {
-  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName } = opts;
+  const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false } = opts;
   const displayName = businessName ?? tenant.business_name;
-  const currency = tenant.currency ?? '₹';
+  const rawCurrency = tenant.currency ?? '₹';
+  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const order = bill.order;
 
   const styles = getPaperStyles(paperSize);

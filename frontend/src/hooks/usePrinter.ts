@@ -123,6 +123,7 @@ export const usePrinterStore = create<PrinterState>()(
               phone: billShowPhone && billPhone ? billPhone : undefined,
               footerNote: billFooterMessage || undefined,
               businessName: billShowName ? tenant.business_name : undefined,
+              useUnicode: printerUseUnicode,
             });
             return;
           }
