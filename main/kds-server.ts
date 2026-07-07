@@ -15,6 +15,23 @@ let kdsServer: http.Server | null = null;
 const KDS_PORT = parseInt(process.env.KDS_PORT || '3002', 10);
 let activeKdsPort = KDS_PORT;
 
+type KdsRequestUser = {
+  userId: string;
+  email?: string;
+  role: string;
+  categoryIds: string[];
+};
+
+function parseCategoryIds(value: unknown): string[] {
+  if (!value || typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? parsed.map(String) : [];
+  } catch {
+    return [];
+  }
+}
+
 export function isKdsServerRunning(): boolean {
   return kdsServer !== null;
 }
@@ -85,8 +102,21 @@ export function startKdsServer(): Promise<void> {
 
       const token = authHeader.split(' ')[1];
       try {
-        const decoded = jwt.verify(token, getJWTSecret());
-        (req as any).user = decoded;
+        const decoded = jwt.verify(token, getJWTSecret()) as any;
+        const db = getDatabase();
+        const user = db.prepare('SELECT id, email, role, category_ids FROM users WHERE id = ? AND is_active = 1').get(decoded.userId) as any;
+        if (!user) {
+          return res.status(401).json({ error: 'Invalid token' });
+        }
+        if (!['chef', 'manager', 'owner'].includes(user.role)) {
+          return res.status(403).json({ error: 'Access denied. Only kitchen staff allowed.' });
+        }
+        (req as any).user = {
+          userId: user.id,
+          email: user.email,
+          role: user.role,
+          categoryIds: parseCategoryIds(user.category_ids),
+        } satisfies KdsRequestUser;
         next();
       } catch (error) {
         return res.status(401).json({ error: 'Invalid token' });
@@ -151,7 +181,7 @@ export function startKdsServer(): Promise<void> {
     app.get('/api/kds/orders', requireAuth, (req: Request, res: Response) => {
       try {
         const db = getDatabase();
-        const categoryIds = req.query.category_ids ? String(req.query.category_ids).split(',') : null;
+        const categoryIds = ((req as any).user as KdsRequestUser).categoryIds;
 
         let query = `
           SELECT DISTINCT o.*, t.number as table_number
@@ -169,7 +199,7 @@ export function startKdsServer(): Promise<void> {
           let items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson);
 
           // Filter by category if provided
-          if (categoryIds && categoryIds.length > 0 && categoryIds[0] !== '') {
+          if (categoryIds.length > 0) {
             const productIds = db.prepare(`
               SELECT id FROM products WHERE category_id IN (${categoryIds.map(() => '?').join(',')})
             `).all(...categoryIds).map((p: any) => p.id);
@@ -201,9 +231,18 @@ export function startKdsServer(): Promise<void> {
         }
 
         const db = getDatabase();
-        const item = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.id) as any;
+        const item = db.prepare(`
+          SELECT oi.*, p.category_id
+          FROM order_items oi
+          LEFT JOIN products p ON p.id = oi.product_id
+          WHERE oi.id = ?
+        `).get(req.params.id) as any;
         if (!item) {
           return res.status(404).json({ error: 'Order item not found' });
+        }
+        const categoryIds = ((req as any).user as KdsRequestUser).categoryIds;
+        if (categoryIds.length > 0 && !categoryIds.includes(String(item.category_id))) {
+          return res.status(403).json({ error: 'Not authorized to update this item' });
         }
 
         db.prepare("UPDATE order_items SET status = ?, updated_at = datetime('now') WHERE id = ?")

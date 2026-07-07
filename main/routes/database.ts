@@ -137,7 +137,7 @@ function getTableColumns(db: Database.Database, tableName: string): string[] {
   }
 }
 
-router.get('/backup', async (req: Request, res: Response) => {
+router.get('/backup', requireRole('owner'), async (req: Request, res: Response) => {
   try {
     const { path: backupPath, schemaVersion } = await createBackup();
     res.json({ 
@@ -165,7 +165,7 @@ router.get('/download', requireRole('owner'), (req: Request, res: Response) => {
   }
 });
 
-router.get('/tables', (req: Request, res: Response) => {
+router.get('/tables', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const tables = db.prepare(`

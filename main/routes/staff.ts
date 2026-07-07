@@ -14,10 +14,10 @@ const router = Router();
 
 // ── List ──────────────────────────────────────────────────────────────────────
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    let query = 'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE 1=1';
+    let query = 'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE 1=1';
     const params: any[] = [];
 
     if (req.query.role) {
@@ -42,11 +42,11 @@ router.get('/', (req: Request, res: Response) => {
 
 // ── Get one ───────────────────────────────────────────────────────────────────
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const member = db.prepare(
-      'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(req.params.id) as any;
 
     if (!member) {
@@ -109,7 +109,7 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     `).run(id, name, email || null, hashedPassword, role, hashedPin, now(), now());
 
     const member = db.prepare(
-      'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(id);
 
     res.status(201).json({ staff: member });
@@ -175,7 +175,7 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     );
 
     const updated = db.prepare(
-      'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(req.params.id);
 
     res.json({ staff: updated });
@@ -220,7 +220,7 @@ router.post('/:id/deactivate', requireRole('owner', 'manager'), (req: Request, r
 
     db.prepare('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     const updated = db.prepare(
-      'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(req.params.id);
     res.json({ staff: updated });
   } catch (error: any) {
@@ -237,7 +237,7 @@ router.post('/:id/reactivate', requireRole('owner', 'manager'), (req: Request, r
 
     db.prepare('UPDATE users SET is_active = 1, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     const updated = db.prepare(
-      'SELECT id, name, email, role, pin_hash, is_active, created_at, updated_at FROM users WHERE id = ?'
+      'SELECT id, name, email, role, is_active, created_at, updated_at FROM users WHERE id = ?'
     ).get(req.params.id);
     res.json({ staff: updated });
   } catch (error: any) {

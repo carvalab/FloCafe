@@ -9,6 +9,7 @@ const router = Router();
 const JWT_EXPIRES_IN = '24h';
 const INITIAL_ADMIN_ROLE = 'owner';
 const VALID_BUSINESS_TYPES = new Set(['retail', 'restaurant', 'salon']);
+const LOCAL_SETUP_HOSTS = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 
 /**
  * Lazy-loaded JWT secret. On first access, reads from the settings table.
@@ -106,6 +107,17 @@ function currencySymbolFor(currency: string): string {
     case 'GBP': return '£';
     default: return currency;
   }
+}
+
+function isLocalSetupRequest(req: Request): boolean {
+  const remoteAddress = req.socket.remoteAddress || req.ip || '';
+  return LOCAL_SETUP_HOSTS.has(remoteAddress) || remoteAddress.startsWith('127.');
+}
+
+function requireLocalSetup(req: Request, res: Response): boolean {
+  if (isLocalSetupRequest(req)) return true;
+  res.status(403).json({ error: 'Initial setup must be completed on the POS computer.' });
+  return false;
 }
 
 // ── Rate Limiting (In-Memory for local offline apps) ──────────────────────────
@@ -354,6 +366,8 @@ router.get('/setup/status', (_req: Request, res: Response) => {
 
 router.post('/setup/initialize', (req: Request, res: Response) => {
   try {
+    if (!requireLocalSetup(req, res)) return;
+
     const {
       name,
       password,
@@ -475,6 +489,8 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
 router.post('/setup/seed', (req: Request, res: Response) => {
   try {
+    if (!requireLocalSetup(req, res)) return;
+
     const { business_type, business_name, password } = req.body;
     const normalizedBusinessType = String(business_type || 'restaurant').trim();
 

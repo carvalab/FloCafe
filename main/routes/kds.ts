@@ -2,8 +2,11 @@ import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
+
+router.use(requireRole('chef', 'manager', 'owner'));
 
 router.get('/orders', (req: Request, res: Response) => {
   try {
@@ -57,7 +60,7 @@ router.get('/pairing', (req: Request, res: Response) => {
   }
 });
 
-router.post('/pairing', (req: Request, res: Response) => {
+router.post('/pairing', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const { station_id } = req.body;
 
