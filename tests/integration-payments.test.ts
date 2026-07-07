@@ -117,12 +117,11 @@ async function main() {
     // Disable loyalty so cashback isn't credited during payment —
     // this test verifies wallet balance depletion, not loyalty earn
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
-    // Set redemption rate to 1 so 600 points = ₹600
-    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '1', ?)").run(now());
 
-    // Give customer ₹600 wallet balance — enough for first order (₹500 + tax ≈ ₹525)
+    // Redemption rate is fixed at 100 points = ₹1 (see LOYALTY_REDEMPTION_RATE in bills.ts).
+    // Give customer ₹600 wallet balance (60000 points) — enough for first order (₹500 + tax ≈ ₹525)
     // but NOT enough for second order (₹200 + tax ≈ ₹210)
-    seedWalletCredit(db, 'cust-wallet', 600);
+    seedWalletCredit(db, 'cust-wallet', 60000);
 
     // Create first order (₹500)
     const orderB1 = await api(baseUrl, '/api/orders', {
@@ -209,7 +208,6 @@ async function main() {
 
     // Enable loyalty
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
-    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_points_per_currency', '1', ?)").run(now());
 
     // Create order WITHOUT customer_id
     const orderD = await api(baseUrl, '/api/orders', {
@@ -296,9 +294,8 @@ async function main() {
     // ═══════════════════════════════════════════════════════════════════
     console.log('\n─── Scenario G: Wallet Balance After Split ───');
 
-    // Keep loyalty disabled, set redemption rate to 100
+    // Keep loyalty disabled (redemption rate is fixed at 100 points = ₹1)
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
-    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '100', ?)").run(now());
 
     seedCustomer(db, 'cust-split', 'Split Payment Customer', '9999999999');
     // Give 100000 points (₹1000 at 100:1 — plenty for half of ₹525 bill)

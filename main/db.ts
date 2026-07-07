@@ -657,6 +657,32 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       db.exec(`UPDATE tables SET id = 'tbl-' || id WHERE typeof(id) = 'integer'`);
     },
   },
+  {
+    version: 14,
+    name: 'simplify_loyalty_settings',
+    up: () => {
+      // Loyalty program is now a single on/off switch — earning rate comes from
+      // each product's own cb_percent, and redemption uses a fixed in-code rate.
+      // Drop the now-unused tuning settings; keep only loyalty_enabled.
+      db.exec(`
+        DELETE FROM settings WHERE key IN (
+          'loyalty_points_per_currency',
+          'loyalty_redemption_rate',
+          'loyalty_max_balance_enabled',
+          'loyalty_max_balance_points',
+          'loyalty_expiry_enabled',
+          'loyalty_expiry_months',
+          'loyalty_min_redemption',
+          'loyalty_max_redemption_percentage',
+          'loyalty_expiry_days'
+        )
+      `);
+      const customerCols = db.prepare(`PRAGMA table_info(customers)`).all() as { name: string }[];
+      if (customerCols.some((c) => c.name === 'loyalty_points')) {
+        db.exec(`ALTER TABLE customers DROP COLUMN loyalty_points`);
+      }
+    },
+  },
 ];
 
 function runMigrations(): void {
@@ -792,7 +818,6 @@ function createSchema(): void {
       phone TEXT,
       country_code TEXT DEFAULT '+91',
       address TEXT,
-      loyalty_points INTEGER DEFAULT 0,
       notes TEXT,
       tag_counts TEXT DEFAULT NULL,
       is_active INTEGER DEFAULT 1,
@@ -1021,7 +1046,6 @@ function seedInstallDefaults(): void {
   insert('tables_required', 'true');
   insert('service_model', 'finedine');
   insert('setup_profile', '');
-  insert('loyalty_expiry_days', '365');
   insert('cloud_server_url', DEFAULT_CLOUD_SERVER_URL);
   insert('cloud_connected', 'false');
   insert('cloud_sync_enabled', '0');

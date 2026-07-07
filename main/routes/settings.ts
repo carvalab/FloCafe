@@ -82,9 +82,6 @@ function taxShape(s: Record<string, string>) {
     tax_scheme: s.tax_scheme || 'regular',
     country: s.country || 'IN',
     loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
-    loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
-    loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
-    loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
   };
 }
 
@@ -143,13 +140,6 @@ router.get('/loyalty', (req: Request, res: Response) => {
     const s = getAllSettings(getDatabase());
     res.json({
       loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
-      loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
-      loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
-      loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
-      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === 'true' || s.loyalty_max_balance_enabled === '1',
-      loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
-      loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
-      loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -158,37 +148,12 @@ router.get('/loyalty', (req: Request, res: Response) => {
 
 router.put('/loyalty', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
-    const {
-      loyalty_enabled,
-      loyalty_expiry_months,
-      loyalty_points_per_currency,
-      loyalty_redemption_rate,
-      loyalty_max_balance_enabled,
-      loyalty_max_balance_points,
-      loyalty_min_redemption,
-      loyalty_max_redemption_percentage,
-    } = req.body;
+    const { loyalty_enabled } = req.body;
     const db = getDatabase();
-    upsertSettings(db, {
-      loyalty_enabled,
-      loyalty_expiry_months,
-      loyalty_points_per_currency,
-      loyalty_redemption_rate,
-      loyalty_max_balance_enabled,
-      loyalty_max_balance_points,
-      loyalty_min_redemption,
-      loyalty_max_redemption_percentage,
-    });
+    upsertSettings(db, { loyalty_enabled });
     const s = getAllSettings(db);
     res.json({
       loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
-      loyalty_expiry_months: parseInt(s.loyalty_expiry_months || '6'),
-      loyalty_points_per_currency: parseFloat(s.loyalty_points_per_currency || '1'),
-      loyalty_redemption_rate: parseFloat(s.loyalty_redemption_rate || '100'),
-      loyalty_max_balance_enabled: s.loyalty_max_balance_enabled === 'true' || s.loyalty_max_balance_enabled === '1',
-      loyalty_max_balance_points: parseInt(s.loyalty_max_balance_points || '10000'),
-      loyalty_min_redemption: parseInt(s.loyalty_min_redemption || '100'),
-      loyalty_max_redemption_percentage: parseInt(s.loyalty_max_redemption_percentage || '50'),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -334,8 +299,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'billing_type', 'tables_required', 'bill_show_name', 'bill_show_address',
   'bill_show_phone', 'bill_show_gstn',
   'tax_scheme',
-  'loyalty_enabled', 'loyalty_expiry_months', 'loyalty_points_per_currency', 'loyalty_redemption_rate',
-  'loyalty_max_balance_enabled', 'loyalty_max_balance_points', 'loyalty_min_redemption', 'loyalty_max_redemption_percentage',
+  'loyalty_enabled',
   'printer_method', 'paper_size', 'bill_template',
 ]);
 

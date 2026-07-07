@@ -7,6 +7,9 @@ import { requireRole } from '../middleware/security';
 
 const router = Router();
 
+// Fixed conversion rate for redeeming loyalty wallet points as payment (points per 1 currency unit).
+const LOYALTY_REDEMPTION_RATE = 100;
+
 // Rate limiting for PIN validation (simple in-memory)
 const pinAttempts = new Map<string, { count: number; resetAt: number }>();
 const PIN_MAX_ATTEMPTS = 5;
@@ -205,12 +208,6 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
 
     // Pre-compute cashback eligibility (safe to read order items outside txn — they don't change)
     let loyaltyCashbackToCredit = 0;
-    let loyaltyExpiresAt: string | null = null;
-    // Read redemption rate always — needed for wallet debits even when loyalty earning is disabled
-    const redemptionRateRow = (db.prepare(
-      `SELECT value FROM settings WHERE key = 'loyalty_redemption_rate'`
-    ).get() as any)?.value;
-    let loyaltyRedemptionRate = parseFloat(redemptionRateRow || '100'); // default: 100 points = 1 currency
     {
       const tempBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
       if (tempBill && tempBill.payment_status !== 'paid') {
@@ -219,25 +216,10 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
           `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
         ).get() as any)?.value;
         if ((loyaltySetting === 'true' || loyaltySetting === '1') && effectiveCustomerId) {
-          const expiryRow = (db.prepare(
-            `SELECT value FROM settings WHERE key = 'loyalty_expiry_months'`
-          ).get() as any)?.value;
-          const expiryMonths = parseInt(expiryRow || '6');
-          const expiryDays = expiryMonths * 30;
-          const expires = new Date();
-          expires.setDate(expires.getDate() + expiryDays);
-          loyaltyExpiresAt = expires.toISOString().slice(0, 19).replace('T', ' ');
-
           // BUG #20 FIX: Calculate cashback on discounted subtotal (proportional)
           const order = db.prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?').get(tempBill.order_id) as any;
           const orderDiscount = order?.discount_amount || 0;
           const orderSubtotal = order?.subtotal || 0;
-
-          // Read global earning rate — used as fallback when product cb_percent is 0
-          const pointsPerCurrencyRow = (db.prepare(
-            `SELECT value FROM settings WHERE key = 'loyalty_points_per_currency'`
-          ).get() as any)?.value;
-          const globalPointsPerCurrency = parseFloat(pointsPerCurrencyRow || '1');
 
           const items = db.prepare(`
             SELECT oi.subtotal, p.cb_percent
@@ -252,11 +234,9 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
               const itemDiscountShare = orderDiscount * (item.subtotal / orderSubtotal);
               effectiveSubtotal = Math.max(0, item.subtotal - itemDiscountShare);
             }
-            // Use per-product cb_percent if set, otherwise fall back to global earning rate
+            // Points earned come solely from each item's own cashback percentage
             if (item.cb_percent > 0) {
               loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * item.cb_percent / 100);
-            } else {
-              loyaltyCashbackToCredit += Math.floor(effectiveSubtotal * globalPointsPerCurrency);
             }
           }
         }
@@ -328,7 +308,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
       if (method === 'wallet') {
         // Convert currency amount to points using redemption rate
         // e.g., if redemption_rate=100 and customer pays ₹50, debit 5000 points
-        const pointsToDebit = Math.ceil(paidAmount * loyaltyRedemptionRate);
+        const pointsToDebit = Math.ceil(paidAmount * LOYALTY_REDEMPTION_RATE);
 
         // Check wallet balance INSIDE transaction to prevent double-spend
         const credits = db.prepare(`
@@ -341,7 +321,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
         `).get(bill.customer_id) as { total: number };
         const walletBalance = Math.max(0, credits.total - debits.total);
         if (walletBalance < pointsToDebit) {
-          const availableCurrency = Math.floor(walletBalance / loyaltyRedemptionRate);
+          const availableCurrency = Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE);
           throw Object.assign(new Error(`Insufficient wallet balance. Available: ${availableCurrency} (${walletBalance} points), Required: ${paidAmount}`), { statusCode: 400 });
         }
 
@@ -395,12 +375,12 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
             }
             if (finalCashback > 0) {
               db.prepare(`
-                INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, expires_at, created_at, updated_at)
-                VALUES (?, ?, 'credit', ?, ?, ?, ?, ?)
+                INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, created_at, updated_at)
+                VALUES (?, ?, 'credit', ?, ?, ?, ?)
               `).run(
                 effectiveCustomerId, bill.id, finalCashback,
                 `Cashback on bill ${bill.bill_number}`,
-                loyaltyExpiresAt, now(), now()
+                now(), now()
               );
               actualLoyaltyPointsEarned = finalCashback;
             }

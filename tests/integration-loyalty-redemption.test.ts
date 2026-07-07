@@ -44,17 +44,13 @@ async function main() {
 
   const db = initTestDb();
 
-  // Enable loyalty with specific rates
-  // Earning: 1 point per currency unit (default)
-  // Redemption: 100 points = 1 currency unit (1% return)
+  // Enable loyalty. Earning comes solely from each product's cb_percent;
+  // redemption uses the fixed in-code rate (100 points = 1 currency unit).
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_points_per_currency', '1', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '100', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_expiry_months', '6', ?)").run(now());
 
   const { authHeader } = seedOwnerUser(db);
   seedCategory(db, 'cat-redeem', 'Redemption Test Menu');
-  seedProduct(db, 'prod-redeem-1', 'cat-redeem', 'Coffee', 100, { cb_percent: 0 }); // Uses global rate
+  seedProduct(db, 'prod-redeem-1', 'cat-redeem', 'Coffee', 100, { cb_percent: 0 }); // No cashback
   seedProduct(db, 'prod-redeem-2', 'cat-redeem', 'Sandwich', 200, { cb_percent: 5 }); // 5% cashback
   seedCustomer(db, 'cust-redeem', 'Redemption Customer', '1111111111');
   seedCustomer(db, 'cust-redeem-2', 'Redemption Customer 2', '2222222222');
@@ -223,7 +219,7 @@ async function main() {
     // Give customer 50000 points (worth ₹500 at 100:1 rate — enough for any bill)
     seedWalletCredit(db, 'cust-redeem', 50000);
 
-    // Create order for ₹50 (Coffee, global rate 1pt/currency)
+    // Create order for ₹100 (Coffee, cb_percent=0 — would earn nothing anyway)
     const order4 = await api(baseUrl, '/api/orders', {
       method: 'POST',
       body: {
@@ -264,13 +260,13 @@ async function main() {
     // Give customer 50000 points (worth ₹500 at 100:1 rate)
     seedWalletCredit(db, 'cust-redeem-3', 50000);
 
-    // Create order for ₹100
+    // Create order for ₹200 (Sandwich, 5% cashback)
     const order5 = await api(baseUrl, '/api/orders', {
       method: 'POST',
       body: {
         type: 'takeaway',
         customer_id: 'cust-redeem-3',
-        items: [{ product_id: 'prod-redeem-1', quantity: 1 }],
+        items: [{ product_id: 'prod-redeem-2', quantity: 1 }],
       },
       headers: authHeader,
     });
@@ -301,9 +297,9 @@ async function main() {
     assertEqual(pay5Cash.status, 200, 'cash payment accepted');
 
     // Cashback: proportional to cash-paid portion
-    // Full cashback: 1 × ₹100 = 100 points (global rate on subtotal)
+    // Full cashback: 5% of ₹200 (subtotal) = 10 points
     // Cash-paid proportion: cashPay5 / bill5Total
-    const expectedCashback5 = Math.floor(100 * (cashPay5 / bill5Total));
+    const expectedCashback5 = Math.floor(10 * (cashPay5 / bill5Total));
     const creditEntry5 = db.prepare(
       "SELECT amount FROM loyalty_ledger WHERE customer_id = 'cust-redeem-3' AND type = 'credit' AND bill_id = ?"
     ).get(bill5.data.bill.id) as any;
@@ -342,7 +338,6 @@ async function main() {
 
     // Disable loyalty earning (but wallet should still work for existing points)
     db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'false', ?)").run(now());
-    db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_redemption_rate', '100', ?)").run(now());
 
     seedCustomer(db, 'cust-redeem-5', 'Disabled Loyalty Customer', '5555555555');
     seedWalletCredit(db, 'cust-redeem-5', 50000); // 50000 points = ₹500 (enough for bill with tax)

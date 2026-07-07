@@ -29,6 +29,10 @@ interface Payment {
   amount: string;
 }
 
+// Fixed conversion rate for redeeming loyalty wallet points as payment (points per 1 currency unit).
+// Must match LOYALTY_REDEMPTION_RATE in main/routes/bills.ts.
+const LOYALTY_REDEMPTION_RATE = 100;
+
 export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUpdate }: Props) {
   const remaining = Number(bill.balance);
   const cartCustomerId = useCartStore((s) => s.customerId);
@@ -51,11 +55,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [discountApplied, setDiscountApplied] = useState(false);
   const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
   const [discountPin, setDiscountPin] = useState('');
-  const [loyaltySettings, setLoyaltySettings] = useState<{
-    loyalty_enabled: boolean;
-    loyalty_points_per_currency: number;
-    loyalty_redemption_rate: number;
-  } | null>(null);
+  const [loyaltySettings, setLoyaltySettings] = useState<{ loyalty_enabled: boolean } | null>(null);
 
   // Sync state with active bill discount on load or update
   useEffect(() => {
@@ -179,7 +179,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     }
     // Validate wallet amount against available balance (convert currency to points for comparison)
     if (walletAmt > 0 && walletBalance !== null) {
-      const redemptionRate = loyaltySettings?.loyalty_redemption_rate || 100;
+      const redemptionRate = LOYALTY_REDEMPTION_RATE;
       const walletPointsRequired = walletAmt * redemptionRate;
       if (walletPointsRequired > walletBalance) {
         const maxCurrency = Math.floor(walletBalance / redemptionRate);
@@ -306,7 +306,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 <span className="text-gray-700 font-medium">Loyalty</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)))})`
+                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE)))})`
                     : '…'}
                 </span>
                 {nextExpiry && (
@@ -486,7 +486,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)))})`
+                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE)))})`
                     : 'No balance'}
                 </span>
               </div>
@@ -499,7 +499,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                     onChange={(e) => {
                       const v = e.target.value;
                       // Max is wallet points / redemption rate (converted to currency), capped at remaining
-                      const maxWalletCurrency = Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100));
+                      const maxWalletCurrency = Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE));
                       const max = Math.min(maxWalletCurrency, remaining);
                       const clamped = parseFloat(v) > max ? max.toFixed(2) : v;
                       setWalletAmount(clamped);
@@ -509,11 +509,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                         i === 0 ? { ...p, amount: Math.max(0, remaining - walletUsed).toFixed(2) } : p
                       ));
                     }}
-                    placeholder={`0 – ${Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100))}`}
+                    placeholder={`0 – ${Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))}`}
                     className="flex-1 px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                     step="0.01"
                     min="0"
-                    max={Math.min(Math.floor(walletBalance / (loyaltySettings?.loyalty_redemption_rate || 100)), remaining)}
+                    max={Math.min(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE)), remaining)}
                   />
                 </div>
               )}

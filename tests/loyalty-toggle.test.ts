@@ -1,11 +1,9 @@
 /**
  * Loyalty Toggle Tests
  *
- * Verifies that loyalty settings exist in the database after migration.
- *
- * NOTE: The PATCH /api/orders/:id/loyalty endpoint is fully tested in
- * integration-loyalty.test.ts. This file only tests the DB migration
- * seeded the correct default values.
+ * Verifies that the loyalty program is a single on/off setting after migration —
+ * the old tuning settings (earning rate, redemption rate, expiry, balance cap, etc.)
+ * are cleaned up and no longer present.
  *
  * Usage: node tests/run-electron-node-test.cjs tests/loyalty-toggle.test.ts
  */
@@ -27,19 +25,17 @@ const {
   assert, assertEqual,
 } = require('./helpers/test-setup');
 
-// ── Expected loyalty settings ─────────────────────────────────────────────────
-
-const EXPECTED_LOYALTY_SETTINGS: Record<string, string> = {
-  loyalty_enabled: 'true',
-  loyalty_points_per_currency: '1',
-  loyalty_redemption_rate: '100',
-  loyalty_max_balance_enabled: '0',
-  loyalty_max_balance_points: '10000',
-  loyalty_expiry_enabled: '0',
-  loyalty_expiry_months: '6',
-  loyalty_min_redemption: '100',
-  loyalty_max_redemption_percentage: '50',
-};
+const REMOVED_LOYALTY_SETTINGS = [
+  'loyalty_points_per_currency',
+  'loyalty_redemption_rate',
+  'loyalty_max_balance_enabled',
+  'loyalty_max_balance_points',
+  'loyalty_expiry_enabled',
+  'loyalty_expiry_months',
+  'loyalty_min_redemption',
+  'loyalty_max_redemption_percentage',
+  'loyalty_expiry_days',
+];
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -50,20 +46,23 @@ async function main() {
   const db = initTestDb();
 
   try {
-    // ── Test: Loyalty settings exist in database ──────────────────────
-    console.log('\n1. Loyalty settings exist in database with correct defaults');
-    for (const [key, expectedValue] of Object.entries(EXPECTED_LOYALTY_SETTINGS)) {
-      const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as any;
-      assert(row !== undefined, `setting "${key}" exists`);
-      if (row) {
-        assertEqual(row.value, expectedValue, `setting "${key}" = "${expectedValue}"`);
-      }
+    // ── Test: loyalty_enabled exists with default ──────────────────────
+    console.log('\n1. loyalty_enabled setting exists');
+    const row = db.prepare("SELECT value FROM settings WHERE key = 'loyalty_enabled'").get() as any;
+    assert(row !== undefined, 'setting "loyalty_enabled" exists');
+    if (row) assertEqual(row.value, 'true', 'setting "loyalty_enabled" = "true"');
+
+    // ── Test: retired tuning settings are gone ─────────────────────────
+    console.log('\n2. Retired loyalty tuning settings are removed');
+    for (const key of REMOVED_LOYALTY_SETTINGS) {
+      const removed = db.prepare('SELECT value FROM settings WHERE key = ?').get(key);
+      assert(removed === undefined, `setting "${key}" no longer present`);
     }
 
-    // ── Test: All loyalty settings present ─────────────────────────────
-    console.log('\n2. All loyalty settings present');
-    const count = db.prepare("SELECT COUNT(*) as cnt FROM settings WHERE key LIKE 'loyalty_%'").get() as any;
-    assert(count?.cnt >= 9, `at least 9 loyalty_* settings (got ${count?.cnt})`);
+    // ── Test: customers.loyalty_points column dropped ──────────────────
+    console.log('\n3. customers.loyalty_points column removed');
+    const cols = db.prepare('PRAGMA table_info(customers)').all() as { name: string }[];
+    assert(!cols.some((c) => c.name === 'loyalty_points'), 'customers.loyalty_points column dropped');
 
     // ── Summary ───────────────────────────────────────────────────────
     console.log('\n' + '='.repeat(50));

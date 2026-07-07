@@ -1,15 +1,13 @@
 /**
- * Integration Test: Loyalty Global Rate Fallback
+ * Integration Test: Loyalty Earning Is Per-Item Only
  *
- * Tests the fix where products without cb_percent use the global
- * loyalty_points_per_currency setting for cashback calculation.
- *
- * Bug this catches: loyalty_points_per_currency was stored but never
- * used — products with cb_percent=0 earned zero points.
+ * The loyalty program was simplified to a single on/off switch — there is no
+ * more global "points per currency" fallback. Points earned come solely from
+ * each product's own cb_percent; products with cb_percent=0 earn nothing.
  *
  * Scenarios:
- * 1. Product with cb_percent=0 uses global earning rate
- * 2. Mixed cart (per-product + global fallback)
+ * 1. Product with cb_percent=0 earns zero cashback
+ * 2. Mixed cart — only the item with cb_percent>0 earns cashback
  * 3. Discounted order — cashback on discounted subtotal
  * 4. Customer list API returns updated wallet_balance
  *
@@ -40,23 +38,20 @@ const { billRoutes } = require('../main/routes/bills');
 const { customerRoutes } = require('../main/routes/customers');
 
 async function main() {
-  console.log('Integration Test: Loyalty Global Rate Fallback');
+  console.log('Integration Test: Loyalty Earning Is Per-Item Only');
   console.log('='.repeat(50));
 
   const db = initTestDb();
 
-  // Enable loyalty + set global earning rate to 2 points per currency unit
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_points_per_currency', '2', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_expiry_months', '6', ?)").run(now());
 
   const { authHeader } = seedOwnerUser(db);
   seedCategory(db, 'cat-global', 'Global Rate Menu');
 
-  // Product A: cb_percent=0 (should use global rate of 2)
+  // Product A: cb_percent=0 (earns nothing — no global fallback anymore)
   seedProduct(db, 'prod-global-a', 'cat-global', 'Coffee', 100, { cb_percent: 0 });
 
-  // Product B: cb_percent=10 (should use per-product rate)
+  // Product B: cb_percent=10 (earns based on its own rate)
   seedProduct(db, 'prod-global-b', 'cat-global', 'Sandwich', 200, { cb_percent: 10 });
 
   seedCustomer(db, 'cust-global-1', 'Global Test Customer', '1111111111');
@@ -71,9 +66,9 @@ async function main() {
 
   try {
     // ═══════════════════════════════════════════════════════════════════
-    // Scenario 1: Product with cb_percent=0 uses global earning rate
+    // Scenario 1: Product with cb_percent=0 earns zero cashback
     // ═══════════════════════════════════════════════════════════════════
-    console.log('\n─── Scenario 1: Global rate fallback (cb_percent=0, rate=2) ───');
+    console.log('\n─── Scenario 1: cb_percent=0 earns nothing ───');
 
     const order1 = await api(baseUrl, '/api/orders', {
       method: 'POST',
@@ -100,18 +95,17 @@ async function main() {
     });
     assertEqual(pay1.status, 200, 'payment accepted');
     assertEqual(pay1.data.bill.payment_status, 'paid', 'bill paid');
+    assertEqual(pay1.data.loyaltyPointsEarned, 0, 'no points earned for cb_percent=0 item');
 
-    // Global rate = 2, subtotal = ₹200 → expected cashback = floor(200 × 2) = 400
     const ledger1 = db.prepare(
       "SELECT * FROM loyalty_ledger WHERE customer_id = 'cust-global-1' AND type = 'credit' AND bill_id = ?"
     ).get(bill1.data.bill.id) as any;
-    assert(ledger1 !== undefined, 'loyalty credit entry exists');
-    assertEqual(ledger1.amount, 400, 'cashback = 400 (₹200 × global rate 2)');
+    assert(ledger1 === undefined, 'no loyalty credit entry created');
 
     // ═══════════════════════════════════════════════════════════════════
-    // Scenario 2: Mixed cart — per-product + global fallback
+    // Scenario 2: Mixed cart — only the cb_percent>0 item earns
     // ═══════════════════════════════════════════════════════════════════
-    console.log('\n─── Scenario 2: Mixed cart (per-product cb_percent + global) ───');
+    console.log('\n─── Scenario 2: Mixed cart (cb_percent=0 item earns nothing) ───');
 
     const order2 = await api(baseUrl, '/api/orders', {
       method: 'POST',
@@ -119,7 +113,7 @@ async function main() {
         type: 'takeaway',
         customer_id: 'cust-global-1',
         items: [
-          { product_id: 'prod-global-a', quantity: 1 }, // ₹100, cb_percent=0 → global rate 2 → 200
+          { product_id: 'prod-global-a', quantity: 1 }, // ₹100, cb_percent=0 → 0
           { product_id: 'prod-global-b', quantity: 1 }, // ₹200, cb_percent=10 → 20
         ],
       },
@@ -140,11 +134,11 @@ async function main() {
     });
     assertEqual(pay2.status, 200, 'payment accepted');
 
-    // Coffee: floor(100 × 2) = 200, Sandwich: floor(200 × 10/100) = 20 → total = 220
+    // Coffee: cb_percent=0 → 0, Sandwich: floor(200 × 10/100) = 20 → total = 20
     const ledger2 = db.prepare(
       "SELECT amount FROM loyalty_ledger WHERE customer_id = 'cust-global-1' AND type = 'credit' AND bill_id = ?"
     ).get(bill2.data.bill.id) as any;
-    assertEqual(ledger2.amount, 220, 'cashback = 220 (200 from global + 20 from per-product)');
+    assertEqual(ledger2.amount, 20, 'cashback = 20 (only from the cb_percent=10 item)');
 
     // ═══════════════════════════════════════════════════════════════════
     // Scenario 3: Discounted order — cashback on discounted subtotal
@@ -156,7 +150,7 @@ async function main() {
       body: {
         type: 'takeaway',
         customer_id: 'cust-global-2',
-        items: [{ product_id: 'prod-global-a', quantity: 2 }], // 2× ₹100 = ₹200
+        items: [{ product_id: 'prod-global-b', quantity: 2 }], // 2× ₹200 = ₹400, cb_percent=10
       },
       headers: authHeader,
     });
@@ -175,7 +169,7 @@ async function main() {
     });
     assertEqual(discountRes.status, 200, 'discount applied');
 
-    // Pay — cashback should be on discounted subtotal (₹100, not ₹200)
+    // Pay — cashback should be on discounted subtotal (₹200, not ₹400)
     const pay3 = await api(baseUrl, `/api/bills/${bill3Gen.data.bill.id}/payment`, {
       method: 'POST',
       body: { method: 'cash', amount: discountRes.data.bill.total, customer_id: 'cust-global-2' },
@@ -183,11 +177,11 @@ async function main() {
     });
     assertEqual(pay3.status, 200, 'payment accepted');
 
-    // Discounted subtotal = ₹100, global rate = 2 → cashback = floor(100 × 2) = 200
+    // Discounted subtotal = ₹200, cb_percent = 10 → cashback = floor(200 × 10/100) = 20
     const ledger3 = db.prepare(
       "SELECT amount FROM loyalty_ledger WHERE customer_id = 'cust-global-2' AND type = 'credit' AND bill_id = ?"
     ).get(bill3Gen.data.bill.id) as any;
-    assertEqual(ledger3.amount, 200, 'cashback = 200 (₹100 discounted × rate 2)');
+    assertEqual(ledger3.amount, 20, 'cashback = 20 (₹200 discounted × cb_percent 10)');
 
     // ═══════════════════════════════════════════════════════════════════
     // Scenario 4: Customer list API returns updated wallet_balance
@@ -199,12 +193,12 @@ async function main() {
 
     const cust1 = customers.data.data.find((c: any) => c.id === 'cust-global-1');
     assert(cust1 !== undefined, 'cust-global-1 found in list');
-    // Total earned: 400 (scenario 1) + 220 (scenario 2) = 620
-    assertEqual(cust1.wallet_balance, 620, 'wallet_balance = 620 (400 + 220)');
+    // Total earned: 0 (scenario 1) + 20 (scenario 2) = 20
+    assertEqual(cust1.wallet_balance, 20, 'wallet_balance = 20 (0 + 20)');
 
     const cust2 = customers.data.data.find((c: any) => c.id === 'cust-global-2');
     assert(cust2 !== undefined, 'cust-global-2 found in list');
-    assertEqual(cust2.wallet_balance, 200, 'wallet_balance = 200 (discounted order)');
+    assertEqual(cust2.wallet_balance, 20, 'wallet_balance = 20 (discounted order)');
 
   } finally {
     server.close();

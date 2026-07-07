@@ -554,13 +554,6 @@ router.patch('/:id/status', requireRole('owner', 'manager', 'chef', 'waiter'), (
   }
 });
 
-router.patch('/:id/loyalty', (req: Request, res: Response) => {
-  // TODO: Implement loyalty toggle with database persistence
-  // For now, return success but don't persist (frontend handles state locally)
-  const { loyalty_enabled } = req.body;
-  res.json({ success: true, loyalty_enabled: !!loyalty_enabled, _note: 'Not persisted — frontend handles locally' });
-});
-
 router.patch('/:id/customer', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();

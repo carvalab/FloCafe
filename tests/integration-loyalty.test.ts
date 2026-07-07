@@ -43,7 +43,6 @@ async function main() {
 
   // Enable loyalty in settings
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
-  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_expiry_months', '6', ?)").run(now());
 
   // Seed data — product with 5% cashback
   const { authHeader } = seedOwnerUser(db);
@@ -106,7 +105,7 @@ async function main() {
       // 5% of ₹1000 subtotal = ₹50 cashback (floor)
       const expectedCashback = Math.floor(1000 * 5 / 100);
       assertEqual(ledgerEntry.amount, expectedCashback, `cashback = ₹${expectedCashback} (5% of ₹1000)`);
-      assert(ledgerEntry.expires_at !== null, 'expiry date is set');
+      assert(ledgerEntry.expires_at === null, 'points do not expire');
     }
 
     // ── Step 5: Verify idempotency — no double credit ────────────────
