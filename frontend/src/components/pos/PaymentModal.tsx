@@ -42,6 +42,9 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: remaining.toString() },
   ]);
+  // Tracks whether the cashier has manually typed a split amount — once true, we stop
+  // auto-rescaling payment splits (e.g. on discount edits) so we don't clobber their entry.
+  const [paymentsTouched, setPaymentsTouched] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletAmount, setWalletAmount] = useState('');
@@ -55,6 +58,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [discountApplied, setDiscountApplied] = useState(false);
   const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
   const [discountPin, setDiscountPin] = useState('');
+  const [applyingDiscount, setApplyingDiscount] = useState(false);
   const [loyaltySettings, setLoyaltySettings] = useState<{ loyalty_enabled: boolean } | null>(null);
 
   // Sync state with active bill discount on load or update
@@ -72,8 +76,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     }
   }, [bill]);
 
-  // Dynamically update payment inputs when remaining balance changes
+  // Dynamically update payment inputs when remaining balance changes, but only until the
+  // cashier manually edits an amount — after that, discount/wallet edits must not silently
+  // rewrite amounts they've already typed in.
   useEffect(() => {
+    if (paymentsTouched) return;
     if (payments.length === 1) {
       setPayments([{ ...payments[0], amount: remaining.toString() }]);
     } else {
@@ -88,7 +95,8 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         setPayments(payments.map(p => ({ ...p, amount: perSplit.toFixed(2) })));
       }
     }
-  }, [remaining]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only recompute splits when the remaining balance changes
+  }, [remaining, paymentsTouched]);
 
   useEffect(() => {
     const custId = bill.customer_id || cartCustomerId;
@@ -109,6 +117,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   }, [bill.customer_id, cartCustomerId]);
 
   const updatePayment = (idx: number, field: keyof Payment, value: string) => {
+    if (field === 'amount') setPaymentsTouched(true);
     setPayments(payments.map((p, i) => i === idx ? { ...p, [field]: value } : p));
   };
 
@@ -137,6 +146,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
   const handleApplyDiscount = async (customVal?: number) => {
+    if (applyingDiscount) return;
     const val = customVal !== undefined ? customVal : parseFloat(discountValue);
     if (customVal === undefined && (isNaN(val) || val < 0)) {
       toast.error('Please enter a valid discount value');
@@ -147,6 +157,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       toast.error('Manager PIN required for discounts');
       return;
     }
+    setApplyingDiscount(true);
     try {
       const res = await api.patch(`/orders/${bill.order_id}/discount`, {
         discount_type: discountType,
@@ -155,6 +166,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         override_pin: discountRequiresApproval && val > 0 ? discountPin : undefined,
       });
       toast.success(val === 0 ? 'Discount removed' : 'Discount updated');
+      setDiscountPin('');
       if (val === 0) {
         setShowDiscount(false);
         setDiscountValue('');
@@ -166,9 +178,14 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         onBillUpdate(data.bill);
       }
     } catch (err: unknown) {
-      const axiosErr = err as { response?: { data?: { error?: string; message?: string } } };
+      const axiosErr = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
       const msg = axiosErr.response?.data?.error || axiosErr.response?.data?.message || 'Failed to update discount';
       toast.error(msg);
+      // Clear the PIN on any failure (wrong PIN or rate-limited) so a stale/rejected
+      // PIN doesn't sit in the field looking like it might still work on retry.
+      setDiscountPin('');
+    } finally {
+      setApplyingDiscount(false);
     }
   };
 
@@ -391,12 +408,14 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   />
                 )}
                 <Button
-                  size="sm" 
-                  onClick={() => handleApplyDiscount()} 
-                  disabled={discountValue === '' || isNaN(parseFloat(discountValue))} 
+                  size="sm"
+                  onClick={() => handleApplyDiscount()}
+                  disabled={applyingDiscount || discountValue === '' || isNaN(parseFloat(discountValue))}
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                 >
-                  {Number(bill.discount_amount) > 0 ? 'Update Discount' : 'Apply Discount'}
+                  {applyingDiscount
+                    ? 'Applying...'
+                    : Number(bill.discount_amount) > 0 ? 'Update Discount' : 'Apply Discount'}
                 </Button>
               </div>
             )}
