@@ -26,10 +26,8 @@ jobs:
         os: [ubuntu-latest, macos-latest, windows-latest]
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -50,10 +48,8 @@ jobs:
   typecheck:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -71,10 +67,8 @@ jobs:
   backend-lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -92,10 +86,8 @@ jobs:
   frontend-lint:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -127,10 +119,8 @@ jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
@@ -162,10 +152,8 @@ jobs:
             extra-deps: echo "No extra deps needed"
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Checkout repository and submodules
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          submodules: recursive
 
       - name: Set up Node.js 22
         uses: actions/setup-node@v4

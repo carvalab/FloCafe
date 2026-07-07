@@ -2,9 +2,7 @@
 
 ## Base URL
 
-**FloDesktop (Local):** `http://flo.local:3001` or `http://<local-ip>:3001`
-
-**FloCloud (Cloud):** `https://api.flopos.com` *(placeholder)*
+**Local:** `http://flo.local:3001` or `http://<local-ip>:3001`
 
 ---
 

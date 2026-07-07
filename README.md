@@ -10,7 +10,7 @@
 
 <p align="center">
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/releases"><img src="https://img.shields.io/github/v/release/FreeOpenSourcePOS/FloCafe" alt="GitHub release"></a>
-  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/blob/main/license_instructions.md"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
+  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node.js">
 </p>
@@ -61,14 +61,14 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 | Platform | File | Description |
 |----------|------|-------------|
 | **macOS** | [Mac App Store](https://apps.apple.com/in/app/flo-cafe/id6763136018) | Recommended — auto-updates |
-| **macOS (Intel DMG)** | `Flo.Cafe-1.7.1.dmg` | Direct download for Intel Macs |
-| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.7.1-arm64.dmg` | Direct download for M1/M2/M3/M4 |
+| **macOS (Intel DMG)** | `Flo.Cafe-1.7.2.dmg` | Direct download for Intel Macs |
+| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.7.2-arm64.dmg` | Direct download for M1/M2/M3/M4 |
 | **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
-| **Windows (EXE)** | `Flo.Cafe.Setup.1.7.1.exe` | Direct download installer |
-| **Linux (AppImage)** | `Flo.Cafe-1.7.1.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
-| **Linux (Debian)** | `flo-desktop_1.7.1_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
+| **Windows (EXE)** | `Flo.Cafe.Setup.1.7.2.exe` | Direct download installer |
+| **Linux (AppImage)** | `Flo.Cafe-1.7.2.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
+| **Linux (Debian)** | `flo-desktop_1.7.2_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
 
-**Latest Version:** v1.7.1
+**Latest Version:** v1.7.2
 
 **Release note:** Linux artifacts are now built on `ubuntu-20.04` so the native `better-sqlite3` module stays compatible with Ubuntu 20.04 and other older glibc-based distributions.
 
@@ -178,7 +178,7 @@ On first run, the app initializes the SQLite database. Optionally load demo data
 git clone https://github.com/FreeOpenSourcePOS/FloCafe.git
 cd FloCafe
 
-# Install dependencies (also inits frontend submodule)
+# Install dependencies
 npm install
 
 # Start development
@@ -247,7 +247,7 @@ FloCafe/
 │   ├── routes/             # 20 API route modules
 │   ├── services/           # Business logic (cloud-sync, KDS, tax)
 │   └── printers/           # ESC/POS thermal printing
-├── frontend/               # Next.js frontend (git submodule)
+├── frontend/               # Next.js frontend
 │   └── src/
 │       ├── app/            # App Router pages
 │       ├── components/     # React components
@@ -296,20 +296,17 @@ FloCafe/
 
 ## Contributing
 
-Contributions are welcome!
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 
-1. **Fork** the repository
-2. **Clone** your fork: `git clone https://github.com/YOUR_NAME/FloCafe.git`
-3. **Create** a branch: `git checkout -b feature/amazing-feature`
-4. **Commit** your changes: `git commit -m 'Add amazing feature'`
-5. **Push** to the branch: `git push origin feature/amazing-feature`
-6. **Open** a Pull Request
-
-See [AGENTS.md](AGENTS.md) for development guidelines and architecture details.
+- Development setup and available commands
+- Branch naming and commit conventions
+- PR process and checklist
+- Database migration guidelines
+- Code style and testing expectations
 
 ## License
 
-This project is open source under the [MIT License](license_instructions.md).
+This project is open source under the [MIT License](LICENSE).
 
 ---
 
