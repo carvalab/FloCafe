@@ -45,7 +45,7 @@ FloCafe/
 │   ├── db.ts          # SQLite database + migrations
 │   ├── server.ts      # Express server setup
 │   └── ipc.ts         # Electron IPC handlers
-├── frontend/          # Next.js frontend (git submodule → FloUI)
+├── frontend/          # Next.js frontend
 │   ├── src/
 │   │   ├── app/       # Next.js app router pages
 │   │   ├── components/# React components
@@ -53,7 +53,6 @@ FloCafe/
 │   │   └── lib/       # Utilities, types, API client
 │   └── package.json
 ├── tests/             # Integration tests
-├── specs/             # API specifications (git submodule)
 └── .github/workflows/ # CI/CD pipelines
 ```
 
