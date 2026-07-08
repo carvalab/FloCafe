@@ -61,14 +61,14 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 | Platform | File | Description |
 |----------|------|-------------|
 | **macOS** | [Mac App Store](https://apps.apple.com/in/app/flo-cafe/id6763136018) | Recommended — auto-updates |
-| **macOS (Intel DMG)** | `Flo.Cafe-1.7.9.dmg` | Direct download for Intel Macs |
-| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.7.9-arm64.dmg` | Direct download for M1/M2/M3/M4 |
+| **macOS (Intel DMG)** | `Flo.Cafe-1.8.0.dmg` | Direct download for Intel Macs |
+| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.8.0-arm64.dmg` | Direct download for M1/M2/M3/M4 |
 | **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
-| **Windows (EXE)** | `Flo.Cafe.Setup.1.7.9.exe` | Direct download installer |
-| **Linux (AppImage)** | `Flo.Cafe-1.7.9.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
-| **Linux (Debian)** | `flo-desktop_1.7.9_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
+| **Windows (EXE)** | `Flo.Cafe.Setup.1.8.0.exe` | Direct download installer |
+| **Linux (AppImage)** | `Flo.Cafe-1.8.0.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
+| **Linux (Debian)** | `flo-desktop_1.8.0_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
 
-**Latest Version:** v1.7.9
+**Latest Version:** v1.8.0
 
 **Release note:** Linux artifacts are now built on `ubuntu-22.04` (GitHub retired the `ubuntu-20.04` hosted runner) so the native `better-sqlite3` module stays compatible with Ubuntu 22.04 and other reasonably recent glibc-based distributions.
 
