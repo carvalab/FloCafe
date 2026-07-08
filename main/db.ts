@@ -683,6 +683,13 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 15,
+    name: 'add_instagram_handle_setting',
+    up: () => {
+      insertSettingIfMissing('instagram_handle', '');
+    },
+  },
 ];
 
 function runMigrations(): void {
@@ -1038,6 +1045,7 @@ function seedInstallDefaults(): void {
   insert('email', '');
   insert('business_address', '');
   insert('business_phone', '');
+  insert('instagram_handle', '');
   insert('tax_registered', 'false');
   insert('gstin', '');
   insert('state_code', '');

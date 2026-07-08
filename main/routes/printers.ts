@@ -257,25 +257,57 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
     }
 
     // Fetch business settings for bill template
-    const businessName = db.prepare("SELECT value FROM settings WHERE key = 'business_name'").get() as any;
-    const businessAddress = db.prepare("SELECT value FROM settings WHERE key = 'address'").get() as any;
-    const businessPhone = db.prepare("SELECT value FROM settings WHERE key = 'phone'").get() as any;
-    const gstin = db.prepare("SELECT value FROM settings WHERE key = 'gstin'").get() as any;
-    const billTemplate = db.prepare("SELECT value FROM settings WHERE key = 'bill_template'").get() as any;
-    const currencySymbol = db.prepare("SELECT value FROM settings WHERE key = 'currency_symbol'").get() as any;
+    const settingsRows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    const settings: Record<string, string> = Object.fromEntries(settingsRows.map(r => [r.key, r.value]));
+
+    // Customer + loyalty context, only relevant when the bill is tied to a customer
+    let customer: any = null;
+    let pointsEarned = 0;
+    let pointsRedeemed = 0;
+    let pointsBalance: number | null = null;
+    if (bill.customer_id) {
+      customer = db.prepare('SELECT name, phone, country_code FROM customers WHERE id = ?').get(bill.customer_id);
+
+      const earned = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger WHERE bill_id = ? AND type = 'credit'`
+      ).get(bill.id) as { total: number };
+      pointsEarned = earned.total;
+
+      const redeemed = db.prepare(
+        `SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger WHERE bill_id = ? AND type = 'debit'`
+      ).get(bill.id) as { total: number };
+      pointsRedeemed = redeemed.total;
+
+      if (settings.loyalty_enabled === 'true') {
+        const credits = db.prepare(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger WHERE customer_id = ? AND type = 'credit' AND (expires_at IS NULL OR expires_at > datetime('now'))`
+        ).get(bill.customer_id) as { total: number };
+        const debits = db.prepare(
+          `SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger WHERE customer_id = ? AND type = 'debit'`
+        ).get(bill.customer_id) as { total: number };
+        pointsBalance = Math.max(0, credits.total - debits.total);
+      }
+    }
 
     const business = {
-      name: businessName?.value || 'Store',
-      address: businessAddress?.value || '',
-      phone: businessPhone?.value || '',
-      gstin: gstin?.value || '',
-      currency_symbol: currencySymbol?.value || '₹',
+      name: settings.business_name || 'Store',
+      address: settings.business_address || '',
+      phone: settings.business_phone || '',
+      gstin: settings.gstin || '',
+      currency_symbol: settings.currency_symbol || '₹',
+      instagram_handle: settings.instagram_handle || '',
+      customer_name: customer?.name || '',
+      customer_phone: customer?.phone ? `${customer.country_code || '+91'} ${customer.phone}` : '',
+      points_earned: pointsEarned,
+      points_redeemed: pointsRedeemed,
+      points_balance: pointsBalance,
     };
-    console.log('[Print Bill] Business:', business.name, 'Template:', billTemplate?.value || 'compact');
+    const billTemplate = settings.bill_template;
+    console.log('[Print Bill] Business:', business.name, 'Template:', billTemplate || 'compact');
 
     // Use existing printReceipt function with template support
     console.log('[Print Bill] Calling printReceipt...');
-    const success = await printReceipt(order, bill, business, billTemplate?.value || 'compact', useUnicode, isReprint);
+    const success = await printReceipt(order, bill, business, billTemplate || 'compact', useUnicode, isReprint);
     console.log('[Print Bill] Print result:', success);
 
     if (success) {

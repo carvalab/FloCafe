@@ -13,23 +13,28 @@ import toast from 'react-hot-toast';
 import { COUNTRIES } from '@/lib/countries';
 import { useConfirm } from '@/hooks/use-confirm';
 
-const CLASSIC_PREVIEW = `  [STORE NAME]
-  Table: T1
+const CLASSIC_PREVIEW = `   STORE NAME
+   Jane Doe
+  +91 98765...
 ---------------
-Item      Qty Rate Amt
+Invoice #: B-1
+ 1 Jan, 12:30pm
 ---------------
-Burger      1   99   99
-  + Sauce
->> No onions
+Item      Qty Amt
 ---------------
-Subtotal       99
-Tax             6
-===============
-TOTAL         105
-Cash          105
+Burger      1   99
+  + Sauce        9
 ---------------
-GSTN: xxx  Bill#1
-123 Main St`;
+Discount       -5
+Subtotal      103
+TOTAL         109
+Cash          109
+---------------
+Points Earned  10
+Pts Balance   210
+---------------
+  123 Main St
+  Ph: 98765...`;
 
 const COMPACT_PREVIEW = `  STORE NAME
 -----------
@@ -67,7 +72,7 @@ interface TemplateCard {
 }
 
 const TEMPLATE_CARDS: TemplateCard[] = [
-  { id: 'classic', name: 'Classic', description: 'Rich layout with 4-column item table, addon details, and full totals. Best for dine-in.', preview: CLASSIC_PREVIEW },
+  { id: 'classic', name: 'Classic', description: 'Personalized layout with customer name/mobile, addon details, discounts, and loyalty points earned/balance. Best for dine-in.', preview: CLASSIC_PREVIEW },
   { id: 'compact', name: 'Compact', description: 'Minimal, fast layout. One line per item. Ideal for quick service and takeaway.', preview: COMPACT_PREVIEW },
   { id: 'detailed', name: 'Detailed (GST)', description: 'Full GST compliance with GSTIN header, TAX INVOICE label, and per-rate tax breakdown.', preview: DETAILED_PREVIEW },
 ];
@@ -369,13 +374,13 @@ export default function SettingsPage() {
     businessName: string; countryCode: string; timezone: string; currency: string;
     billingType: 'postpaid' | 'prepaid';
     tablesRequired: boolean;
-    gstin: string; businessAddress: string; businessPhone: string;
+    gstin: string; businessAddress: string; businessPhone: string; instagramHandle: string;
     billShowName: boolean; billShowAddress: boolean; billShowPhone: boolean; billShowGstn: boolean;
   };
   const [savedBusiness, setSavedBusiness] = useState<BusinessForm>({
     businessName: '', countryCode: '', timezone: '', currency: '', billingType: 'postpaid',
     tablesRequired: true,
-    gstin: '', businessAddress: '', businessPhone: '',
+    gstin: '', businessAddress: '', businessPhone: '', instagramHandle: '',
     billShowName: true, billShowAddress: true, billShowPhone: true, billShowGstn: false,
   });
   const [form, setForm] = useState<BusinessForm>(savedBusiness);
@@ -438,6 +443,7 @@ export default function SettingsPage() {
         gstin: d.gstin || '',
         businessAddress: d.business_address || '',
         businessPhone: d.business_phone || '',
+        instagramHandle: d.instagram_handle || '',
         billShowName: typeof d.bill_show_name === 'boolean' ? d.bill_show_name : true,
         billShowAddress: typeof d.bill_show_address === 'boolean' ? d.bill_show_address : true,
         billShowPhone: typeof d.bill_show_phone === 'boolean' ? d.bill_show_phone : true,
@@ -533,6 +539,7 @@ export default function SettingsPage() {
         gstin: form.gstin,
         business_address: form.businessAddress,
         business_phone: form.businessPhone,
+        instagram_handle: form.instagramHandle,
         bill_show_name: form.billShowName,
         bill_show_address: form.billShowAddress,
         bill_show_phone: form.billShowPhone,
@@ -761,6 +768,17 @@ export default function SettingsPage() {
                   ) : (
                     <p className="font-medium text-gray-900">{form.businessAddress || '—'}</p>
                   )}
+                </div>
+                <div>
+                  <label className="block text-sm text-gray-500 mb-1">Instagram Handle</label>
+                  {isAdmin ? (
+                    <input type="text" value={form.instagramHandle} onChange={(e) => setForm((p) => ({ ...p, instagramHandle: e.target.value }))}
+                      placeholder="@yourcafe"
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                  ) : (
+                    <p className="font-medium text-gray-900">{form.instagramHandle || '—'}</p>
+                  )}
+                  <p className="text-xs text-gray-500 mt-1">Shown on printed bills, if set</p>
                 </div>
               </div>
 

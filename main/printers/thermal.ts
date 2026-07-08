@@ -595,7 +595,6 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   const lines: string[] = [];
   const date = new Date(order.created_at);
 
-  const bar = '='.repeat(cols);
   const dash = '-'.repeat(cols);
 
   const itemNameLen = cols === 42 ? 22 : 28;
@@ -604,11 +603,18 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
-  lines.push('{CENTER}{BOLD}' + (biz.name || 'Store') + '{/BOLD}{/CENTER}');
-  lines.push(bar);
-  lines.push('Bill #: ' + (bill.bill_number || order.order_number));
-  lines.push('Date: ' + date.toLocaleDateString() + ' ' + date.toLocaleTimeString());
+
+  // Header: store name (Font A, big + bold), then customer name (Font B) and
+  // mobile number, each only if the bill actually has that data.
+  lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}' + (biz.name || 'Store') + '{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
+  if (biz.customer_name) lines.push('{CENTER}{FONT_B}' + biz.customer_name + '{/FONT_B}{/CENTER}');
+  if (biz.customer_phone) lines.push('{CENTER}' + biz.customer_phone + '{/CENTER}');
+
   lines.push(dash);
+  lines.push('{CENTER}Invoice #: ' + (bill.bill_number || order.order_number) + '{/CENTER}');
+  lines.push('{CENTER}' + date.toLocaleDateString() + ' ' + date.toLocaleTimeString() + '{/CENTER}');
+  lines.push(dash);
+
   lines.push(itemHeader(itemNameLen, amtLen, cols));
   lines.push(dash);
 
@@ -627,15 +633,21 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   }
 
   lines.push(dash);
-  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal, prefix), cols - 8));
+
+  // Discount / redeemed points sit above the subtotal, each only if present.
   if (bill.discount_amount > 0) {
     lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount, prefix), cols - 8));
   }
+  if (biz.points_redeemed > 0) {
+    const label = 'Points Redeemed';
+    lines.push(label + rightAlign('-' + biz.points_redeemed + ' pts', cols - label.length));
+  }
+
+  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal, prefix), cols - 8));
   lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount, prefix), cols - 3));
   lines.push('{BOLD}TOTAL' + rightAlign(formatCurrency(bill.total, prefix), cols - 5) + '{/BOLD}');
 
   if (bill.payment_details) {
-    lines.push(dash);
     try {
       const payments = typeof bill.payment_details === 'string' ? JSON.parse(bill.payment_details) : bill.payment_details;
       if (payments && Array.isArray(payments)) {
@@ -648,11 +660,25 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
     } catch {}
   }
 
-  lines.push(bar);
-  if (biz.address) lines.push(biz.address);
-  if (biz.phone) lines.push('Ph: ' + biz.phone);
-  if (biz.gstin) lines.push('GSTIN: ' + biz.gstin);
-  lines.push('{CENTER}Thank you!{/CENTER}');
+  // Earned points this bill + running balance, each only if it exists.
+  const hasEarned = biz.points_earned > 0;
+  const hasBalance = biz.points_balance !== null && biz.points_balance !== undefined;
+  if (hasEarned || hasBalance) {
+    lines.push(dash);
+    if (hasEarned) lines.push('Points Earned' + rightAlign(String(biz.points_earned), cols - 13));
+    if (hasBalance) lines.push('Points Balance' + rightAlign(String(biz.points_balance), cols - 14));
+  }
+
+  // Footer: store contact details, only the ones actually configured.
+  const footerLines: string[] = [];
+  if (biz.address) footerLines.push(biz.address);
+  if (biz.phone) footerLines.push('Ph: ' + biz.phone);
+  if (biz.instagram_handle) footerLines.push(biz.instagram_handle);
+  if (footerLines.length > 0) {
+    lines.push(dash);
+    for (const footerLine of footerLines) lines.push('{CENTER}' + footerLine + '{/CENTER}');
+  }
+
   lines.push('{CUT}');
 
   return buildEscPos(lines, useUnicode);
@@ -917,24 +943,25 @@ export function buildEscPos(lines: string[], useUnicode: boolean = false): Buffe
     let lineBold = line.includes('{BOLD}');
     let lineDH = line.includes('{DOUBLE_HEIGHT}');
     let lineDW = line.includes('{DOUBLE_WIDTH}');
+    // ESC/POS mode byte bit 0 selects the character font: 0 = Font A (12x24,
+    // the default), 1 = Font B (9x17, condensed). No token means Font A.
+    let lineFontB = line.includes('{FONT_B}');
     let center = line.startsWith('{CENTER}') && line.includes('{/CENTER}');
 
     line = line.replace(/\{CENTER\}/g, '').replace(/\{\/CENTER\}/g, '');
     line = line.replace(/\{BOLD\}/g, '').replace(/\{\/BOLD\}/g, '');
     line = line.replace(/\{DOUBLE_HEIGHT\}/g, '').replace(/\{\/DOUBLE_HEIGHT\}/g, '');
     line = line.replace(/\{DOUBLE_WIDTH\}/g, '').replace(/\{\/DOUBLE_WIDTH\}/g, '');
+    line = line.replace(/\{FONT_B\}/g, '').replace(/\{\/FONT_B\}/g, '');
 
     buf.push(0x1B, 0x61, center ? 0x01 : 0x00);
 
-    if (lineBold || lineDH || lineDW) {
-      let mode = 0;
-      if (lineDH) mode |= 0x10;
-      if (lineDW) mode |= 0x20;
-      if (lineBold) mode |= 0x08;
-      buf.push(0x1B, 0x21, mode);
-    } else {
-      buf.push(0x1B, 0x21, 0x00);
-    }
+    let mode = 0;
+    if (lineDH) mode |= 0x10;
+    if (lineDW) mode |= 0x20;
+    if (lineBold) mode |= 0x08;
+    if (lineFontB) mode |= 0x01;
+    buf.push(0x1B, 0x21, mode);
 
     if (lineBold) {
       buf.push(0x1B, 0x45, 0x01);
