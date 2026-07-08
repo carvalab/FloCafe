@@ -165,6 +165,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
 
       let subtotal = 0;
       let totalTax = 0;
+      let exclusiveTax = 0;
       const allTaxBreakdowns: any[] = [];
 
       const insertItem = db.prepare(`
@@ -208,11 +209,14 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
 
         totalTax += taxResult.tax_amount;
+        if (taxResult.tax_type !== 'inclusive') {
+          exclusiveTax += taxResult.tax_amount;
+        }
         if (taxResult.tax_breakdown) {
           allTaxBreakdowns.push(taxResult.tax_breakdown);
         }
 
-        const itemTotal = itemSubtotal + taxResult.tax_amount;
+        const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
         subtotal += itemSubtotal;
 
         insertItem.run(
@@ -231,7 +235,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         }
       }
 
-      const preRoundTotal = subtotal + totalTax + (delivery_charge || 0) + (packaging_charge || 0);
+      const preRoundTotal = subtotal + exclusiveTax + (delivery_charge || 0) + (packaging_charge || 0);
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 
@@ -348,7 +352,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         itemSubtotal = Math.max(0, itemSubtotal - itemDiscount);
 
         const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
-        const itemTotal = itemSubtotal + taxResult.tax_amount;
+        const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
 
         insertItem.run(
           req.params.id, product.id, product.name, product.sku, unitPrice, quantity,
@@ -370,15 +374,19 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
       const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
       let subtotal = 0;
       let totalTax = 0;
+      let exclusiveTax = 0;
       const allTaxBreakdowns: any[] = [];
       for (const item of activeItems) {
         subtotal += item.subtotal;
         totalTax += item.tax_amount;
+        if (item.tax_type !== 'inclusive') {
+          exclusiveTax += item.tax_amount;
+        }
         if (item.tax_breakdown) {
           try {
             const breakdown = JSON.parse(item.tax_breakdown);
             if (Array.isArray(breakdown)) allTaxBreakdowns.push(breakdown);
-          } catch {}
+          } catch { }
         }
       }
 
@@ -395,12 +403,14 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
 
       const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
       let newTaxAmount = totalTax;
+      let newExclusiveTax = exclusiveTax;
       if (newDiscountAmount > 0 && subtotal > 0) {
         const taxRatio = discountedSubtotal / subtotal;
         newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+        newExclusiveTax = Math.round(exclusiveTax * taxRatio * 100) / 100;
       }
 
-      const preRoundTotal = discountedSubtotal + newTaxAmount + ((order as any).delivery_charge || 0) + ((order as any).packaging_charge || 0);
+      const preRoundTotal = discountedSubtotal + newExclusiveTax + ((order as any).delivery_charge || 0) + ((order as any).packaging_charge || 0);
       const total = Math.round(preRoundTotal);
       const roundOff = total - preRoundTotal;
 
@@ -689,18 +699,24 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
       // reduction each time this endpoint is called.
       const activeItems = db.prepare("SELECT * FROM order_items WHERE order_id = ? AND status != 'cancelled'").all(req.params.id) as any[];
       let freshTax = 0;
+      let exclusiveTax = 0;
       for (const item of activeItems) {
         freshTax += item.tax_amount || 0;
+        if (item.tax_type !== 'inclusive') {
+          exclusiveTax += item.tax_amount || 0;
+        }
       }
       let newTaxAmount = freshTax;
+      let newExclusiveTax = exclusiveTax;
       if (discountAmount > 0 && order.subtotal > 0) {
         const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
         const taxRatio = discountedSubtotal / order.subtotal;
         newTaxAmount = Math.round(freshTax * taxRatio * 100) / 100;
+        newExclusiveTax = Math.round(exclusiveTax * taxRatio * 100) / 100;
       }
 
       const discountedSubtotal = Math.max(0, order.subtotal - discountAmount);
-      const preRoundTotal = discountedSubtotal + newTaxAmount + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+      const preRoundTotal = discountedSubtotal + newExclusiveTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
       const newTotal = Math.round(preRoundTotal);
       const roundOff = newTotal - preRoundTotal;
 
@@ -826,7 +842,7 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
             addonTotal += (addon.price || 0) * item.quantity;
           }
         }
-      } catch {}
+      } catch { }
     }
     const itemBaseTotal = item.unit_price * item.quantity + addonTotal;
 
@@ -855,7 +871,7 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     const newTaxAmount = taxResult.tax_amount;
     const newTaxBreakdown = taxResult.tax_breakdown;
 
-    const newTotal = newSubtotal + newTaxAmount;
+    const newTotal = newSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : newTaxAmount);
 
     // Update item with recalculated tax
     db.prepare(`
@@ -867,9 +883,13 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     const allItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id) as any[];
     let orderSubtotal = 0;
     let orderTax = 0;
+    let exclusiveOrderTax = 0;
     for (const i of allItems) {
       orderSubtotal += i.subtotal;
       orderTax += i.tax_amount;
+      if (i.tax_type !== 'inclusive') {
+        exclusiveOrderTax += i.tax_amount;
+      }
     }
 
     // Recalculate order-level discount proportionally on new subtotal
@@ -883,12 +903,14 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     // Recalculate tax on discounted subtotal
     const discountedSubtotal = Math.max(0, orderSubtotal - newOrderDiscount);
     let newOrderTax = orderTax;
+    let newExclusiveOrderTax = exclusiveOrderTax;
     if (newOrderDiscount > 0 && orderSubtotal > 0) {
       const taxRatio = discountedSubtotal / orderSubtotal;
       newOrderTax = Math.round(orderTax * taxRatio * 100) / 100;
+      newExclusiveOrderTax = Math.round(exclusiveOrderTax * taxRatio * 100) / 100;
     }
 
-    const preRoundTotal = discountedSubtotal + newOrderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
+    const preRoundTotal = discountedSubtotal + newExclusiveOrderTax + (order.packaging_charge || 0) + (order.delivery_charge || 0);
     const orderTotal = Math.round(preRoundTotal);
     const roundOff = orderTotal - preRoundTotal;
 
