@@ -147,9 +147,13 @@ export function registerRoutes(app: Express): void {
           .all(orderId) as any[];
         let subtotal = 0;
         let totalTax = 0;
+        let exclusiveTax = 0;
         for (const i of activeItems) {
           subtotal += i.subtotal || 0;
           totalTax += i.tax_amount || 0;
+          if (i.tax_type !== 'inclusive') {
+            exclusiveTax += i.tax_amount || 0;
+          }
         }
 
         // BUG #13 FIX: Preserve order-level discount (scale percentage proportionally)
@@ -165,13 +169,15 @@ export function registerRoutes(app: Express): void {
 
         const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
         let newTaxAmount = totalTax;
+        let newExclusiveTax = exclusiveTax;
         if (newDiscountAmount > 0 && subtotal > 0) {
           const taxRatio = discountedSubtotal / subtotal;
           newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+          newExclusiveTax = Math.round(exclusiveTax * taxRatio * 100) / 100;
         }
 
         // BUG #5 FIX: Correct round-off formula; BUG #24 FIX: include delivery_charge (was missing, causing total mismatch with bill generation)
-        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.delivery_charge || 0) + (order.packaging_charge || 0);
+        const preRoundTotal = discountedSubtotal + newExclusiveTax + (order.delivery_charge || 0) + (order.packaging_charge || 0);
         const roundOff = Math.round(preRoundTotal) - preRoundTotal;
         const total = Math.round(preRoundTotal);
 
@@ -248,9 +254,13 @@ export function registerRoutes(app: Express): void {
           .all(orderId) as any[];
         let subtotal = 0;
         let totalTax = 0;
+        let exclusiveTax = 0;
         for (const i of activeItems) {
           subtotal += i.subtotal || 0;
           totalTax += i.tax_amount || 0;
+          if (i.tax_type !== 'inclusive') {
+            exclusiveTax += i.tax_amount || 0;
+          }
         }
 
         // BUG #13 FIX: Preserve order-level discount (scale percentage proportionally)
@@ -266,13 +276,15 @@ export function registerRoutes(app: Express): void {
 
         const discountedSubtotal = Math.max(0, subtotal - newDiscountAmount);
         let newTaxAmount = totalTax;
+        let newExclusiveTax = exclusiveTax;
         if (newDiscountAmount > 0 && subtotal > 0) {
           const taxRatio = discountedSubtotal / subtotal;
           newTaxAmount = Math.round(totalTax * taxRatio * 100) / 100;
+          newExclusiveTax = Math.round(exclusiveTax * taxRatio * 100) / 100;
         }
 
         // BUG #5 FIX: Correct round-off formula; BUG #24 FIX: include delivery_charge (was missing, causing total mismatch with bill generation)
-        const preRoundTotal = discountedSubtotal + newTaxAmount + (order.delivery_charge || 0) + (order.packaging_charge || 0);
+        const preRoundTotal = discountedSubtotal + newExclusiveTax + (order.delivery_charge || 0) + (order.packaging_charge || 0);
         const roundOff = Math.round(preRoundTotal) - preRoundTotal;
         const total = Math.round(preRoundTotal);
 
