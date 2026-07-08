@@ -70,7 +70,7 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 
 **Latest Version:** v1.7.9
 
-**Release note:** Linux artifacts are now built on `ubuntu-20.04` so the native `better-sqlite3` module stays compatible with Ubuntu 20.04 and other older glibc-based distributions.
+**Release note:** Linux artifacts are now built on `ubuntu-22.04` (GitHub retired the `ubuntu-20.04` hosted runner) so the native `better-sqlite3` module stays compatible with Ubuntu 22.04 and other reasonably recent glibc-based distributions.
 
 ## 🚀 Features
 
