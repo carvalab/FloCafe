@@ -9,6 +9,7 @@
 import * as crypto from 'crypto';
 import * as os from 'os';
 import log from 'electron-log';
+import { WebSocket, type RawData } from 'ws';
 import { getDatabase, now, parseItemJson, ensureCloudIdentity } from '../db';
 
 export const DEFAULT_CLOUD_SERVER_URL = 'https://blue.flopos.com/';
@@ -18,6 +19,13 @@ const OUTBOX_INTERVAL_MS = 15_000;
 const COMMAND_POLL_INTERVAL_MS = 10_000;
 const REQUEST_TIMEOUT_MS = 8_000;
 const MAX_COMMAND_RANGE_DAYS = 370;
+
+// Live-relay channel (commands + heartbeat): WSS primary, HTTP poll/POST fallback.
+// See specs/architecture.md § Realtime channel and specs/floadmin.md § WSS /api/pos/relay.
+const RELAY_PING_INTERVAL_MS = 25_000;
+const RELAY_RECONNECT_BASE_MS = 1_000;
+const RELAY_RECONNECT_MAX_MS = 60_000;
+const RELAY_FALLBACK_THRESHOLD = 5;
 
 type CloudSettings = {
   server_url: string;
@@ -86,12 +94,26 @@ function apiPath(pathname: string): string {
 function endpoint(serverUrl: string, pathname: string): URL {
   const base = new URL(serverUrl);
   const basePath = base.pathname.replace(/\/+$/g, '');
-  const nextPath = apiPath(pathname);
-  const adjustedPath = basePath.endsWith('/api') && nextPath.startsWith('/api/')
-    ? nextPath.slice('/api'.length)
-    : nextPath;
+  // Split off any query string before assigning to base.pathname — the URL API's pathname
+  // setter percent-encodes "?" instead of treating it as a delimiter, so a literal
+  // "/api/pos/commands?limit=5" passed straight through silently mangles the query.
+  const [rawPath, rawQuery] = apiPath(pathname).split('?');
+  const adjustedPath = basePath.endsWith('/api') && rawPath.startsWith('/api/')
+    ? rawPath.slice('/api'.length)
+    : rawPath;
   base.pathname = `${basePath}${adjustedPath}`.replace(/\/{2,}/g, '/');
+  base.search = rawQuery || '';
   return base;
+}
+
+function relayEndpoint(serverUrl: string): string {
+  const base = new URL(serverUrl);
+  base.protocol = base.protocol === 'https:' ? 'wss:' : 'ws:';
+  const basePath = base.pathname.replace(/\/+$/g, '');
+  base.pathname = `${basePath}/api/pos/relay`.replace(/\/{2,}/g, '/');
+  base.hash = '';
+  base.search = '';
+  return base.toString();
 }
 
 function parseIsoDate(value: unknown, fallback: Date): Date {
@@ -132,6 +154,16 @@ class CloudSyncService {
   private flushing = false;
   private pollingCommands = false;
 
+  // Live-relay channel state (commands + heartbeat) — see § Realtime channel in specs.
+  private relaySocket: WebSocket | null = null;
+  private relayPingTimer: ReturnType<typeof setInterval> | null = null;
+  private relayAwaitingPong = false;
+  private relayHeartbeatFrameTimer: ReturnType<typeof setInterval> | null = null;
+  private relayReconnectTimer: ReturnType<typeof setTimeout> | null = null;
+  private relayReconnectAttempts = 0;
+  private httpFallbackActive = false;
+  private relayMode: 'websocket' | 'http_fallback' | 'disconnected' = 'disconnected';
+
   start() {
     ensureCloudIdentity();
     this.reload();
@@ -144,16 +176,11 @@ class CloudSyncService {
     if (!cfg) return;
 
     if (cfg.sync_enabled && cfg.api_key) {
-      void this.sendHeartbeat();
       void this.flushOutbox();
-      this.heartbeatTimer = setInterval(() => void this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
       this.outboxTimer = setInterval(() => void this.flushOutbox(), OUTBOX_INTERVAL_MS);
     }
 
-    if (cfg.command_polling_enabled && cfg.api_key) {
-      void this.pollCommands();
-      this.commandTimer = setInterval(() => void this.pollCommands(), COMMAND_POLL_INTERVAL_MS);
-    }
+    this.maybeStartRelay();
 
     log.info('[CloudSync] started', {
       server: cfg.server_url,
@@ -167,6 +194,24 @@ class CloudSyncService {
     if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
     if (this.outboxTimer) { clearInterval(this.outboxTimer); this.outboxTimer = null; }
     if (this.commandTimer) { clearInterval(this.commandTimer); this.commandTimer = null; }
+    this.httpFallbackActive = false;
+    this.teardownRelay();
+  }
+
+  private teardownRelay() {
+    if (this.relayReconnectTimer) { clearTimeout(this.relayReconnectTimer); this.relayReconnectTimer = null; }
+    if (this.relayPingTimer) { clearInterval(this.relayPingTimer); this.relayPingTimer = null; }
+    if (this.relayHeartbeatFrameTimer) { clearInterval(this.relayHeartbeatFrameTimer); this.relayHeartbeatFrameTimer = null; }
+    if (this.relaySocket) {
+      const socket = this.relaySocket;
+      this.relaySocket = null;
+      socket.removeAllListeners();
+      if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
+        socket.terminate();
+      }
+    }
+    this.relayReconnectAttempts = 0;
+    this.relayMode = 'disconnected';
   }
 
   getStatus() {
@@ -189,6 +234,7 @@ class CloudSyncService {
       cloud_last_sync: refreshed.cloud_last_sync || null,
       cloud_last_heartbeat: refreshed.cloud_last_heartbeat || null,
       cloud_last_error: refreshed.cloud_last_error || null,
+      cloud_relay_mode: this.relayMode,
       outbox_pending: this.countOutbox('pending'),
       outbox_failed: this.countOutbox('failed'),
       loaded: Boolean(s),
@@ -295,35 +341,57 @@ class CloudSyncService {
     this.enqueueEvent('order.status', 'order', orderflowOrderId, { orderflow_order_id: orderflowOrderId, status, note });
   }
 
+  private buildHeartbeatPayload(cfg: CloudSettings) {
+    const db = getDatabase();
+    const activeOrders = db.prepare(`
+      SELECT COUNT(*) as count FROM orders
+      WHERE status IN ('pending', 'preparing', 'ready', 'served')
+    `).get() as { count: number };
+    const todaySales = db.prepare(`
+      SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
+      FROM bills
+      WHERE payment_status = 'paid' AND date(paid_at) = date('now')
+    `).get() as { total: number; count: number };
+    return {
+      pos_hash: cfg.pos_hash,
+      pos_id: cfg.pos_id || null,
+      app_version: require('../../package.json').version,
+      device_name: os.hostname(),
+      active_orders: activeOrders.count,
+      today_sales: todaySales.total,
+      today_bills: todaySales.count,
+      sent_at: new Date().toISOString(),
+    };
+  }
+
+  /** HTTP fallback path — used only while the WSS relay is unavailable. */
   private async sendHeartbeat() {
     const cfg = this.settings;
     if (!cfg?.sync_enabled || !cfg.api_key) return;
     try {
-      const db = getDatabase();
-      const activeOrders = db.prepare(`
-        SELECT COUNT(*) as count FROM orders
-        WHERE status IN ('pending', 'preparing', 'ready', 'served')
-      `).get() as { count: number };
-      const todaySales = db.prepare(`
-        SELECT COALESCE(SUM(total), 0) as total, COUNT(*) as count
-        FROM bills
-        WHERE payment_status = 'paid' AND date(paid_at) = date('now')
-      `).get() as { total: number; count: number };
-      const body = {
-        pos_hash: cfg.pos_hash,
-        pos_id: cfg.pos_id || null,
-        app_version: require('../../package.json').version,
-        device_name: os.hostname(),
-        active_orders: activeOrders.count,
-        today_sales: todaySales.total,
-        today_bills: todaySales.count,
-        sent_at: new Date().toISOString(),
-      };
+      const body = this.buildHeartbeatPayload(cfg);
       const res = await this.signedFetch('/api/pos/heartbeat', {
         method: 'POST',
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`heartbeat failed (${res.status})`);
+      this.upsertSettings({
+        cloud_connected: 'true',
+        cloud_last_error: '',
+        cloud_last_heartbeat: new Date().toISOString(),
+      });
+    } catch (err) {
+      this.markError((err as Error).message);
+    }
+  }
+
+  /** Primary path — heartbeat carried as a frame on the open relay connection. */
+  private async sendRelayHeartbeat() {
+    const cfg = this.settings;
+    if (!cfg?.sync_enabled || !cfg.api_key || this.relaySocket?.readyState !== WebSocket.OPEN) return;
+    try {
+      const payload = this.buildHeartbeatPayload(cfg);
+      this.relaySocket.send(JSON.stringify({ type: 'heartbeat', ...payload }));
       this.upsertSettings({
         cloud_connected: 'true',
         cloud_last_error: '',
@@ -458,6 +526,177 @@ class CloudSyncService {
       body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`command result failed (${res.status})`);
+  }
+
+  /** Same as executeCommand, but for a command pushed over the relay socket — result goes back as a frame, not a POST. */
+  private async executeRelayCommand(command: CloudCommand) {
+    let body: Record<string, unknown>;
+    try {
+      const result = this.runCommand(command);
+      body = { ok: true, result, completed_at: new Date().toISOString() };
+    } catch (err) {
+      body = { ok: false, error: (err as Error).message, completed_at: new Date().toISOString() };
+    }
+    if (this.relaySocket?.readyState === WebSocket.OPEN) {
+      this.relaySocket.send(JSON.stringify({ type: 'result', id: command.id, ...body }));
+    }
+  }
+
+  // --- Live-relay connection (WSS primary, HTTP fallback) ---------------------------------
+
+  private maybeStartRelay() {
+    const cfg = this.settings;
+    if (!cfg?.api_key || !(cfg.sync_enabled || cfg.command_polling_enabled)) {
+      this.teardownRelay();
+      this.stopHttpFallback();
+      return;
+    }
+    this.connectRelay();
+  }
+
+  private connectRelay() {
+    const cfg = this.settings;
+    if (!cfg?.api_key || !(cfg.sync_enabled || cfg.command_polling_enabled)) return;
+    if (this.relaySocket && (this.relaySocket.readyState === WebSocket.OPEN || this.relaySocket.readyState === WebSocket.CONNECTING)) {
+      return;
+    }
+
+    let socket: WebSocket;
+    try {
+      const url = relayEndpoint(cfg.server_url);
+      const headers = this.buildSignedHeaders(cfg.api_key, cfg.pos_hash, 'GET', '/api/pos/relay', '');
+      socket = new WebSocket(url, { headers, handshakeTimeout: REQUEST_TIMEOUT_MS });
+    } catch (err) {
+      log.warn('[CloudSync] relay connect failed', (err as Error).message);
+      this.scheduleRelayReconnect();
+      return;
+    }
+
+    this.relaySocket = socket;
+    socket.on('open', () => this.onRelayOpen());
+    socket.on('message', (data) => this.onRelayMessage(data));
+    socket.on('pong', () => { this.relayAwaitingPong = false; });
+    socket.on('close', () => this.onRelayClosed());
+    socket.on('error', (err) => log.warn('[CloudSync] relay error', (err as Error).message));
+  }
+
+  private onRelayOpen() {
+    this.relayReconnectAttempts = 0;
+    this.relayMode = 'websocket';
+    this.stopHttpFallback();
+
+    this.relayAwaitingPong = false;
+    this.relayPingTimer = setInterval(() => {
+      if (!this.relaySocket || this.relaySocket.readyState !== WebSocket.OPEN) return;
+      if (this.relayAwaitingPong) {
+        log.warn('[CloudSync] relay missed pong, reconnecting');
+        this.relaySocket.terminate();
+        return;
+      }
+      this.relayAwaitingPong = true;
+      this.relaySocket.ping();
+    }, RELAY_PING_INTERVAL_MS);
+
+    const cfg = this.settings;
+    if (cfg?.sync_enabled) {
+      void this.sendRelayHeartbeat();
+      this.relayHeartbeatFrameTimer = setInterval(() => void this.sendRelayHeartbeat(), HEARTBEAT_INTERVAL_MS);
+    }
+
+    this.upsertSettings({
+      cloud_connected: 'true',
+      cloud_last_error: '',
+      cloud_last_heartbeat: new Date().toISOString(),
+    });
+    log.info('[CloudSync] relay connected');
+  }
+
+  private onRelayMessage(data: RawData) {
+    let frame: any;
+    try {
+      frame = JSON.parse(data.toString());
+    } catch {
+      return;
+    }
+
+    if (frame?.type === 'command' && frame.id && frame.cmd) {
+      void this.executeRelayCommand({ id: frame.id, type: frame.cmd, payload: frame.payload });
+    } else if (frame?.type === 'heartbeat_ack') {
+      this.applyFeatures(frame.features);
+    }
+  }
+
+  private onRelayClosed() {
+    if (this.relayPingTimer) { clearInterval(this.relayPingTimer); this.relayPingTimer = null; }
+    if (this.relayHeartbeatFrameTimer) { clearInterval(this.relayHeartbeatFrameTimer); this.relayHeartbeatFrameTimer = null; }
+    this.relaySocket = null;
+    this.relayMode = 'disconnected';
+    this.markError('relay connection closed');
+    this.scheduleRelayReconnect();
+  }
+
+  private scheduleRelayReconnect() {
+    const cfg = this.settings;
+    if (!cfg?.api_key || !(cfg.sync_enabled || cfg.command_polling_enabled)) return;
+
+    this.relayReconnectAttempts += 1;
+    if (this.relayReconnectAttempts >= RELAY_FALLBACK_THRESHOLD && !this.httpFallbackActive) {
+      this.startHttpFallback();
+    }
+
+    const backoff = Math.min(RELAY_RECONNECT_MAX_MS, RELAY_RECONNECT_BASE_MS * 2 ** this.relayReconnectAttempts);
+    const jitter = backoff * (0.8 + Math.random() * 0.4);
+    if (this.relayReconnectTimer) clearTimeout(this.relayReconnectTimer);
+    this.relayReconnectTimer = setTimeout(() => this.connectRelay(), jitter);
+  }
+
+  /** Degraded mode — same HTTP command-poll/heartbeat behavior the POS shipped with before the relay existed. */
+  private startHttpFallback() {
+    const cfg = this.settings;
+    if (!cfg?.api_key || this.httpFallbackActive) return;
+    this.httpFallbackActive = true;
+    this.relayMode = 'http_fallback';
+
+    if (cfg.sync_enabled && !this.heartbeatTimer) {
+      void this.sendHeartbeat();
+      this.heartbeatTimer = setInterval(() => void this.sendHeartbeat(), HEARTBEAT_INTERVAL_MS);
+    }
+    if (cfg.command_polling_enabled && !this.commandTimer) {
+      void this.pollCommands();
+      this.commandTimer = setInterval(() => void this.pollCommands(), COMMAND_POLL_INTERVAL_MS);
+    }
+    log.warn('[CloudSync] relay unavailable, falling back to HTTP polling');
+  }
+
+  private stopHttpFallback() {
+    if (!this.httpFallbackActive) return;
+    this.httpFallbackActive = false;
+    if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
+    if (this.commandTimer) { clearInterval(this.commandTimer); this.commandTimer = null; }
+  }
+
+  /**
+   * Only reload when a flag actually *changes* — Blue may reasonably send `features` on every
+   * heartbeat_ack (not just when something changed), and reloading unconditionally would tear
+   * down and reopen the relay connection every heartbeat cycle, which itself immediately re-sends
+   * a heartbeat and can spiral into a reconnect storm.
+   */
+  private applyFeatures(features: unknown) {
+    if (!features || typeof features !== 'object') return;
+    const f = features as Record<string, unknown>;
+    const cfg = this.settings;
+    const entries: Record<string, string> = {};
+    const maybeSet = (flag: keyof typeof f, current: boolean | undefined, key: string) => {
+      const value = f[flag];
+      if (typeof value !== 'boolean' || value === current) return;
+      entries[key] = value ? '1' : '0';
+    };
+    maybeSet('cloud_sync_enabled', cfg?.sync_enabled, 'cloud_sync_enabled');
+    maybeSet('cloud_orders_enabled', cfg?.orders_enabled, 'cloud_orders_enabled');
+    maybeSet('cloud_reports_enabled', cfg?.reports_enabled, 'cloud_reports_enabled');
+    if (Object.keys(entries).length === 0) return;
+    this.upsertSettings(entries);
+    this.reload();
   }
 
   private runCommand(command: CloudCommand): unknown {
@@ -600,6 +839,23 @@ class CloudSyncService {
     };
   }
 
+  /** Shared HMAC signing used by every signed HTTP call and the relay WS handshake — see floadmin.md § Identity & request signing. */
+  private buildSignedHeaders(apiKey: string, posHash: string, method: string, signedPath: string, body: string): Record<string, string> {
+    const timestamp = new Date().toISOString();
+    const nonce = crypto.randomUUID();
+    const bodyHash = sha256Hex(body);
+    const signatureBase = [method.toUpperCase(), signedPath, timestamp, nonce, bodyHash].join('\n');
+    const signature = hmacHex(apiKey, signatureBase);
+    return {
+      'Authorization': `Bearer ${apiKey}`,
+      'X-Flo-POS-Hash': posHash,
+      'X-Flo-Timestamp': timestamp,
+      'X-Flo-Nonce': nonce,
+      'X-Flo-Body-SHA256': bodyHash,
+      'X-Flo-Signature': `sha256=${signature}`,
+    };
+  }
+
   private async signedFetch(pathname: string, init: RequestInit): Promise<Response> {
     const cfg = this.settings ?? this.loadSettings();
     if (!cfg?.api_key) throw new Error('Cloud POS is not registered');
@@ -607,24 +863,15 @@ class CloudSyncService {
     const method = (init.method || 'GET').toUpperCase();
     const url = endpoint(cfg.server_url, pathname);
     const body = typeof init.body === 'string' ? init.body : '';
-    const timestamp = new Date().toISOString();
-    const nonce = crypto.randomUUID();
-    const bodyHash = sha256Hex(body);
     const signedPath = `${url.pathname}${url.search}`;
-    const signatureBase = [method, signedPath, timestamp, nonce, bodyHash].join('\n');
-    const signature = hmacHex(cfg.api_key, signatureBase);
+    const signedHeaders = this.buildSignedHeaders(cfg.api_key, cfg.pos_hash, method, signedPath, body);
 
     return fetch(url, {
       ...init,
       method,
       headers: {
         'Content-Type': 'application/json',
-        'Authorization': `Bearer ${cfg.api_key}`,
-        'X-Flo-POS-Hash': cfg.pos_hash,
-        'X-Flo-Timestamp': timestamp,
-        'X-Flo-Nonce': nonce,
-        'X-Flo-Body-SHA256': bodyHash,
-        'X-Flo-Signature': `sha256=${signature}`,
+        ...signedHeaders,
         ...(init.headers || {}),
       },
       body: method === 'GET' ? undefined : body,
