@@ -8,7 +8,7 @@
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
-import { normalizeCurrencyToAscii } from './unicode';
+import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
 
 export interface GstBillOptions {
   /** 58 mm (2.5", 32 chars) or 80 mm (3.5", 48 chars). Default: 58 */
@@ -48,7 +48,7 @@ export function buildGstBillBytes(
   const { paperWidth = 58, showFooter = true, gstin, address, phone, stateCode, useUnicode = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '₹';
-  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
+  const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });

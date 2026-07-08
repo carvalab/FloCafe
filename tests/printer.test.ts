@@ -171,7 +171,9 @@ console.log('\n✅ Test 2: Compact receipt (80mm, 48 cols)');
   assert('renders addon "Bacon"', text.includes('Bacon'));
   assert('renders special instruction', text.includes('No onions'));
   assert('renders subtotal ₹925.00', text.includes('₹925.00'));
-  assert('renders discount line with negative sign', text.includes('-₹15.00'));
+  // Currency slot is always padded to 2 columns, so a 1-char unicode symbol
+  // gets a leading space — the minus sign sits outside that slot.
+  assert('renders discount line with negative sign', text.includes('- ₹15.00'));
   assert('renders tax total ₹40.00', text.includes('₹40.00'));
   assert('renders TOTAL with grand amount', text.includes('TOTAL') && text.includes('₹950.00'));
   assert('renders Cash payment', text.includes('Cash') && text.includes('₹500.00'));

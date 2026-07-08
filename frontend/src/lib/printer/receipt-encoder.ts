@@ -15,7 +15,7 @@
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
-import { normalizeCurrencyToAscii } from './unicode';
+import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
 
 export interface ReceiptOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -124,7 +124,7 @@ export function buildClassicReceiptBytes(
   } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
-  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
+  const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -273,7 +273,7 @@ export function buildCompactReceiptBytes(
   const { paperWidth = 58, footerNote, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
-  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
+  const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -370,7 +370,7 @@ export function buildDetailedReceiptBytes(
   const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
-  const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
+  const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });

@@ -533,6 +533,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   const itemNameLen = cols === 42 ? 22 : 28;
   const amtLen = 10;
+  const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
@@ -546,11 +547,11 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, amtLen, cols));
+      lines.push(itemRow(item, itemNameLen, amtLen, cols, prefix));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
-        lines.push(addonRow(addon, itemNameLen, amtLen, cols));
+        lines.push(addonRow(addon, itemNameLen, amtLen, cols, prefix));
       }
       if (item.special_instructions) {
         lines.push('  Note: ' + truncate(item.special_instructions, cols - 8));
@@ -559,12 +560,12 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   }
 
   lines.push(dash);
-  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal), cols - 8));
+  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal, prefix), cols - 8));
   if (bill.discount_amount > 0) {
-    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount), cols - 8));
+    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount, prefix), cols - 8));
   }
-  lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount), cols - 3));
-  lines.push('{BOLD}TOTAL' + rightAlign(formatCurrency(bill.total), cols - 5) + '{/BOLD}');
+  lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount, prefix), cols - 3));
+  lines.push('{BOLD}TOTAL' + rightAlign(formatCurrency(bill.total, prefix), cols - 5) + '{/BOLD}');
 
   if (bill.payment_details) {
     lines.push(dash);
@@ -573,7 +574,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
       if (payments && Array.isArray(payments)) {
         for (const payment of payments) {
           if (payment && payment.method) {
-            lines.push(payment.method + rightAlign(formatCurrency(payment.amount), cols - payment.method.length));
+            lines.push(payment.method + rightAlign(formatCurrency(payment.amount, prefix), cols - payment.method.length));
           }
         }
       }
@@ -599,6 +600,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   const itemNameLen = cols === 42 ? 22 : 28;
   const amtLen = 10;
+  const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
@@ -612,11 +614,11 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, amtLen, cols));
+      lines.push(itemRow(item, itemNameLen, amtLen, cols, prefix));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
-        lines.push(addonRow(addon, itemNameLen, amtLen, cols));
+        lines.push(addonRow(addon, itemNameLen, amtLen, cols, prefix));
       }
       if (item.special_instructions) {
         lines.push('  Note: ' + truncate(item.special_instructions, cols - 8));
@@ -625,12 +627,12 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   }
 
   lines.push(dash);
-  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal), cols - 8));
+  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal, prefix), cols - 8));
   if (bill.discount_amount > 0) {
-    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount), cols - 8));
+    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount, prefix), cols - 8));
   }
-  lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount), cols - 3));
-  lines.push('{BOLD}TOTAL' + rightAlign(formatCurrency(bill.total), cols - 5) + '{/BOLD}');
+  lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount, prefix), cols - 3));
+  lines.push('{BOLD}TOTAL' + rightAlign(formatCurrency(bill.total, prefix), cols - 5) + '{/BOLD}');
 
   if (bill.payment_details) {
     lines.push(dash);
@@ -639,7 +641,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
       if (payments && Array.isArray(payments)) {
         for (const payment of payments) {
           if (payment && payment.method) {
-            lines.push(payment.method + rightAlign(formatCurrency(payment.amount), cols - payment.method.length));
+            lines.push(payment.method + rightAlign(formatCurrency(payment.amount, prefix), cols - payment.method.length));
           }
         }
       }
@@ -664,6 +666,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   const dash = '-'.repeat(cols);
 
   const itemNameLen = cols === 42 ? 22 : 28;
+  const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
 
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
@@ -680,11 +683,11 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
 
   if (order.items) {
     for (const item of order.items) {
-      lines.push(itemRow(item, itemNameLen, 10, cols));
+      lines.push(itemRow(item, itemNameLen, 10, cols, prefix));
 
       const addons = parseAddons(item.addons);
       for (const addon of addons) {
-        lines.push(addonRow(addon, itemNameLen, 10, cols));
+        lines.push(addonRow(addon, itemNameLen, 10, cols, prefix));
       }
       if (item.special_instructions) {
         lines.push('  Note: ' + truncate(item.special_instructions, cols - 8));
@@ -693,9 +696,9 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   }
 
   lines.push(dash);
-  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal), cols - 8));
+  lines.push('Subtotal' + rightAlign(formatCurrency(bill.subtotal, prefix), cols - 8));
   if (bill.discount_amount > 0) {
-    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount), cols - 8));
+    lines.push('Discount' + rightAlign('-' + formatCurrency(bill.discount_amount, prefix), cols - 8));
   }
 
   if (bill.tax_breakdown) {
@@ -704,19 +707,19 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
       if (Array.isArray(taxBreakdown) && taxBreakdown.length > 0) {
         for (const tax of taxBreakdown) {
           if (tax.amount > 0) {
-            lines.push((tax.name || 'Tax') + ' @' + tax.rate + '%' + rightAlign(formatCurrency(tax.amount), cols - 16));
+            lines.push((tax.name || 'Tax') + ' @' + tax.rate + '%' + rightAlign(formatCurrency(tax.amount, prefix), cols - 16));
           }
         }
       }
     } catch {
-      lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount), cols - 3));
+      lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount, prefix), cols - 3));
     }
   } else {
-    lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount), cols - 3));
+    lines.push('Tax' + rightAlign(formatCurrency(bill.tax_amount, prefix), cols - 3));
   }
 
   lines.push(bar);
-  lines.push('{BOLD}GRAND TOTAL' + rightAlign(formatCurrency(bill.total), cols - 12) + '{/BOLD}');
+  lines.push('{BOLD}GRAND TOTAL' + rightAlign(formatCurrency(bill.total, prefix), cols - 12) + '{/BOLD}');
 
   if (bill.payment_details) {
     lines.push(dash);
@@ -725,7 +728,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
       if (payments && Array.isArray(payments)) {
         for (const payment of payments) {
           if (payment && payment.method) {
-            lines.push(payment.method + rightAlign(formatCurrency(payment.amount), cols - payment.method.length));
+            lines.push(payment.method + rightAlign(formatCurrency(payment.amount, prefix), cols - payment.method.length));
           }
         }
       }
@@ -755,22 +758,22 @@ function itemHeader(nameLen: number, amtLen: number, cols: number): string {
   );
 }
 
-function itemRow(item: any, nameLen: number, amtLen: number, cols: number): string {
+function itemRow(item: any, nameLen: number, amtLen: number, cols: number, prefix: string): string {
   const qtyW = 4;
   const taxW = cols - nameLen - qtyW - amtLen;
   const name = truncate(item.product_name, nameLen).padEnd(nameLen);
   const qty = String(item.quantity).padEnd(qtyW);
   const taxRate = getTaxRate(item);
   const taxStr = (taxRate > 0 ? taxRate + '%' : '').padEnd(taxW);
-  const amt = rightAlign(formatCurrency(item.total), amtLen);
+  const amt = rightAlign(formatCurrency(item.total, prefix), amtLen);
   return name + qty + taxStr + amt;
 }
 
-function addonRow(addon: any, nameLen: number, amtLen: number, cols: number): string {
+function addonRow(addon: any, nameLen: number, amtLen: number, cols: number, prefix: string): string {
   const midW = cols - nameLen - amtLen;
   const label = truncate('  + ' + addon.name, nameLen).padEnd(nameLen);
   const spacer = ' '.repeat(Math.max(0, midW));
-  const price = addon.price ? rightAlign(formatCurrency(addon.price), amtLen) : ' '.repeat(amtLen);
+  const price = addon.price ? rightAlign(formatCurrency(addon.price, prefix), amtLen) : ' '.repeat(amtLen);
   return label + spacer + price;
 }
 
@@ -785,8 +788,8 @@ function parseAddons(addons: any): any[] {
   return Array.isArray(addons) ? addons : [];
 }
 
-function formatCurrency(amount: number): string {
-  return '₹' + (Number(amount) || 0).toFixed(2);
+function formatCurrency(amount: number, prefix: string): string {
+  return prefix + (Number(amount) || 0).toFixed(2);
 }
 
 function rightAlign(text: string, width: number = 24): string {
@@ -862,19 +865,26 @@ export function buildTestPage(paperWidth: string = '80mm'): Buffer {
   return buildEscPos(lines);
 }
 
+// Every ASCII fallback is exactly 2 characters, so the currency slot on a
+// printed line is always 2 columns wide whether or not unicode is enabled.
 const CURRENCY_ASCII_MAP: Record<string, string> = {
-  '₹': 'Rs', '₨': 'Rs', '€': 'EUR', '£': 'GBP', '¥': 'Yen',
-  '₩': 'KRW', '₺': 'TRY', '₫': 'VND', '₪': 'NIS', '₽': 'RUB',
-  '฿': 'THB', '₱': 'PHP', '₴': 'UAH', '₦': 'NGN', '₵': 'GHS',
-  '₡': 'CRC', '₲': 'PYG',
+  '₹': 'Rs', '₨': 'Rs', '€': 'Eu', '£': 'Pd', '¥': 'Yn',
+  '₩': 'Kw', '₺': 'Tl', '₫': 'Vd', '₪': 'Ns', '₽': 'Rb',
+  '฿': 'Bh', '₱': 'Ph', '₴': 'Uh', '₦': 'Ng', '₵': 'Gh',
+  '₡': 'Cr', '₲': 'Pg',
 };
 
-function normalizeCurrencyToAscii(text: string): string {
-  let out = text;
-  for (const [sym, ascii] of Object.entries(CURRENCY_ASCII_MAP)) {
-    if (out.includes(sym)) out = out.split(sym).join(ascii);
-  }
-  return out;
+// Resolves the currency symbol into the exact text that will be printed,
+// padded to a fixed 2-column slot (leading space if it's a single-width
+// symbol). Must run BEFORE rightAlign() computes padding — swapping the
+// symbol out afterwards (e.g. '₹' -> 'Rs') changes the string length and
+// pushes trailing digits onto the next line.
+function resolveCurrencyPrefix(symbol: string, useUnicode: boolean): string {
+  const isAsciiSafe = /^[\x00-\x7F]+$/.test(symbol);
+  const prefix = (useUnicode || isAsciiSafe)
+    ? symbol
+    : (CURRENCY_ASCII_MAP[symbol] || symbol.slice(0, 2).toUpperCase() || 'Rs');
+  return prefix.length >= 2 ? prefix : ' '.repeat(2 - prefix.length) + prefix;
 }
 
 export function buildEscPos(lines: string[], useUnicode: boolean = false): Buffer {
@@ -887,7 +897,6 @@ export function buildEscPos(lines: string[], useUnicode: boolean = false): Buffe
   };
 
   for (let line of lines) {
-    if (!useUnicode) line = normalizeCurrencyToAscii(line);
     if (line.includes('{INIT}')) {
       buf.push(0x1B, 0x40);
       resetAllStyles();

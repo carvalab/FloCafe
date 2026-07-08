@@ -262,12 +262,14 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
     const businessPhone = db.prepare("SELECT value FROM settings WHERE key = 'phone'").get() as any;
     const gstin = db.prepare("SELECT value FROM settings WHERE key = 'gstin'").get() as any;
     const billTemplate = db.prepare("SELECT value FROM settings WHERE key = 'bill_template'").get() as any;
+    const currencySymbol = db.prepare("SELECT value FROM settings WHERE key = 'currency_symbol'").get() as any;
 
     const business = {
       name: businessName?.value || 'Store',
       address: businessAddress?.value || '',
       phone: businessPhone?.value || '',
       gstin: gstin?.value || '',
+      currency_symbol: currencySymbol?.value || '₹',
     };
     console.log('[Print Bill] Business:', business.name, 'Template:', billTemplate?.value || 'compact');
 
