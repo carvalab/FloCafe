@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
+  LayoutDashboard,
   ShoppingCart,
   ClipboardList,
   Package,
@@ -34,13 +35,14 @@ import {
 
 // null = show for all business types
 const ALL_NAV_ITEMS = [
-  { href: '/pos',             label: 'POS',          icon: ShoppingCart,  roles: ['owner', 'manager', 'cashier'],              businessTypes: null },
-  { href: '/orders',          label: 'Orders',       icon: ClipboardList, roles: ['owner', 'manager', 'cashier'],              businessTypes: null },
-  { href: '/products',        label: 'Products',     icon: Package,       roles: ['owner', 'manager'],                         businessTypes: null },
-  { href: '/tables',          label: 'Tables',       icon: Grid3X3,       roles: ['owner', 'manager'],                         businessTypes: ['restaurant'] },
-  { href: '/customers',       label: 'Customers',    icon: Users,         roles: ['owner', 'manager'],                         businessTypes: null },
-  { href: '/staff',           label: 'Staff',        icon: UserCog,       roles: ['owner', 'manager'],                         businessTypes: null },
-  { href: '/settings',        label: 'Settings',     icon: Settings,      roles: ['owner', 'manager'],                         businessTypes: null },
+  { href: '/pos', label: 'POS', icon: ShoppingCart, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/orders', label: 'Orders', icon: ClipboardList, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/products', label: 'Products', icon: Package, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/tables', label: 'Tables', icon: Grid3X3, roles: ['owner', 'manager'], businessTypes: ['restaurant'] },
+  { href: '/customers', label: 'Customers', icon: Users, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/staff', label: 'Staff', icon: UserCog, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/settings', label: 'Settings', icon: Settings, roles: ['owner', 'manager'], businessTypes: null },
 ];
 
 export default function AppSidebar() {
@@ -65,7 +67,7 @@ export default function AppSidebar() {
       .then((res) => {
         setTablesRequired(typeof res.data.tables_required === 'boolean' ? res.data.tables_required : true);
       })
-      .catch(() => {});
+      .catch(() => { });
   }, [currentTenant, setTablesRequired]);
 
   return (
