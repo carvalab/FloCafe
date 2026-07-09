@@ -9,7 +9,7 @@ export function getLandingPage(role?: string, businessType?: string): string {
   return '/pos';
 }
 
-const PUBLIC_PATHS = ['/kds', '/auth/login', '/auth/register', '/setup'];
+const PUBLIC_PATHS = ['/kds', '/kds-standalone', '/auth/login', '/auth/register', '/setup'];
 
 export default function AuthGuard({ children }: { children: React.ReactNode }) {
   const { user, currentTenant, loading, loadFromStorage } = useAuthStore();
