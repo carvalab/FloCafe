@@ -19,7 +19,7 @@ export default function AuthGuard({ children }: { children: React.ReactNode }) {
 
   const isPublicPath = PUBLIC_PATHS.some(p => pathname === p || pathname?.startsWith(p + '/'));
   const isSetupPath = pathname === '/setup' || pathname?.startsWith('/setup/');
-  const isKdsPath = pathname === '/kds' || pathname?.startsWith('/kds/');
+  const isKdsPath = pathname?.startsWith('/kds');
 
   useEffect(() => {
     loadFromStorage();
