@@ -69,6 +69,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   const [searched, setSearched] = useState(false);
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const autoSelectRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const customer = cart.customer;
@@ -84,8 +85,16 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cart.customerId]);
 
+  useEffect(() => {
+    return () => {
+      clearTimeout(debounceRef.current);
+      clearTimeout(autoSelectRef.current);
+    };
+  }, []);
+
   const searchByPhone = (p: string) => {
     clearTimeout(debounceRef.current);
+    clearTimeout(autoSelectRef.current);
     if (p.length < 3) { setMatched(null); setName(''); setSearched(false); return; }
     debounceRef.current = setTimeout(async () => {
       try {
@@ -97,12 +106,17 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
         setName(found ? found.name : '');
         setSearched(true);
         if (exactMatch) {
-          cart.setCustomer(exactMatch);
-          setPhone('');
-          setName('');
-          setMatched(null);
-          setSearched(false);
-          onSelected?.();
+          // Let the matched name stay visible for a beat before auto-selecting,
+          // otherwise the field snaps straight to the "selected" pill and the
+          // autofill is never actually seen — it just looks broken.
+          autoSelectRef.current = setTimeout(() => {
+            cart.setCustomer(exactMatch);
+            setPhone('');
+            setName('');
+            setMatched(null);
+            setSearched(false);
+            onSelected?.();
+          }, 600);
         }
       } catch {
         setMatched(null);
@@ -147,6 +161,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
 
   const handleSelectMatched = () => {
     if (!matched) return;
+    clearTimeout(autoSelectRef.current);
     cart.setCustomer(matched);
     setPhone(''); setName(''); setMatched(null); setSearched(false);
     onSelected?.();
