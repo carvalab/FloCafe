@@ -36,7 +36,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const canHold = isRestaurant && cart.orderType === 'dine_in' && cart.tableId && cart.items.length > 0 && billingType === 'postpaid';
 
-  const handleHold = () => {
+  const handleHold = async () => {
     if (!cart.tableId) {
       toast.error('Select a table first');
       return;
@@ -46,9 +46,14 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
       return;
     }
     const tableName = tables.find((t) => t.id === cart.tableId)?.name || cart.tableId;
-    heldOrders.holdOrder(cart.tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
-    cart.clearCart();
-    toast.success(`Order held for ${tableName}`);
+    try {
+      await heldOrders.holdOrder(cart.tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
+      cart.clearCart();
+      toast.success(`Order held for ${tableName}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e.message || 'Failed to hold order');
+    }
   };
 
   const isDrawer = variant === 'drawer';

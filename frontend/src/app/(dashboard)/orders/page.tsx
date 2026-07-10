@@ -13,6 +13,7 @@ import type { OrderItem, Table, Product, Customer } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 import { usePrinterStore } from '@/hooks/usePrinter';
+import { useHeldOrdersStore } from '@/store/held-orders';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
   pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
@@ -37,7 +38,7 @@ const paymentStatusBadge: Record<string, { bg: string; text: string; label: stri
   unpaid: { bg: 'bg-red-100', text: 'text-red-700', label: 'Unpaid' },
 };
 
-type FilterType = 'all' | 'active' | 'unpaid';
+type FilterType = 'all' | 'active' | 'unpaid' | 'held';
 
 // Consolidated state types
 interface Filters {
@@ -64,6 +65,7 @@ interface DiscountModal {
 export default function OrdersPage() {
   const { currentTenant } = useAuthStore();
   const { printBill } = usePrinterStore();
+  const heldOrdersStore = useHeldOrdersStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -131,6 +133,7 @@ export default function OrdersPage() {
 
   useEffect(() => {
     fetchOrders();
+    heldOrdersStore.fetchHeldOrders();
     api.get('/settings/discount')
       .then((res) => setDiscountRequiresApproval(!!res.data.discount_requires_approval))
       .catch(() => {});
@@ -519,7 +522,7 @@ export default function OrdersPage() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
         <div className="flex gap-2">
-          {(['all', 'active', 'unpaid'] as FilterType[]).map((f) => (
+          {(['all', 'active', 'unpaid', 'held'] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setTabFilter(f)}
@@ -590,7 +593,55 @@ export default function OrdersPage() {
       </div>
 
       {/* Orders List */}
-      {loading ? (
+      {tabFilter === 'held' ? (
+        loading ? (
+          <div className="flex items-center justify-center flex-1">
+            <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
+          </div>
+        ) : Object.keys(heldOrdersStore.orders).length === 0 ? (
+          <div className="flex items-center justify-center flex-1 text-gray-400">
+            <p>No held orders found</p>
+          </div>
+        ) : (
+          <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start">
+            {Object.values(heldOrdersStore.orders).map((heldOrder) => (
+              <div key={heldOrder.tableId} className="bg-white rounded-xl border border-blue-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
+                 <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
+                   <div>
+                     <p className="font-bold text-gray-900">{tables.find(t => t.id === heldOrder.tableId)?.name || 'Table'}</p>
+                     <p className="text-xs text-gray-500">{new Date(heldOrder.heldAt).toLocaleTimeString()}</p>
+                   </div>
+                   <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">HELD</span>
+                 </div>
+                 <div className="p-4 flex-1">
+                   {heldOrder.items.map((item, idx) => (
+                     <div key={idx} className="flex justify-between text-sm py-1 text-gray-700">
+                       <span>{item.quantity}x {item.product.name}</span>
+                     </div>
+                   ))}
+                   {heldOrder.orderNotes && (
+                     <div className="mt-3 text-sm italic text-gray-500 bg-gray-50 p-2 rounded-lg">
+                       &quot;{heldOrder.orderNotes}&quot;
+                     </div>
+                   )}
+                 </div>
+                 <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-2">
+                   <Button onClick={async () => {
+                     if (await confirm('Are you sure you want to delete this held order?', { destructive: true })) {
+                       try {
+                         await heldOrdersStore.removeHeldOrder(heldOrder.tableId);
+                         toast.success('Held order removed');
+                       } catch {
+                         toast.error('Failed to remove held order');
+                       }
+                     }
+                   }} variant="outline" className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50">Delete</Button>
+                 </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <div className="flex items-center justify-center flex-1">
           <div className="w-8 h-8 border-4 border-brand border-t-transparent rounded-full animate-spin" />
         </div>

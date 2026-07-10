@@ -108,6 +108,8 @@ export default function POSPage() {
         setCategories((catRes.data.categories as Category[]) || []);
         setProducts((prodRes.data.products as Product[]) || []);
         if (tableRes) setTables((tableRes.data.tables as Table[]) || []);
+        
+        await heldOrders.fetchHeldOrders();
       } catch {
         toast.error('Failed to load menu data');
       }
@@ -295,8 +297,8 @@ export default function POSPage() {
     setCheckoutTable(table);
   };
 
-  const handleSelectHeldTable = (tableId: string) => {
-    const held = heldOrders.restoreOrder(tableId);
+  const handleSelectHeldTable = async (tableId: string) => {
+    const held = await heldOrders.restoreOrder(tableId);
     if (held) {
       cart.loadItems(held.items, tableId, held.customerId, held.guestCount, held.orderNotes);
       cart.setOrderType('dine_in');
@@ -304,16 +306,21 @@ export default function POSPage() {
     setShowTablePicker(false);
   };
 
-  const handleHoldTable = (tableId: string) => {
+  const handleHoldTable = async (tableId: string) => {
     if (cart.items.length === 0) {
       toast.error('Cart is empty');
       return;
     }
     const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
-    heldOrders.holdOrder(tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
-    cart.clearCart();
-    setShowTablePicker(false);
-    toast.success(`Order held for ${tableName}`);
+    try {
+      await heldOrders.holdOrder(tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
+      cart.clearCart();
+      setShowTablePicker(false);
+      toast.success(`Order held for ${tableName}`);
+    } catch (err: unknown) {
+      const e = err as Error;
+      toast.error(e.message || 'Failed to hold order');
+    }
   };
 
   const handleAddItemsToOrder = (table: Table, order: Order) => {

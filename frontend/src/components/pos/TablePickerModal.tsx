@@ -19,7 +19,8 @@ const statusStyles: Record<string, { border: string; badge: string; badgeText: s
   available: { border: 'border-gray-200 hover:border-brand/40', badge: '', badgeText: '' },
   occupied: { border: 'border-orange-300 bg-orange-50', badge: 'bg-orange-500', badgeText: 'Occupied' },
   reserved: { border: 'border-yellow-300 bg-yellow-50', badge: 'bg-yellow-500', badgeText: 'Reserved' },
-  cleaning: { border: 'border-gray-300 bg-gray-50', badge: 'bg-gray-500', badgeText: 'Cleaning' },
+  cleaning: { border: 'border-gray-300 bg-gray-100', badge: 'bg-gray-500', badgeText: 'Cleaning' },
+  held: { border: 'border-blue-400 bg-blue-50', badge: 'bg-blue-500', badgeText: 'HELD' },
 };
 
 export default function TablePickerModal({

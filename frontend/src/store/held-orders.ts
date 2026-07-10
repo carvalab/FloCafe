@@ -1,8 +1,9 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 import type { CartItem } from '@/lib/types';
+import api from '@/lib/api';
 
-interface HeldOrder {
+export interface HeldOrder {
+  id?: string;
   tableId: string;
   items: CartItem[];
   customerId: number | string | null;
@@ -13,66 +14,79 @@ interface HeldOrder {
 
 interface HeldOrdersState {
   orders: Record<string, HeldOrder>;
-  holdOrder: (tableId: string, items: CartItem[], customerId: number | string | null, guestCount: number, orderNotes?: string) => void;
-  restoreOrder: (tableId: string) => HeldOrder | null;
-  removeHeldOrder: (tableId: string) => void;
+  fetchHeldOrders: () => Promise<void>;
+  holdOrder: (tableId: string, items: CartItem[], customerId: number | string | null, guestCount: number, orderNotes?: string) => Promise<void>;
+  restoreOrder: (tableId: string) => Promise<HeldOrder | null>;
+  removeHeldOrder: (tableId: string) => Promise<void>;
   hasHeldOrder: (tableId: string) => boolean;
   getHeldOrder: (tableId: string) => HeldOrder | undefined;
 }
 
-export const useHeldOrdersStore = create<HeldOrdersState>()(
-  persist(
-    (set, get) => ({
-      orders: {},
+export const useHeldOrdersStore = create<HeldOrdersState>()((set, get) => ({
+  orders: {},
 
-      holdOrder: (tableId, items, customerId, guestCount, orderNotes = '') => {
-        set((state) => ({
-          orders: {
-            ...state.orders,
-            [tableId]: { tableId, items, customerId, guestCount, orderNotes, heldAt: new Date().toISOString() },
-          },
-        }));
-      },
-
-      restoreOrder: (tableId) => {
-        const order = get().orders[tableId];
-        if (!order) return null;
-        set((state) => {
-          const { [tableId]: _, ...rest } = state.orders;
-          return { orders: rest };
-        });
-        return order;
-      },
-
-      removeHeldOrder: (tableId) => {
-        set((state) => {
-          const { [tableId]: _, ...rest } = state.orders;
-          return { orders: rest };
-        });
-      },
-
-      hasHeldOrder: (tableId) => !!get().orders[tableId],
-
-      getHeldOrder: (tableId) => get().orders[tableId],
-    }),
-    {
-      name: 'held-orders',
-      onRehydrateStorage: () => (state) => {
-        if (!state) return;
-        const migrated: Record<string, HeldOrder> = {};
-        let changed = false;
-        for (const [key, value] of Object.entries(state.orders)) {
-          if (typeof key === 'string' && /^\d+$/.test(key)) {
-            migrated[String(Number(key))] = { ...value, tableId: String(Number(key)) };
-            changed = true;
-          } else {
-            migrated[key] = value;
-          }
+  fetchHeldOrders: async () => {
+    try {
+      const { data } = await api.get('/held-orders');
+      if (data && data.orders) {
+        const newOrders: Record<string, HeldOrder> = {};
+        for (const order of data.orders) {
+          newOrders[order.tableId] = order;
         }
-        if (changed) {
-          useHeldOrdersStore.setState({ orders: migrated });
-        }
-      },
+        set({ orders: newOrders });
+      }
+    } catch (err) {
+      console.error('Failed to fetch held orders', err);
     }
-  )
-);
+  },
+
+  holdOrder: async (tableId, items, customerId, guestCount, orderNotes = '') => {
+    try {
+      await api.post('/held-orders', { tableId, items, customerId, guestCount, orderNotes });
+      set((state) => ({
+        orders: {
+          ...state.orders,
+          [tableId]: { tableId, items, customerId, guestCount, orderNotes, heldAt: new Date().toISOString() },
+        },
+      }));
+    } catch (err) {
+      console.error('Failed to hold order', err);
+      throw err;
+    }
+  },
+
+  restoreOrder: async (tableId) => {
+    const order = get().orders[tableId];
+    if (!order) return null;
+    try {
+      await api.delete(`/held-orders/${tableId}`);
+      set((state) => {
+        const rest = { ...state.orders };
+        delete rest[tableId];
+        return { orders: rest };
+      });
+      return order;
+    } catch (err) {
+      console.error('Failed to restore order', err);
+      throw err;
+    }
+  },
+
+  removeHeldOrder: async (tableId) => {
+    try {
+      await api.delete(`/held-orders/${tableId}`);
+      set((state) => {
+        const rest = { ...state.orders };
+        delete rest[tableId];
+        return { orders: rest };
+      });
+    } catch (err) {
+      console.error('Failed to remove held order', err);
+      throw err;
+    }
+  },
+
+  hasHeldOrder: (tableId) => !!get().orders[tableId],
+
+  getHeldOrder: (tableId) => get().orders[tableId],
+}));

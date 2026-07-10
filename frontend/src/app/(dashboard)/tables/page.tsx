@@ -13,6 +13,7 @@ const statusColors: Record<string, string> = {
   occupied: 'bg-red-500',
   reserved: 'bg-yellow-500',
   cleaning: 'bg-gray-500',
+  held: 'bg-blue-500',
 };
 
 interface ReserveModalProps {

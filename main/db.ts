@@ -700,6 +700,24 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 17,
+    name: 'add_held_orders_table',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS held_orders (
+          id TEXT PRIMARY KEY,
+          table_id TEXT NOT NULL,
+          items TEXT NOT NULL,
+          customer_id TEXT,
+          guest_count INTEGER DEFAULT 1,
+          order_notes TEXT,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+        )
+      `);
+    },
+  },
 ];
 
 function runMigrations(): void {

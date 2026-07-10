@@ -21,6 +21,7 @@ import { moreAppsRoutes } from './more-apps';
 import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
 import { menuCsvRoutes } from './menu-csv';
+import { heldOrderRoutes } from './held-orders';
 import { getDatabase, now, parseItemJson, withTxn } from '../db';
 import { cloudSync } from '../services/cloud-sync';
 
@@ -49,6 +50,7 @@ export function registerRoutes(app: Express): void {
   app.use('/api/printers', printerRoutes);
   app.use('/api/db', databaseRoutes);
   app.use('/api/menu-csv', menuCsvRoutes);
+  app.use('/api/held-orders', heldOrderRoutes);
 
   // Tax preview
   app.post('/api/tax/preview', async (req, res) => {

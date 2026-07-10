@@ -97,7 +97,7 @@ export interface Table {
   id: string;
   name: string;
   capacity: number;
-  status: 'available' | 'occupied' | 'reserved' | 'cleaning';
+  status: 'available' | 'occupied' | 'reserved' | 'cleaning' | 'held';
   kitchen_station_id: number | null;
   floor: string | null;
   section: string | null;
