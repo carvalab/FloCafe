@@ -31,6 +31,12 @@ const orderStatusBadge: Record<string, { bg: string; text: string; label: string
   cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' },
 };
 
+const paymentStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
+  paid: { bg: 'bg-green-100', text: 'text-green-700', label: 'Paid' },
+  partial: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Partially Paid' },
+  unpaid: { bg: 'bg-red-100', text: 'text-red-700', label: 'Unpaid' },
+};
+
 type FilterType = 'all' | 'active' | 'unpaid';
 
 // Consolidated state types
@@ -208,16 +214,18 @@ export default function OrdersPage() {
 
   const isOrderPaid = (order: Order) => order.bill?.payment_status === 'paid';
 
+  const paymentStatusOf = (order: Order): 'paid' | 'partial' | 'unpaid' | null => {
+    if (order.status === 'cancelled') return null;
+    if (order.bill?.payment_status === 'paid') return 'paid';
+    if (order.bill?.payment_status === 'partial') return 'partial';
+    return 'unpaid';
+  };
+
   const getTimeSince = (dateStr: string) => {
     const minutes = Math.floor((Date.now() - new Date(dateStr).getTime()) / 60000);
     if (minutes < 1) return 'Just now';
     if (minutes < 60) return `${minutes}m ago`;
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
-  };
-
-  const maskPhone = (phone: string) => {
-    if (!phone || phone.length < 4) return phone;
-    return 'x'.repeat(phone.length - 4) + phone.slice(-4);
   };
 
   const searchCustomersForLink = (query: string) => {
@@ -591,22 +599,29 @@ export default function OrdersPage() {
           <p>No orders found</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto space-y-4">
+        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start">
           {filteredOrders.map((order) => {
             const activeItems = (order.items || []).filter((i: OrderItem) => i.status !== 'cancelled');
             const cancelledItems = (order.items || []).filter((i: OrderItem) => i.status === 'cancelled');
             const paid = isOrderPaid(order);
+            const payStatus = paymentStatusOf(order);
+            const payBadge = payStatus ? paymentStatusBadge[payStatus] : null;
+            const bill = order.bill;
+            const discount = bill ? Number(bill.discount_amount) : Number(order.discount_amount);
+            const tax = bill ? Number(bill.tax_amount) : Number(order.tax_amount);
+            const subtotal = bill ? Number(bill.subtotal) : Number(order.subtotal);
+            const total = bill ? Number(bill.total) : Number(order.total);
 
             return (
               <div
                 key={order.id}
-                className={`bg-white rounded-xl border overflow-hidden ${
+                className={`bg-white rounded-xl border overflow-hidden flex flex-col ${
                   order.status === 'cancelled' ? 'border-red-200 opacity-75' : 'border-gray-100'
                 }`}
               >
-                {/* Order Header */}
-                <div className="flex items-center justify-between px-4 py-3 bg-gray-50 border-b border-gray-100">
-                  <div className="flex items-center gap-3">
+                {/* Top bar: order id/status on the left, payment badge + reprint on the right */}
+                <div className="flex items-center justify-between gap-2 px-4 py-3 bg-gray-50 border-b border-gray-100">
+                  <div className="flex items-center gap-2 flex-wrap min-w-0">
                     <span className="font-bold text-gray-900">#{order.order_number}</span>
                     {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
                       <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
@@ -620,26 +635,31 @@ export default function OrdersPage() {
                       {getTimeSince(order.created_at)}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    {paid && (
-                      <span className="px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-700">Paid</span>
+                  <div className="flex items-center gap-2 shrink-0">
+                    {payBadge && (
+                      <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}>
+                        {payBadge.label}
+                      </span>
                     )}
                     {paid && order.customer?.phone && (
                       <button
                         onClick={() => handleWhatsAppShare(order)}
-                        className="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-green-500 hover:bg-green-600 text-white text-xs font-medium transition-colors"
+                        className="p-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
                         title="Share via WhatsApp"
                       >
                         <MessageCircle size={14} />
-                        Share
                       </button>
                     )}
-                    {Number(order.discount_amount) > 0 && (
-                      <span className="text-xs text-purple-600 font-medium">
-                        -{currency}{Number(order.discount_amount).toLocaleString()} discount
-                      </span>
+                    {order.bill && (
+                      <button
+                        onClick={() => setConfirmPrintBillId(order.bill!.id)}
+                        disabled={printingBillId === order.bill.id}
+                        className="p-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-100 disabled:opacity-50 transition-colors"
+                        title={(printHistory[order.bill.id]?.length ?? 0) > 0 ? 'Reprint' : 'Print'}
+                      >
+                        <Printer size={14} />
+                      </button>
                     )}
-                    <span className="font-bold text-gray-900">{currency}{Number(order.total).toLocaleString()}</span>
                   </div>
                 </div>
 
@@ -659,7 +679,7 @@ export default function OrdersPage() {
                       <User size={14} className="text-blue-600 shrink-0" />
                       <span className="text-sm font-medium text-blue-800">{order.customer.name}</span>
                       {order.customer.phone && (
-                        <span className="text-xs text-blue-600">({maskPhone(order.customer.phone)})</span>
+                        <span className="text-xs text-blue-600">{order.customer.phone}</span>
                       )}
                     </div>
                   </div>
@@ -721,38 +741,79 @@ export default function OrdersPage() {
                   </div>
                 ) : null}
 
-                {/* Items */}
-                <div className="px-4 py-3">
-                  <div className="space-y-2">
+                {/* Items — presented like a bill */}
+                <div className="px-4 py-3 flex-1">
+                  <div className="divide-y divide-gray-50">
                     {activeItems.map((item: OrderItem) => {
                       const config = itemStatusConfig[item.status] || itemStatusConfig.pending;
                       return (
-                        <div key={item.id} className="flex items-center justify-between py-1.5">
-                          <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <span className={`w-2 h-2 rounded-full shrink-0 ${config.dot}`} title={config.label} />
-                            <span className={`text-sm font-medium ${config.color}`}>
-                              {item.quantity}x
-                            </span>
-                            <span className="text-sm text-gray-900 truncate">{item.product_name}</span>
-                            {item.special_instructions && (
-                              <span className="text-xs text-red-500 italic break-words">&quot;{item.special_instructions}&quot;</span>
-                            )}
+                        <div key={item.id} className="py-1.5">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2 flex-1 min-w-0">
+                              <span className={`w-2 h-2 rounded-full shrink-0 ${config.dot}`} title={config.label} />
+                              <span className={`text-sm font-medium ${config.color}`}>
+                                {item.quantity}x
+                              </span>
+                              <span className="text-sm text-gray-900 truncate">{item.product_name}</span>
+                              {item.special_instructions && (
+                                <span className="text-xs text-red-500 italic break-words">&quot;{item.special_instructions}&quot;</span>
+                              )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm text-gray-600">{currency}{Number(item.total).toLocaleString()}</span>
+                              {item.status === 'pending' && isOwnerOrManager && !paid && (
+                                <button
+                                  onClick={() => deleteItem(order.id, item.id)}
+                                  className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
+                                  title="Remove item"
+                                >
+                                  <Trash2 size={14} />
+                                </button>
+                              )}
+                            </div>
                           </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm text-gray-600">{currency}{Number(item.total).toLocaleString()}</span>
-                            {item.status === 'pending' && isOwnerOrManager && !paid && (
-                              <button
-                                onClick={() => deleteItem(order.id, item.id)}
-                                className="p-1 rounded hover:bg-red-50 text-red-400 hover:text-red-600 transition-colors"
-                                title="Remove item"
-                              >
-                                <Trash2 size={14} />
-                              </button>
-                            )}
-                          </div>
+                          {item.addons && item.addons.length > 0 && (
+                            <div className="pl-4 mt-0.5 flex flex-wrap gap-x-3 gap-y-0.5">
+                              {item.addons.map((addon, idx) => (
+                                <span key={addon.id ?? `${item.id}-${idx}`} className="text-xs text-gray-400">
+                                  + {addon.name}{addon.price ? ` (${currency}${Number(addon.price).toLocaleString()})` : ''}
+                                </span>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       );
                     })}
+                  </div>
+
+                  {/* Bill summary */}
+                  <div className="mt-3 pt-3 border-t border-dashed border-gray-200 space-y-1">
+                    <div className="flex justify-between text-sm">
+                      <span className="text-gray-500">Subtotal</span>
+                      <span className="text-gray-700">{currency}{subtotal.toLocaleString()}</span>
+                    </div>
+                    {discount > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-purple-600">Discount</span>
+                        <span className="text-purple-600">-{currency}{discount.toLocaleString()}</span>
+                      </div>
+                    )}
+                    {tax > 0 && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-500">Tax</span>
+                        <span className="text-gray-700">{currency}{tax.toLocaleString()}</span>
+                      </div>
+                    )}
+                    <div className="flex justify-between text-base font-bold pt-1 border-t border-gray-100">
+                      <span className="text-gray-900">Total</span>
+                      <span className="text-gray-900">{currency}{total.toLocaleString()}</span>
+                    </div>
+                    {bill && payStatus === 'partial' && (
+                      <div className="flex justify-between text-xs text-gray-500 pt-0.5">
+                        <span>Paid {currency}{Number(bill.paid_amount).toLocaleString()}</span>
+                        <span>Balance {currency}{Number(bill.balance).toLocaleString()}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* Cancelled items */}
@@ -808,21 +869,6 @@ export default function OrdersPage() {
 
                 {/* Footer with actions */}
                 <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
-                    {order.bill && (
-                      <Button
-                        variant="outline"
-                        onClick={() => setConfirmPrintBillId(order.bill!.id)}
-                        disabled={printingBillId === order.bill.id}
-                        size="sm"
-                      >
-                        <Printer size={14} className="mr-1.5" />
-                        {printingBillId === order.bill.id
-                          ? 'Printing...'
-                          : (printHistory[order.bill.id]?.length ?? 0) > 0
-                            ? 'Reprint'
-                            : 'Print'}
-                      </Button>
-                    )}
                     {showCheckout(order) && (
                       <Button
                         onClick={() => handleCheckout(order.id)}
