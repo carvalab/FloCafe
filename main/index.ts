@@ -393,6 +393,7 @@ function createTray(): void {
               // Fallback: force exit if will-quit does not fire in time
               setTimeout(() => {
                 console.log('[Tray] app.quit() hung, forcing exit');
+                runCleanup();
                 app.exit(0);
               }, 1000);
             }, 100);
