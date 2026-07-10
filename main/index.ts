@@ -180,7 +180,6 @@ let hasCleanedUp = false;
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged;
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
-let ownsLinuxLock = false;
 let gotSingleInstanceLock = false;
 
 // ── Single-instance lock ──────────────────────────────────────────────────────
@@ -192,44 +191,13 @@ if (process.platform === 'linux') {
   // resolving them inside temporary mount paths (e.g. /tmp/.mount_FloXXXXXX)
   app.name = 'flo-desktop';
   app.setPath('userData', path.join(os.homedir(), '.config', 'flo-desktop'));
+}
 
-  const lockFilePath = path.join(app.getPath('userData'), 'singleton.lock');
-  let isRunning = false;
-  if (fs.existsSync(lockFilePath)) {
-    try {
-      const lockContent = fs.readFileSync(lockFilePath, 'utf8').trim();
-      const lockPid = parseInt(lockContent, 10);
-      if (!isNaN(lockPid) && fs.existsSync(`/proc/${lockPid}`)) {
-        isRunning = true;
-      }
-    } catch (err) {
-      console.error('[Lock] Failed to read existing lock file:', err);
-    }
-  }
-
-  if (isRunning) {
-    console.log('[Lock] Another instance is already running on Linux. Quitting.');
-    app.quit();
-    process.exit(0);
-  } else {
-    try {
-      // Ensure the directory exists
-      const userDataPath = app.getPath('userData');
-      if (!fs.existsSync(userDataPath)) {
-        fs.mkdirSync(userDataPath, { recursive: true });
-      }
-      fs.writeFileSync(lockFilePath, process.pid.toString(), 'utf8');
-      gotSingleInstanceLock = true;
-      ownsLinuxLock = true;
-    } catch (err) {
-      console.error('[Lock] Failed to write lock file:', err);
-    }
-  }
-} else {
-  gotSingleInstanceLock = app.requestSingleInstanceLock();
-  if (!gotSingleInstanceLock) {
-    app.quit();
-  }
+gotSingleInstanceLock = app.requestSingleInstanceLock();
+if (!gotSingleInstanceLock) {
+  console.log('[Lock] Another instance is already running. Quitting.');
+  app.quit();
+  process.exit(0);
 }
 
 if (gotSingleInstanceLock) {
@@ -239,6 +207,11 @@ if (gotSingleInstanceLock) {
       if (mainWindow.isMinimized()) mainWindow.restore();
       mainWindow.show();
       mainWindow.focus();
+      if (process.platform === 'linux') {
+        mainWindow.setAlwaysOnTop(true);
+        mainWindow.setAlwaysOnTop(false);
+        app.focus();
+      }
     }
   });
 }
@@ -657,14 +630,6 @@ function runCleanup(): void {
   if (hasCleanedUp) return;
   hasCleanedUp = true;
   console.log('[Flo] Running cleanup...');
-
-  // Remove Linux singleton lock
-  if (process.platform === 'linux' && ownsLinuxLock) {
-    try {
-      const lockFilePath = path.join(app.getPath('userData'), 'singleton.lock');
-      if (fs.existsSync(lockFilePath)) fs.unlinkSync(lockFilePath);
-    } catch (e) { console.error('[Flo] Lock removal error:', e); }
-  }
 
   // Destroy tray to prevent ghost icons on X11/GNOME/KDE
   if (tray) {
