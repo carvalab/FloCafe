@@ -136,13 +136,13 @@ async function main() {
     assertEqual(moveRes.status, 200, 'move order returns 200');
     assertEqual(moveRes.data.order.id, orderId, 'same order is returned');
     assertEqual(moveRes.data.order.table_id, 'tbl-move-target', 'order table_id moves to target');
-    assertEqual(String(moveRes.data.order.table.name), '92', 'response includes new table for KOT/KDS consumers');
+    assertEqual(Number(moveRes.data.order.table.name), 92, 'response includes new table for KOT/KDS consumers');
     assertEqual(moveRes.data.sourceTable.status, 'available', 'source table is freed');
     assertEqual(moveRes.data.targetTable.status, 'occupied', 'target table is occupied');
     assertEqual(moveRes.data.targetTable.activeOrder.id, orderId, 'target table now exposes active order');
 
     const movedOrder = await api(baseUrl, `/api/orders/${orderId}`, { headers: authHeader });
-    assertEqual(String(movedOrder.data.order.table.name), '92', 'order detail resolves the new table immediately');
+    assertEqual(Number(movedOrder.data.order.table.name), 92, 'order detail resolves the new table immediately');
 
     const occupiedMove = await api(baseUrl, '/api/tables/tbl-move-target/move-order', {
       method: 'POST',
