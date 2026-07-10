@@ -303,11 +303,11 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
       points_balance: pointsBalance,
     };
     const billTemplate = settings.bill_template;
-    console.log('[Print Bill] Business:', business.name, 'Template:', billTemplate || 'compact');
+    console.log('[Print Bill] Business:', business.name, 'Template:', billTemplate || 'classic');
 
     // Use existing printReceipt function with template support
     console.log('[Print Bill] Calling printReceipt...');
-    const success = await printReceipt(order, bill, business, billTemplate || 'compact', useUnicode, isReprint);
+    const success = await printReceipt(order, bill, business, billTemplate || 'classic', useUnicode, isReprint);
     console.log('[Print Bill] Print result:', success);
 
     if (success) {

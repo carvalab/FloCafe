@@ -506,7 +506,7 @@ export function formatReceipt(order: any, bill: any, business?: any, template?: 
   console.log('[Printer] formatReceipt - order:', order?.order_number, 'bill:', bill?.bill_number);
   console.log('[Printer] formatReceipt - items count:', order?.items?.length || 0, 'cols:', cols);
 
-  const tpl = template || 'compact';
+  const tpl = normalizeReceiptTemplate(template);
   const biz = business || { name: 'Store', address: '', phone: '', gstin: '' };
 
   try {
@@ -522,6 +522,13 @@ export function formatReceipt(order: any, bill: any, business?: any, template?: 
     console.error('[Printer] formatReceipt error:', err);
     throw err;
   }
+}
+
+function normalizeReceiptTemplate(template?: string): 'classic' | 'compact' | 'detailed' {
+  const normalized = String(template || 'classic').toLowerCase().replace(/[^a-z]/g, '');
+  if (normalized.includes('compact') || normalized.includes('minimal')) return 'compact';
+  if (normalized.includes('detailed') || normalized.includes('gst') || normalized.includes('tax')) return 'detailed';
+  return 'classic';
 }
 
 function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48, useUnicode: boolean = false, isReprint: boolean = false): Buffer {

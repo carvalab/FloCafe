@@ -222,7 +222,7 @@ console.log('\n✅ Test 4: Classic receipt template');
 
 console.log('\n✅ Test 5: Detailed GST invoice template');
 {
-  const buf = formatReceipt(fixtureOrder, fixtureBill, fixtureBusiness, 'detailed', 48, true);
+  const buf = formatReceipt(fixtureOrder, fixtureBill, fixtureBusiness, 'Detailed (GST)', 48, true);
   const text = buf.toString('utf8');
 
   assert('renders TAX INVOICE header', text.includes('TAX INVOICE'));
@@ -234,6 +234,17 @@ console.log('\n✅ Test 5: Detailed GST invoice template');
 
   console.log('\n   — Rendered detailed —');
   console.log(visiblePreview(buf, 48));
+}
+
+console.log('\n✅ Test 5b: Template labels normalize to backend templates');
+{
+  const classic = formatReceipt(fixtureOrder, fixtureBill, fixtureBusiness, 'Classic', 48, true).toString('utf8');
+  const compact = formatReceipt(fixtureOrder, fixtureBill, fixtureBusiness, 'Compact', 48, true).toString('utf8');
+  const detailed = formatReceipt(fixtureOrder, fixtureBill, fixtureBusiness, 'Detailed (GST)', 48, true).toString('utf8');
+
+  assert('Classic label renders classic template', classic.includes('Invoice #:'));
+  assert('Compact label renders compact template', compact.includes('Bill #:'));
+  assert('Detailed (GST) label renders detailed template', detailed.includes('TAX INVOICE'));
 }
 
 console.log('\n✅ Test 6: KOT (Kitchen Order Ticket)');
