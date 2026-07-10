@@ -75,7 +75,7 @@ async function main() {
     throw error;
   }
 
-  assert.equal(getCurrentSchemaVersion(), 15, 'fresh database migrates to latest schema');
+  assert.equal(getCurrentSchemaVersion(), 16, 'fresh database migrates to latest schema');
   assert.equal(count('users'), 0, 'fresh install starts without users');
   assert.equal(count('categories'), 0, 'fresh install starts with no sample categories');
   assert.equal(count('products'), 0, 'fresh install starts with no sample products');
@@ -110,7 +110,7 @@ async function main() {
     assert.equal(before.data.initialRole, 'owner');
     console.log('   ✓ setup status reports setup is needed');
 
-    const first = await request(baseUrl, '/setup/initialize', {
+    const withoutTerms = await request(baseUrl, '/setup/initialize', {
       method: 'POST',
       body: JSON.stringify({
         name: 'First Owner',
@@ -122,11 +122,30 @@ async function main() {
         service_model: 'qsr',
       }),
     });
+    assert.equal(withoutTerms.status, 400, 'setup rejects account creation without terms acceptance');
+    assert.equal(count('users'), 0, 'no user is created when terms are not accepted');
+    console.log('   ✓ setup endpoint requires terms_accepted before creating the owner account');
+
+    const first = await request(baseUrl, '/setup/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'First Owner',
+        email: 'owner@example.com',
+        password: 'x',
+        business_type: 'restaurant',
+        business_name: 'First Cafe',
+        setup_profile: 'express',
+        service_model: 'qsr',
+        terms_accepted: true,
+      }),
+    });
 
     assert.equal(first.status, 200);
     assert.equal(first.data.user.email, 'owner@example.com');
     assert.equal(first.data.user.role, 'owner');
     assert.equal(count('users'), 1, 'setup creates the first owner');
+    const ownerRow = getDatabase().prepare('SELECT terms_accepted_at FROM users WHERE email = ?').get('owner@example.com') as { terms_accepted_at: string | null };
+    assert.ok(ownerRow.terms_accepted_at, 'terms acceptance is stamped with a timestamp on the owner record');
     assert.equal(setting('business_name'), 'First Cafe');
     assert.equal(setting('business_type'), 'restaurant');
     assert.equal(setting('setup_profile'), 'express');
@@ -148,6 +167,7 @@ async function main() {
         email: 'second@example.com',
         password: 'x',
         business_type: 'restaurant',
+        terms_accepted: true,
       }),
     });
 

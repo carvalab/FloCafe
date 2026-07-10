@@ -487,6 +487,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       state_code,
       tax_registered,
       billing_type,
+      terms_accepted,
     } = req.body;
     const email = normalizeEmail(req.body.email);
     const displayName = String(name || '').trim();
@@ -505,6 +506,10 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
     if (!isValidEmail(email)) {
       return res.status(400).json({ error: 'A valid email is required' });
+    }
+
+    if (terms_accepted !== true) {
+      return res.status(400).json({ error: 'You must accept the Terms and Conditions, Privacy Policy, and No Warranty Disclaimer to continue.' });
     }
 
     if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
@@ -541,9 +546,9 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
       userId = uuidv4();
       db.prepare(`
-        INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-      `).run(userId, displayName, email, hashedPassword, INITIAL_ADMIN_ROLE, 1, now(), now());
+        INSERT INTO users (id, name, email, password, role, is_active, terms_accepted_at, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `).run(userId, displayName, email, hashedPassword, INITIAL_ADMIN_ROLE, 1, now(), now(), now());
 
       upsertSettings(db, {
         business_name: resolvedStoreName,

@@ -690,6 +690,16 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       insertSettingIfMissing('instagram_handle', '');
     },
   },
+  {
+    version: 16,
+    name: 'add_terms_accepted_at_to_users',
+    up: () => {
+      const userColumns = getColumns(db, 'users');
+      if (!userColumns.includes('terms_accepted_at')) {
+        db.exec(`ALTER TABLE users ADD COLUMN terms_accepted_at TEXT`);
+      }
+    },
+  },
 ];
 
 function runMigrations(): void {
@@ -847,6 +857,7 @@ function createSchema(): void {
       pin_hash TEXT,
       category_ids TEXT,
       is_active INTEGER DEFAULT 1,
+      terms_accepted_at TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

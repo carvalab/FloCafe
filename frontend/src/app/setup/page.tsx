@@ -74,6 +74,7 @@ export default function SetupPage() {
     confirmPassword: '',
     business_name: '',
   });
+  const [termsAccepted, setTermsAccepted] = useState(false);
   const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
   const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
@@ -90,6 +91,10 @@ export default function SetupPage() {
     }
     if (form.password !== form.confirmPassword) {
       toast.error('Passwords do not match');
+      return false;
+    }
+    if (!termsAccepted) {
+      toast.error('You must agree to the Terms and Conditions, Privacy Policy, and No Warranty Disclaimer to continue');
       return false;
     }
     return true;
@@ -116,6 +121,7 @@ export default function SetupPage() {
         business_name: form.business_name || undefined,
         setup_profile: profile,
         service_model: serviceModel,
+        terms_accepted: termsAccepted,
       });
       completeSetup();
     } catch (err: unknown) {
@@ -216,7 +222,32 @@ export default function SetupPage() {
                     />
                   </div>
 
-                  <Button type="submit" disabled={!passwordsMatch} className="w-full" size="lg">
+                  <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={termsAccepted}
+                      onChange={(e) => setTermsAccepted(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                      required
+                    />
+                    <span>
+                      I agree to the FloPOS{' '}
+                      <a href="https://flopos.com/terms" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                        Terms and Conditions
+                      </a>
+                      ,{' '}
+                      <a href="https://flopos.com/privacy" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                        Privacy Policy
+                      </a>
+                      , and{' '}
+                      <a href="https://flopos.com/disclaimer" target="_blank" rel="noopener noreferrer" className="text-primary underline">
+                        No Warranty Disclaimer
+                      </a>
+                      .
+                    </span>
+                  </label>
+
+                  <Button type="submit" disabled={!passwordsMatch || !termsAccepted} className="w-full" size="lg">
                     Continue <ArrowRight className="w-4 h-4 ml-2" />
                   </Button>
                 </form>

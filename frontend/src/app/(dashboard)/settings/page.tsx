@@ -123,6 +123,28 @@ export default function SettingsPage() {
     }).finally(() => setKdsInfoLoading(false));
   };
 
+  // ── More Apps ───────────────────────────────────────────────────────────────
+  type MoreApp = {
+    id: string;
+    name: string;
+    tagline: string;
+    ios_url: string | null;
+    android_url: string | null;
+    qr_data_url: string | null;
+    available: boolean;
+  };
+  const [moreApps, setMoreApps] = useState<MoreApp[]>([]);
+  const [moreAppsLoading, setMoreAppsLoading] = useState(false);
+
+  useEffect(() => {
+    setMoreAppsLoading(true);
+    api.get('/more-apps').then((res) => {
+      setMoreApps(res.data.apps || []);
+    }).catch(() => {
+      // Silent — this tab is informational, not critical
+    }).finally(() => setMoreAppsLoading(false));
+  }, []);
+
   // ── Updates ─────────────────────────────────────────────────────────────────
   type UpdateStatus = {
     status: 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready-to-install' | 'error' | 'dev-mode' | 'store';
@@ -619,6 +641,7 @@ export default function SettingsPage() {
           <TabsTrigger value="data">Data</TabsTrigger>
           <TabsTrigger value="updates">Updates</TabsTrigger>
           <TabsTrigger value="cloud">Cloud Sync</TabsTrigger>
+          <TabsTrigger value="more-apps">More Apps</TabsTrigger>
         </TabsList>
 
         {/* ================================================================
@@ -1846,6 +1869,72 @@ export default function SettingsPage() {
             >
               {savingCloud ? 'Saving…' : 'Save Cloud Settings'}
             </button>
+          </div>
+        </TabsContent>
+
+        {/* ================================================================
+            TAB: More Apps
+        ================================================================ */}
+        <TabsContent value="more-apps">
+          <div className="max-w-2xl space-y-6">
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Smartphone size={20} className="text-gray-500" />
+                <h2 className="font-semibold text-gray-900">More Apps</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">
+                Companion apps for the Flo POS family. Scan a QR code with your phone to download.
+              </p>
+
+              {moreAppsLoading && (
+                <div className="flex items-center justify-center py-10">
+                  <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {!moreAppsLoading && (
+                <div className="space-y-4">
+                  {moreApps.map((app) => (
+                    <div key={app.id} className="flex flex-col sm:flex-row gap-5 items-start border border-gray-100 rounded-xl p-5">
+                      <div className="shrink-0">
+                        {app.qr_data_url ? (
+                          <img src={app.qr_data_url} alt={`${app.name} QR Code`}
+                            className="w-32 h-32 rounded-lg border border-gray-200" />
+                        ) : (
+                          <div className="w-32 h-32 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400">
+                            <QrCode size={36} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-semibold text-gray-900">{app.name}</h3>
+                          {!app.available && (
+                            <span className="text-xs font-medium text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full">Coming soon</span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-500 mb-3">{app.tagline}</p>
+                        <div className="flex gap-3 text-sm">
+                          {app.ios_url && (
+                            <a href={app.ios_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+                              Download for iOS
+                            </a>
+                          )}
+                          {app.android_url && (
+                            <a href={app.android_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+                              Download for Android
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  {moreApps.length === 0 && (
+                    <p className="text-sm text-gray-400 text-center py-10">No apps to show yet.</p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         </TabsContent>
 
