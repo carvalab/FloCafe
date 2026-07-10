@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now } from '../db';
+import { getDatabase, now, generateShortId } from '../db';
 import { requireRole } from '../middleware/security';
 
 const router = Router();
@@ -65,12 +65,13 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
 
     const db = getDatabase();
-    const result = db.prepare(`
-      INSERT INTO categories (name, slug, description, parent_id, sort_order, is_active, color, icon, created_at, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(name, slug, description || null, parent_id || null, sort_order || 0, is_active !== false ? 1 : 0, color || null, icon || null, now(), now());
+    const id = generateShortId('categories');
+    db.prepare(`
+      INSERT INTO categories (id, name, slug, description, parent_id, sort_order, is_active, color, icon, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(id, name, slug, description || null, parent_id || null, sort_order || 0, is_active !== false ? 1 : 0, color || null, icon || null, now(), now());
 
-    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(result.lastInsertRowid);
+    const category = db.prepare('SELECT * FROM categories WHERE id = ?').get(id);
     res.status(201).json({ category });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
