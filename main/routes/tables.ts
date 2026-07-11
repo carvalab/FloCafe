@@ -45,6 +45,9 @@ router.get('/', (req: Request, res: Response) => {
       query += ' AND kitchen_station_id = ?';
       params.push(req.query.kitchen_station_id);
     }
+    if (req.query.active === 'true' || req.query.active === '1') {
+      query += ' AND is_active = 1';
+    }
 
     query += ' ORDER BY number';
 
