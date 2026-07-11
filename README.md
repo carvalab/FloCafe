@@ -98,9 +98,11 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 - Menu catalog with categories
 - Staff management with roles
 - Customer database
+- Dashboard insights and owner-restricted analytics
 - Sales reports
 
 ### Order Management
+- Bill-style order cards for intuitive layout and fast management
 - Cancel orders with status-based rules (pending = free, preparing+ = manager PIN)
 - Loyalty points toggle per order (configurable earn/redeem rates)
 - Discount system (order + item level, percentage + amount)
@@ -108,9 +110,11 @@ Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCaf
 - Receipt reprinting with print logging
 - Add-on items after order placement
 - Filter bar with search, table, type, and status filters
+- Cross-device held orders synchronization
 
 ### Kitchen Display System (KDS)
 - Real-time order updates via WebSocket
+- Dynamic IP detection for easy pairing via VPN/Mesh networks (Tailscale, ZeroTier, etc.)
 - "NEW" badge for items added after initial order
 - Table name always visible
 

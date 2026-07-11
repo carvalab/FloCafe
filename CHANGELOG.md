@@ -2,6 +2,22 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.2] - 2026-07-11
+
+### Added
+- Cross-device held orders synchronization via the backend, complete with a resume button in POS.
+- Dynamic IP detection and Tailscale/VPN/Mesh network support for Kitchen Display System (KDS) pairing.
+- Bill-style order cards on the Orders page for a more intuitive layout.
+- Dashboard insights and owner-restricted analytics.
+- Cart quantity aggregation for product grid badges in POS.
+
+### Fixed
+- Reverted all order tabs (including held orders) to the standard vertical list layout.
+- Corrected an invalid column reference (`t.name` to `t.number`) in the `recentOrders` SQL query.
+- Linux restore from tray issues and implemented a singleton lock mechanism for graceful resource cleanup on force exit.
+- Ensured a unique ID is assigned when creating a new category.
+- Improved POS phone lookup to show the matched customer name before auto-selecting.
+
 ## [1.8.0] - 2026-07-09
 
 ### Added

@@ -7,7 +7,7 @@ FloUI is the user interface for the FloCafe point-of-sale system. It runs as a s
 ## Features
 
 ### Orders Page
-- **Order cards** with status tracking, items, and totals
+- **Bill-style order cards** with status tracking, items, and totals
 - **Filter bar** — search by order number, filter by table, type, or status
 - **Print receipt** — confirmation modal with print logging
 - **Cancel order** — modal with reason, table free option, and manager PIN override
@@ -16,9 +16,11 @@ FloUI is the user interface for the FloCafe point-of-sale system. It runs as a s
 - **Add item / New order** buttons for existing orders
 - **Print history** — collapsible section showing print log
 - **WhatsApp sharing** — share bill directly with customer
+- **Cross-device held orders sync** — resume and manage suspended orders seamlessly
 
 ### Kitchen Display System (KDS)
 - Real-time order updates via WebSocket
+- Dynamic IP detection for easy pairing via VPN/Mesh networks (Tailscale, ZeroTier, etc.)
 - **"NEW" badge** for items added after initial order
 - Table name always visible
 - Status progression: pending → preparing → ready → served

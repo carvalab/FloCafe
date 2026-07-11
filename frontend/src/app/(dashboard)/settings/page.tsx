@@ -1352,7 +1352,7 @@ export default function SettingsPage() {
                         {kdsInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
                           <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
                             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                              {ipInfo.ip.startsWith('100.') ? 'Tailscale VPN' : 'Local Network'}
+                              {ipInfo.ip.startsWith('100.') ? 'VPN / Mesh Network' : 'Local Network'}
                             </p>
                             {ipInfo.qr_data ? (
                               <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
