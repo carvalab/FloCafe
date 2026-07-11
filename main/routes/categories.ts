@@ -113,7 +113,35 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
       return res.status(404).json({ error: 'Category not found' });
     }
 
-    // Soft delete
+    const { action, reassign_to } = req.query as { action?: string; reassign_to?: string };
+
+    const { count: productCount } = db.prepare(
+      'SELECT COUNT(*) as count FROM products WHERE category_id = ? AND deleted_at IS NULL'
+    ).get(req.params.id) as { count: number };
+
+    if (productCount > 0 && !action) {
+      return res.status(400).json({
+        error: `Category has ${productCount} active product(s). Choose an action.`,
+        productCount,
+      });
+    }
+
+    if (action === 'reassign') {
+      if (!reassign_to) {
+        return res.status(400).json({ error: 'reassign_to is required for reassign action' });
+      }
+      const targetCategory = db.prepare('SELECT * FROM categories WHERE id = ? AND deleted_at IS NULL').get(reassign_to);
+      if (!targetCategory) {
+        return res.status(400).json({ error: 'Target category not found or deleted' });
+      }
+      db.prepare('UPDATE products SET category_id = ?, updated_at = ? WHERE category_id = ? AND deleted_at IS NULL')
+        .run(reassign_to, now(), req.params.id);
+    } else if (action === 'delete_all') {
+      db.prepare('UPDATE products SET deleted_at = ?, updated_at = ? WHERE category_id = ? AND deleted_at IS NULL')
+        .run(now(), now(), req.params.id);
+    }
+
+    // Soft delete the category
     db.prepare('UPDATE categories SET deleted_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Category deleted' });
   } catch (error: any) {

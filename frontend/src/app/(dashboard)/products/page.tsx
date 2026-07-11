@@ -81,9 +81,12 @@ export default function ProductsPage() {
   const [csvFile, setCsvFile] = useState<File | null>(null);
   const [csvResult, setCsvResult] = useState<Record<string, unknown> | null>(null);
   const [csvUploading, setCsvUploading] = useState(false);
+  const [catDeleteModal, setCatDeleteModal] = useState<{ open: boolean; id: number | null; name: string; productCount: number }>({ open: false, id: null, name: '', productCount: 0 });
+  const [catReassignTo, setCatReassignTo] = useState<string>('');
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
+  const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 
   const fetchData = async () => {
     try {
@@ -181,7 +184,7 @@ export default function ProductsPage() {
     try {
       const payload = {
         name: form.name,
-        category_id: Number(form.category_id),
+        category_id: form.category_id || null,
         price: Number(form.price),
         cost_price: form.cost_price ? Number(form.cost_price) : null,
         cb_percent: Number(form.cb_percent) || 0,
@@ -252,13 +255,46 @@ export default function ProductsPage() {
     } catch { toast.error('Failed to save category'); }
   };
 
-  const handleCategoryDelete = async (id: number) => {
-    if (!await confirm('Delete this category?', { destructive: true, confirmLabel: 'Delete' })) return;
+  const handleCategoryDelete = async (id: number, name: string) => {
     try {
       await api.delete(`/categories/${id}`);
       toast.success('Category deleted');
       fetchData();
-    } catch { toast.error('Failed to delete'); }
+    } catch (err: unknown) {
+      const e = err as { response?: { status?: number; data?: { error?: string; productCount?: number } } };
+      if (e?.response?.status === 400 && e?.response?.data?.productCount) {
+        setCatReassignTo('');
+        setCatDeleteModal({ open: true, id, name, productCount: e.response.data.productCount });
+      } else {
+        toast.error(e?.response?.data?.error || 'Failed to delete');
+      }
+    }
+  };
+
+  const handleCategoryReassignDelete = async () => {
+    if (!catDeleteModal.id || !catReassignTo) return;
+    try {
+      await api.delete(`/categories/${catDeleteModal.id}?action=reassign&reassign_to=${catReassignTo}`);
+      toast.success('Products reassigned and category deleted');
+      setCatDeleteModal({ open: false, id: null, name: '', productCount: 0 });
+      fetchData();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      toast.error(e?.response?.data?.error || 'Failed to delete');
+    }
+  };
+
+  const handleCategoryForceDelete = async () => {
+    if (!catDeleteModal.id) return;
+    try {
+      await api.delete(`/categories/${catDeleteModal.id}?action=delete_all`);
+      toast.success('Category and all products deleted');
+      setCatDeleteModal({ open: false, id: null, name: '', productCount: 0 });
+      fetchData();
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      toast.error(e?.response?.data?.error || 'Failed to delete');
+    }
   };
 
   const resetAddonForm = () => {
@@ -398,12 +434,16 @@ export default function ProductsPage() {
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex gap-2 justify-end">
-                    <button onClick={() => openEdit(product)} className="p-1.5 text-gray-400 hover:text-brand">
-                      <Pencil size={16} />
-                    </button>
-                    <button onClick={() => handleDelete(product.id)} className="p-1.5 text-gray-400 hover:text-red-600">
-                      <Trash2 size={16} />
-                    </button>
+                    {isOwnerOrManager && (
+                      <>
+                        <button onClick={() => openEdit(product)} className="p-1.5 text-gray-400 hover:text-brand">
+                          <Pencil size={16} />
+                        </button>
+                        <button onClick={() => handleDelete(product.id)} className="p-1.5 text-gray-400 hover:text-red-600">
+                          <Trash2 size={16} />
+                        </button>
+                      </>
+                    )}
                   </div>
                 </td>
               </tr>
@@ -634,8 +674,12 @@ export default function ProductsPage() {
                       </td>
                       <td className="p-4 text-right">
                         <div className="flex gap-2 justify-end">
-                          <button onClick={() => openEditCategory(cat)} className="p-1.5 text-gray-400 hover:text-brand"><Pencil size={16} /></button>
-                          <button onClick={() => handleCategoryDelete(cat.id)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                          {isOwnerOrManager && (
+                            <>
+                              <button onClick={() => openEditCategory(cat)} className="p-1.5 text-gray-400 hover:text-brand"><Pencil size={16} /></button>
+                              <button onClick={() => handleCategoryDelete(cat.id, cat.name)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                            </>
+                          )}
                         </div>
                       </td>
                     </tr>
@@ -714,8 +758,12 @@ export default function ProductsPage() {
                     <td className="p-4 text-center text-sm text-gray-600">{group.addons?.length || 0}</td>
                     <td className="p-4 text-right">
                       <div className="flex gap-2 justify-end">
-                        <button onClick={() => openEditAddonGroup(group)} className="p-1.5 text-gray-400 hover:text-brand"><Pencil size={16} /></button>
-                        <button onClick={() => handleAddonGroupDelete(group.id)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                        {isOwnerOrManager && (
+                          <>
+                            <button onClick={() => openEditAddonGroup(group)} className="p-1.5 text-gray-400 hover:text-brand"><Pencil size={16} /></button>
+                            <button onClick={() => handleAddonGroupDelete(group.id)} className="p-1.5 text-gray-400 hover:text-red-600"><Trash2 size={16} /></button>
+                          </>
+                        )}
                       </div>
                     </td>
                   </tr>
@@ -888,6 +936,53 @@ export default function ProductsPage() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {catDeleteModal.open && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl p-6 w-full max-w-md">
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-lg font-bold text-gray-900">Delete Category</h2>
+              <button onClick={() => setCatDeleteModal({ open: false, id: null, name: '', productCount: 0 })} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
+            </div>
+            <p className="text-sm text-gray-700 mb-5">
+              <span className="font-semibold">&ldquo;{catDeleteModal.name}&rdquo;</span> has{' '}
+              <span className="font-semibold text-amber-600">{catDeleteModal.productCount} active product(s)</span>.{' '}
+              What would you like to do with them?
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Move products to</label>
+                <select
+                  value={catReassignTo}
+                  onChange={(e) => setCatReassignTo(e.target.value)}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none"
+                >
+                  <option value="">Select a category…</option>
+                  {categories
+                    .filter((c) => c.name.toLowerCase() === 'uncategorized' && c.id !== catDeleteModal.id)
+                    .map((c) => <option key={c.id} value={String(c.id)}>{c.name} (default)</option>)}
+                  {categories
+                    .filter((c) => c.name.toLowerCase() !== 'uncategorized' && c.id !== catDeleteModal.id)
+                    .map((c) => <option key={c.id} value={String(c.id)}>{c.name}</option>)}
+                </select>
+              </div>
+              <Button onClick={handleCategoryReassignDelete} disabled={!catReassignTo} className="w-full">
+                Move &amp; Delete Category
+              </Button>
+              <div className="relative flex items-center">
+                <div className="flex-grow border-t border-gray-200" />
+                <span className="mx-3 text-xs text-gray-400">or</span>
+                <div className="flex-grow border-t border-gray-200" />
+              </div>
+              <button
+                onClick={handleCategoryForceDelete}
+                className="w-full px-4 py-2 text-sm font-medium bg-red-600 hover:bg-red-700 text-white rounded-lg transition-colors"
+              >
+                Delete Category &amp; All Products
+              </button>
             </div>
           </div>
         </div>
