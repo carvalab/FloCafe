@@ -14,6 +14,8 @@ import type { Order, Bill } from '@/lib/types';
 import { getCurrencySymbol } from '@/lib/countries';
 import { usePrinterStore } from '@/hooks/usePrinter';
 import { useHeldOrdersStore } from '@/store/held-orders';
+import { useRouter } from 'next/navigation';
+import { useCartStore } from '@/store/cart';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
   pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
@@ -66,6 +68,8 @@ export default function OrdersPage() {
   const { currentTenant } = useAuthStore();
   const { printBill } = usePrinterStore();
   const heldOrdersStore = useHeldOrdersStore();
+  const router = useRouter();
+  const cartStore = useCartStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -626,16 +630,26 @@ export default function OrdersPage() {
                    )}
                  </div>
                  <div className="p-4 bg-gray-50 border-t border-gray-100 flex gap-2">
-                   <Button onClick={async () => {
-                     if (await confirm('Are you sure you want to delete this held order?', { destructive: true })) {
-                       try {
-                         await heldOrdersStore.removeHeldOrder(heldOrder.tableId);
-                         toast.success('Held order removed');
-                       } catch {
-                         toast.error('Failed to remove held order');
-                       }
-                     }
-                   }} variant="outline" className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50">Delete</Button>
+                    <Button onClick={async () => {
+                      const held = await heldOrdersStore.restoreOrder(heldOrder.tableId);
+                      if (held) {
+                        cartStore.loadItems(held.items, heldOrder.tableId, held.customerId, held.guestCount, held.orderNotes);
+                        cartStore.setOrderType('dine_in');
+                        router.push('/pos');
+                      } else {
+                        toast.error('Could not resume order');
+                      }
+                    }} variant="default" className="flex-1 bg-brand hover:bg-brand/90 text-white">Resume in POS</Button>
+                    <Button onClick={async () => {
+                      if (await confirm('Are you sure you want to delete this held order?', { destructive: true })) {
+                        try {
+                          await heldOrdersStore.removeHeldOrder(heldOrder.tableId);
+                          toast.success('Held order removed');
+                        } catch {
+                          toast.error('Failed to remove held order');
+                        }
+                      }
+                    }} variant="outline" className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50">Delete</Button>
                  </div>
               </div>
             ))}
