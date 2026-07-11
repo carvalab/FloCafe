@@ -5,7 +5,7 @@
  */
 import { Router, Request, Response } from 'express';
 import QRCode from 'qrcode';
-import { getLocalIP } from '../server';
+import { getLocalIP, getAllLocalIPs } from '../server';
 import { getKdsPort } from '../kds-server';
 
 const router = Router();
@@ -13,11 +13,21 @@ const router = Router();
 router.get('/', async (_req: Request, res: Response) => {
   const kdsPort = getKdsPort();
   const ip = getLocalIP();
+  const allIps = getAllLocalIPs();
 
   const mdnsUrl = `http://flo.local:${kdsPort}`;
   const ipUrl   = `http://${ip}:${kdsPort}`;
-  // Prefer IP URL for QR — mDNS may not resolve on Android
   const qrUrl   = ipUrl;
+
+  const ipsData = await Promise.all(allIps.map(async (localIp) => {
+    const url = `http://${localIp}:${kdsPort}`;
+    try {
+      const qr_data = await QRCode.toDataURL(url, { errorCorrectionLevel: 'M', width: 256 });
+      return { ip: localIp, url, qr_data };
+    } catch {
+      return { ip: localIp, url, qr_data: null };
+    }
+  }));
 
   let qrDataUrl: string | null = null;
   try {
@@ -31,7 +41,9 @@ router.get('/', async (_req: Request, res: Response) => {
     ip_url:      ipUrl,
     qr_url:      qrUrl,
     qr_data_url: qrDataUrl,
+    ips_data:    ipsData,
   });
 });
 
 export const kdsInfoRoutes = router;
+

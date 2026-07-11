@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import { getDatabase, parseItemJson } from './db';
 import { setupKdsWebSocket } from './services/kds';
 import { getJWTSecret } from './routes/auth';
-import { rateLimit } from './middleware/security';
+import { rateLimit, corsOptions } from './middleware/security';
 
 let kdsServer: http.Server | null = null;
 const KDS_PORT = parseInt(process.env.KDS_PORT || '3002', 10);
@@ -78,16 +78,7 @@ export function startKdsServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     const app: Express = express();
 
-    app.use(cors({
-      origin: (origin, callback) => {
-        if (!origin) return callback(null, true);
-        if (/^https?:\/\/localhost(:[0-9]+)?$/.test(origin) ||
-          /^https?:\/\/(127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin)) {
-          return callback(null, true);
-        }
-        callback(new Error('Not allowed by CORS'));
-      }
-    }));
+    app.use(cors(corsOptions));
     app.use(express.json());
 
     // ── Global API rate limiting ──────────────────────────────────────────

@@ -118,3 +118,6 @@ dropAllTables();
 ## Frontend
 
 `frontend/` is part of this repository. It is not a git submodule.
+
+## Post-Implementation Protocol
+- **MANDATORY**: After modifying ANY code, you MUST run all linting (`npm run lint`), build (`npm run build`), and testing (`npm test`) commands to ensure zero regressions before reporting back to the user. Do not blindly assume changes compile successfully; always verify via terminal output.
