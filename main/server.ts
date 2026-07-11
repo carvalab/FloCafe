@@ -10,7 +10,7 @@ import { registerRoutes } from './routes';
 import { getJWTSecret } from './routes/auth';
 import { getDbHealth } from './db';
 import { setupKdsWebSocket } from './services/kds';
-import { rateLimit } from './middleware/security';
+import { rateLimit, corsOptions } from './middleware/security';
 
 let server: http.Server | null = null;
 let app: Express;
@@ -96,20 +96,7 @@ export function startServer(): Promise<void> {
   return new Promise((resolve, reject) => {
     app = express();
 
-    app.use(cors({
-      origin: (origin, callback) => {
-        // Allow requests with no origin (like curl or desktop apps)
-        if (!origin) return callback(null, true);
-
-        // Allow localhost and local private IPs
-        if (/^https?:\/\/localhost(:[0-9]+)?$/.test(origin) ||
-          /^https?:\/\/(127\.0\.0\.1|192\.168\.|10\.|172\.(1[6-9]|2[0-9]|3[0-1])\.)/.test(origin)) {
-          return callback(null, true);
-        }
-
-        callback(new Error('Not allowed by CORS'));
-      }
-    }));
+    app.use(cors(corsOptions));
     app.use(express.json());
 
     // ── Global API rate limiting ───────────────────────────────────────
@@ -253,4 +240,20 @@ export function getLocalIP(): string {
     }
   }
   return '127.0.0.1';
+}
+
+/** Returns all non-loopback IPv4 addresses on the machine. */
+export function getAllLocalIPs(): string[] {
+  const ips: string[] = [];
+  const interfaces = os.networkInterfaces();
+  for (const name of Object.keys(interfaces)) {
+    const iface = interfaces[name];
+    if (!iface) continue;
+    for (const alias of iface) {
+      if ((alias.family === 'IPv4' || (alias.family as string | number) === 4) && !alias.internal) {
+        ips.push(alias.address);
+      }
+    }
+  }
+  return ips.length > 0 ? ips : ['127.0.0.1'];
 }

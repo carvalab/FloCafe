@@ -111,7 +111,13 @@ export default function SettingsPage() {
   const [tableInfo, setTableInfo] = useState<{ name: string; rows: number }[]>([]);
 
   // ── KDS pairing ──────────────────────────────────────────────────────────
-  const [kdsInfo, setKdsInfo] = useState<{ mdns_url: string; ip_url: string; qr_url: string; qr_data_url: string | null } | null>(null);
+  const [kdsInfo, setKdsInfo] = useState<{ 
+    mdns_url: string; 
+    ip_url: string; 
+    qr_url: string; 
+    qr_data_url: string | null;
+    ips_data?: { ip: string; url: string; qr_data: string | null }[];
+  } | null>(null);
   const [kdsInfoLoading, setKdsInfoLoading] = useState(false);
 
   const fetchKdsInfo = () => {
@@ -1338,38 +1344,75 @@ export default function SettingsPage() {
               )}
 
               {kdsInfo && !kdsInfoLoading && (
-                <div className="flex flex-col sm:flex-row gap-6 items-start">
-                  {/* QR code */}
-                  <div className="shrink-0">
-                    {kdsInfo.qr_data_url ? (
-                      <img src={kdsInfo.qr_data_url} alt="KDS QR Code"
-                        className="w-48 h-48 rounded-xl border border-gray-200" />
-                    ) : (
-                      <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
-                        <QrCode size={48} />
+                <div className="flex flex-col gap-6 w-full">
+                  {/* Local Network / Tailscale IPs */}
+                  {kdsInfo.ips_data && kdsInfo.ips_data.length > 0 ? (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                        {kdsInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
+                          <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                              {ipInfo.ip.startsWith('100.') ? 'Tailscale VPN' : 'Local Network'}
+                            </p>
+                            {ipInfo.qr_data ? (
+                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
+                            ) : (
+                              <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
+                                <QrCode size={40} className="text-gray-400" />
+                              </div>
+                            )}
+                            <a href={ipInfo.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-brand hover:underline break-all text-center">
+                              {ipInfo.url}
+                            </a>
+                          </div>
+                        ))}
                       </div>
-                    )}
-                  </div>
 
-                  {/* URLs */}
-                  <div className="flex-1 space-y-4">
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Direct IP (recommended)</p>
-                      <a href={kdsInfo.ip_url} target="_blank" rel="noopener noreferrer"
-                        className="block font-mono text-sm text-brand break-all hover:underline">
-                        {kdsInfo.ip_url}
-                      </a>
-                      <p className="text-xs text-gray-400 mt-1">Works on all devices. IP may change if the POS machine reconnects to WiFi.</p>
+                      {/* mDNS URL */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">Apple Devices (mDNS)</p>
+                            <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-blue-600 break-all hover:underline">
+                              {kdsInfo.mdns_url}
+                            </a>
+                            <p className="text-xs text-blue-600 mt-2">
+                              Works on iOS, macOS, and some Android devices with mDNS support. Requires Bonjour/mDNS enabled on your router.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    // Fallback for older server response
+                    <div className="flex flex-col sm:flex-row gap-6 items-start">
+                      <div className="shrink-0">
+                        {kdsInfo.qr_data_url ? (
+                          <img src={kdsInfo.qr_data_url} alt="KDS QR Code" className="w-48 h-48 rounded-xl border border-gray-200" />
+                        ) : (
+                          <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
+                            <QrCode size={48} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">Direct IP (recommended)</p>
+                          <a href={kdsInfo.ip_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-brand break-all hover:underline">
+                            {kdsInfo.ip_url}
+                          </a>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">mDNS (always-stable)</p>
+                          <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-gray-700 break-all hover:underline">
+                            {kdsInfo.mdns_url}
+                          </a>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">mDNS (always-stable)</p>
-                      <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer"
-                        className="block font-mono text-sm text-gray-700 break-all hover:underline">
-                        {kdsInfo.mdns_url}
-                      </a>
-                      <p className="text-xs text-gray-400 mt-1">Resolves via Bonjour/mDNS. Works on iOS, macOS, and most Android (Chrome). May need mDNS enabled on router.</p>
-                    </div>
+                  )}
 
+                  <div className="flex justify-end border-t border-gray-200 pt-4">
                     <button onClick={fetchKdsInfo} disabled={kdsInfoLoading}
                       className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
                       <RefreshCw size={14} className={kdsInfoLoading ? 'animate-spin' : ''} />

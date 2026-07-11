@@ -87,3 +87,51 @@ export function requireRole(...roles: string[]) {
     next();
   };
 }
+
+import { URL } from 'url';
+import * as net from 'net';
+
+/**
+ * Checks if the given IP address is a private, local, or Tailscale IP.
+ */
+export function isAllowedPrivateIp(ip: string): boolean {
+  if (!net.isIP(ip)) return false; 
+  if (ip === '::1') return true;
+
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4) return false;
+  const [a, b] = parts;
+
+  // Localhost (127.0.0.0/8)
+  if (a === 127) return true;
+  // Private Class A (10.0.0.0/8)
+  if (a === 10) return true;
+  // Private Class B (172.16.0.0/12)
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  // Private Class C (192.168.0.0/16)
+  if (a === 192 && b === 168) return true;
+  
+  // Tailscale CGNAT (100.64.0.0/10)
+  if (a === 100 && b >= 64 && b <= 127) return true;
+
+  return false;
+}
+
+export const corsOptions = {
+  origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+    if (!origin) return callback(null, true);
+
+    try {
+      const parsedOrigin = new URL(origin);
+      const hostname = parsedOrigin.hostname;
+
+      if (hostname === 'localhost' || hostname.endsWith('.local') || isAllowedPrivateIp(hostname)) {
+        return callback(null, true);
+      }
+      
+      callback(new Error('Not allowed by CORS'));
+    } catch (err) {
+      callback(new Error('Invalid origin format'));
+    }
+  }
+};
