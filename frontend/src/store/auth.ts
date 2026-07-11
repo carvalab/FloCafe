@@ -46,10 +46,10 @@ export const useAuthStore = create<AuthState>((set) => ({
 
   register: async (registerData: RegisterData) => {
     const { data } = await api.post('/auth/register', registerData);
-    localStorage.setItem('token', data.token);
+    localStorage.setItem('token', data.access_token);
     set({
       user: data.user,
-      token: data.token,
+      token: data.access_token,
       tenants: [data.tenant],
     });
   },

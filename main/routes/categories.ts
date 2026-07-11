@@ -139,6 +139,8 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
     } else if (action === 'delete_all') {
       db.prepare('UPDATE products SET deleted_at = ?, updated_at = ? WHERE category_id = ? AND deleted_at IS NULL')
         .run(now(), now(), req.params.id);
+    } else {
+      return res.status(400).json({ error: 'Invalid action. Must be reassign or delete_all.' });
     }
 
     // Soft delete the category

@@ -71,7 +71,11 @@ export default function TableCheckoutModal({
   const handleAddCartToOrder = async () => {
     if (!order || !onAddCartToOrder) return;
     setAddingItems(true);
-    onAddCartToOrder(table, order);
+    try {
+      await onAddCartToOrder(table, order);
+    } finally {
+      setAddingItems(false);
+    }
   };
 
   if (loading) {
