@@ -664,7 +664,7 @@ export default function OrdersPage() {
           <p>No orders found</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start">
+        <div className="flex-1 overflow-y-auto space-y-4">
           {filteredOrders.map((order) => {
             const activeItems = (order.items || []).filter((i: OrderItem) => i.status !== 'cancelled');
             const cancelledItems = (order.items || []).filter((i: OrderItem) => i.status === 'cancelled');
