@@ -45,9 +45,11 @@ router.get('/', (req: Request, res: Response) => {
       query += ' AND kitchen_station_id = ?';
       params.push(req.query.kitchen_station_id);
     }
-    if (req.query.active === 'true' || req.query.active === '1') {
-      query += ' AND is_active = 1';
-    }
+    // `active` has no backing column — tables are hard-deleted (see DELETE /:id
+    // below), there's no is_active/deleted_at concept, so every remaining row is
+    // implicitly "active". Accept the param for API compatibility with the
+    // frontend's `?active=1` call (issue #33) without querying a column that
+    // doesn't exist.
 
     query += ' ORDER BY number';
 
