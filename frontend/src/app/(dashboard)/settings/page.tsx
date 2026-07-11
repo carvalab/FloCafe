@@ -421,8 +421,17 @@ export default function SettingsPage() {
     cloud_orders_enabled: false,
     cloud_last_sync: null as string | null,
   });
+  const [cloudStatus, setCloudStatus] = useState({
+    cloud_registration_status: 'unregistered',
+    cloud_pending_store_id: null as string | null,
+    cloud_connected: false,
+    cloud_relay_mode: 'disconnected',
+    cloud_last_heartbeat: null as string | null,
+    cloud_last_error: null as string | null,
+  });
   const [savingCloud, setSavingCloud] = useState(false);
   const [testingCloud, setTestingCloud] = useState(false);
+  const [registeringCloud, setRegisteringCloud] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
 
   const resetBusiness = () => setForm(savedBusiness);
@@ -455,6 +464,14 @@ export default function SettingsPage() {
         cloud_sync_enabled: !!res.data.cloud_sync_enabled,
         cloud_orders_enabled: !!res.data.cloud_orders_enabled,
         cloud_last_sync: res.data.cloud_last_sync || null,
+      });
+      setCloudStatus({
+        cloud_registration_status: res.data.cloud_registration_status || 'unregistered',
+        cloud_pending_store_id: res.data.cloud_pending_store_id || null,
+        cloud_connected: !!res.data.cloud_connected,
+        cloud_relay_mode: res.data.cloud_relay_mode || 'disconnected',
+        cloud_last_heartbeat: res.data.cloud_last_heartbeat || null,
+        cloud_last_error: res.data.cloud_last_error || null,
       });
     }).catch(() => {});
 
@@ -511,16 +528,42 @@ export default function SettingsPage() {
     setTestingCloud(true);
     setCloudTestResult(null);
     try {
-      const res = await fetch('https://soflo.codify.tech/api/sync/heartbeat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Api-Key': cloudSettings.cloud_api_key },
-        body: JSON.stringify({ pos_version: 'test' }),
-      });
-      setCloudTestResult(res.ok ? 'ok' : 'fail');
+      await api.post('/settings/cloud/test');
+      setCloudTestResult('ok');
     } catch {
       setCloudTestResult('fail');
     } finally {
       setTestingCloud(false);
+    }
+  };
+
+  const registerCloud = async () => {
+    setRegisteringCloud(true);
+    try {
+      const res = await api.post('/settings/cloud/register');
+      setCloudStatus({
+        cloud_registration_status: res.data.cloud_registration_status || 'unregistered',
+        cloud_pending_store_id: res.data.cloud_pending_store_id || null,
+        cloud_connected: !!res.data.cloud_connected,
+        cloud_relay_mode: res.data.cloud_relay_mode || 'disconnected',
+        cloud_last_heartbeat: res.data.cloud_last_heartbeat || null,
+        cloud_last_error: res.data.cloud_last_error || null,
+      });
+      setCloudSettings((prev) => ({
+        ...prev,
+        cloud_api_key: res.data.cloud_api_key || prev.cloud_api_key,
+        cloud_store_id: res.data.cloud_store_id || prev.cloud_store_id,
+      }));
+      if (res.data.cloud_registration_status === 'pending') {
+        toast.success('Registered — waiting for FloAdmin to approve this store');
+      } else if (res.data.cloud_registration_status === 'registered') {
+        toast.success('Registered with FloAdmin');
+      }
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || 'Registration failed — check your connection');
+    } finally {
+      setRegisteringCloud(false);
     }
   };
 
@@ -1816,9 +1859,45 @@ export default function SettingsPage() {
                 </div>
               </div>
 
+              <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                <div className="flex items-center gap-2">
+                  {cloudStatus.cloud_registration_status === 'registered' ? (
+                    <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+                  ) : cloudStatus.cloud_registration_status === 'pending' ? (
+                    <Cloud size={16} className="text-amber-500 shrink-0" />
+                  ) : (
+                    <CloudOff size={16} className="text-gray-400 shrink-0" />
+                  )}
+                  <div>
+                    <p className="text-sm font-medium text-gray-900">
+                      {cloudStatus.cloud_registration_status === 'registered' && (cloudStatus.cloud_connected ? 'Connected to FloAdmin' : 'Registered (reconnecting…)')}
+                      {cloudStatus.cloud_registration_status === 'pending' && 'Waiting for approval'}
+                      {cloudStatus.cloud_registration_status === 'rejected' && 'Registration rejected'}
+                      {(cloudStatus.cloud_registration_status === 'unregistered' || cloudStatus.cloud_registration_status === 'registration_failed') && 'Not registered'}
+                    </p>
+                    <p className="text-xs text-gray-500">
+                      {cloudStatus.cloud_registration_status === 'registered' && `Live channel: ${cloudStatus.cloud_relay_mode === 'websocket' ? 'realtime' : cloudStatus.cloud_relay_mode === 'http_fallback' ? 'fallback polling' : 'disconnected'}${cloudStatus.cloud_last_heartbeat ? ` · last heartbeat ${new Date(cloudStatus.cloud_last_heartbeat).toLocaleTimeString()}` : ''}`}
+                      {cloudStatus.cloud_registration_status === 'pending' && `Store ID ${cloudStatus.cloud_pending_store_id || '—'} — a FloAdmin team member needs to claim this install`}
+                      {cloudStatus.cloud_registration_status === 'rejected' && 'Contact support — this install was not approved'}
+                      {cloudStatus.cloud_registration_status === 'registration_failed' && (cloudStatus.cloud_last_error || 'Last attempt failed — will keep retrying automatically')}
+                      {cloudStatus.cloud_registration_status === 'unregistered' && 'Register to announce this POS to FloAdmin, or paste an API key below'}
+                    </p>
+                  </div>
+                </div>
+                {cloudStatus.cloud_registration_status !== 'registered' && (
+                  <button
+                    onClick={registerCloud}
+                    disabled={registeringCloud}
+                    className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium shrink-0"
+                  >
+                    {registeringCloud ? 'Registering…' : 'Register with FloAdmin'}
+                  </button>
+                )}
+              </div>
+
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key <span className="text-gray-400 font-normal">(manual — optional if registered above)</span></label>
                   <p className="text-xs text-gray-500 mb-2">Get this from <span className="font-mono">soflo.codify.tech</span> → register your store → copy the API key</p>
                   <div className="flex gap-2">
                     <input

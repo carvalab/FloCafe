@@ -27,6 +27,10 @@ const RELAY_RECONNECT_BASE_MS = 1_000;
 const RELAY_RECONNECT_MAX_MS = 60_000;
 const RELAY_FALLBACK_THRESHOLD = 5;
 
+// Zero-touch registration (register -> pending -> claim). See specs/floadmin.md § Zero-touch registration & claim.
+const STATUS_POLL_INTERVAL_MS = 5 * 60_000;
+const AUTO_REGISTER_MAX_BACKOFF_MS = 30 * 60_000;
+
 type CloudSettings = {
   server_url: string;
   api_key: string;
@@ -164,9 +168,19 @@ class CloudSyncService {
   private httpFallbackActive = false;
   private relayMode: 'websocket' | 'http_fallback' | 'disconnected' = 'disconnected';
 
+  // Zero-touch registration state.
+  private statusPollTimer: ReturnType<typeof setInterval> | null = null;
+  private autoRegisterTimer: ReturnType<typeof setTimeout> | null = null;
+  private autoRegisterAttempts = 0;
+
   start() {
     ensureCloudIdentity();
     this.reload();
+    // First-run zero-touch: if this install has never registered (and hasn't been
+    // explicitly rejected), announce itself with no staff action required. Only
+    // done once at boot, not on every reload(), so saving an unrelated cloud
+    // setting doesn't re-trigger it.
+    this.maybeAutoRegister();
   }
 
   reload() {
@@ -181,6 +195,7 @@ class CloudSyncService {
     }
 
     this.maybeStartRelay();
+    this.maybeStartStatusPoll();
 
     log.info('[CloudSync] started', {
       server: cfg.server_url,
@@ -194,6 +209,8 @@ class CloudSyncService {
     if (this.heartbeatTimer) { clearInterval(this.heartbeatTimer); this.heartbeatTimer = null; }
     if (this.outboxTimer) { clearInterval(this.outboxTimer); this.outboxTimer = null; }
     if (this.commandTimer) { clearInterval(this.commandTimer); this.commandTimer = null; }
+    if (this.statusPollTimer) { clearInterval(this.statusPollTimer); this.statusPollTimer = null; }
+    if (this.autoRegisterTimer) { clearTimeout(this.autoRegisterTimer); this.autoRegisterTimer = null; }
     this.httpFallbackActive = false;
     this.teardownRelay();
   }
@@ -224,6 +241,7 @@ class CloudSyncService {
       cloud_pos_hash: refreshed.cloud_pos_hash || null,
       cloud_pos_id: refreshed.cloud_pos_id || null,
       cloud_store_id: refreshed.cloud_store_id || null,
+      cloud_pending_store_id: refreshed.cloud_pending_store_id || null,
       cloud_api_key: maskSecret(refreshed.cloud_api_key),
       cloud_sync_enabled: refreshed.cloud_sync_enabled === '1',
       cloud_orders_enabled: refreshed.cloud_orders_enabled === '1',
@@ -253,6 +271,7 @@ class CloudSyncService {
       platform: process.platform,
       arch: process.arch,
       app_version: require('../../package.json').version,
+      store_type: 'cafe',
       business: {
         name: settings.business_name || '',
         phone: settings.business_phone || settings.phone || '',
@@ -277,6 +296,20 @@ class CloudSyncService {
         throw new Error(String(data.error || `Registration failed (${res.status})`));
       }
 
+      // Zero-touch target shape: no api_key yet, just an unclaimed pending row —
+      // poll GET /api/pos/status until a human claims (or rejects) it.
+      if (data.status === 'pending') {
+        this.upsertSettings({
+          cloud_server_url: serverUrl,
+          cloud_pending_store_id: typeof data.pending_store_id === 'string' ? data.pending_store_id : '',
+          cloud_registration_status: 'pending',
+          cloud_connected: 'false',
+          cloud_last_error: '',
+        });
+        this.reload();
+        return this.getStatus();
+      }
+
       const apiKey = typeof data.api_key === 'string' ? data.api_key : settings.cloud_api_key;
       if (!apiKey) throw new Error('Registration response did not include api_key');
 
@@ -285,6 +318,7 @@ class CloudSyncService {
         cloud_api_key: apiKey,
         cloud_pos_id: typeof data.pos_id === 'string' ? data.pos_id : settings.cloud_pos_id,
         cloud_store_id: typeof data.store_id === 'string' ? data.store_id : settings.cloud_store_id,
+        cloud_pending_store_id: '',
         cloud_registration_status: 'registered',
         cloud_connected: 'true',
         cloud_last_error: '',
@@ -375,11 +409,13 @@ class CloudSyncService {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(`heartbeat failed (${res.status})`);
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
       this.upsertSettings({
         cloud_connected: 'true',
         cloud_last_error: '',
         cloud_last_heartbeat: new Date().toISOString(),
       });
+      this.applyFeatures(data.features);
     } catch (err) {
       this.markError((err as Error).message);
     }
@@ -540,6 +576,83 @@ class CloudSyncService {
     if (this.relaySocket?.readyState === WebSocket.OPEN) {
       this.relaySocket.send(JSON.stringify({ type: 'result', id: command.id, ...body }));
     }
+  }
+
+  // --- Zero-touch registration: pending status poll + first-run auto-register --------------
+
+  private maybeStartStatusPoll() {
+    const db = getDatabase();
+    const status = this.readSettings(db).cloud_registration_status;
+    if (status !== 'pending') return;
+    void this.pollStatus();
+    this.statusPollTimer = setInterval(() => void this.pollStatus(), STATUS_POLL_INTERVAL_MS);
+  }
+
+  /** GET /api/pos/status — unsigned, proof-of-possession via device_secret_hash. Polled while pending. */
+  private async pollStatus() {
+    const db = getDatabase();
+    const s = this.readSettings(db);
+    if (s.cloud_registration_status !== 'pending' || !s.cloud_pos_hash) return;
+    try {
+      const serverUrl = normalizeCloudServerUrl(s.cloud_server_url || DEFAULT_CLOUD_SERVER_URL);
+      const { posHash, deviceSecret } = ensureCloudIdentity();
+      const url = endpoint(
+        serverUrl,
+        `/api/pos/status?install_uuid=${encodeURIComponent(posHash)}&device_secret_hash=${encodeURIComponent(sha256Hex(deviceSecret))}`
+      );
+      const res = await fetch(url, { signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) });
+      const data = await res.json().catch(() => ({})) as Record<string, unknown>;
+      if (!res.ok) return; // keep polling — could be a transient error, not a definitive answer
+
+      if (data.status === 'claimed') {
+        const apiKey = typeof data.api_key === 'string' ? data.api_key : '';
+        if (!apiKey) return;
+        this.upsertSettings({
+          cloud_api_key: apiKey,
+          cloud_store_id: typeof data.store_id === 'string' ? data.store_id : s.cloud_store_id,
+          cloud_pending_store_id: '',
+          cloud_registration_status: 'registered',
+          cloud_connected: 'true',
+          cloud_last_error: '',
+          cloud_last_heartbeat: new Date().toISOString(),
+        });
+        this.applyFeatures(data.features);
+        this.reload();
+      } else if (data.status === 'rejected') {
+        this.upsertSettings({ cloud_registration_status: 'rejected', cloud_connected: 'false' });
+        this.reload();
+      }
+      // status === 'pending' -> no-op, timer keeps polling
+    } catch (err) {
+      log.warn('[CloudSync] status poll failed', (err as Error).message);
+    }
+  }
+
+  /**
+   * Zero-touch: register automatically if this install has never successfully
+   * announced itself. Retries a prior failure too (network down at last boot) —
+   * only a definitive 'pending' (already announced, use the status poll instead),
+   * 'registered', or a human's explicit 'rejected' stop this from trying again.
+   */
+  private maybeAutoRegister() {
+    const db = getDatabase();
+    const status = this.readSettings(db).cloud_registration_status || 'unregistered';
+    if (status !== 'unregistered' && status !== 'registration_failed') return;
+    this.attemptAutoRegister();
+  }
+
+  private attemptAutoRegister() {
+    if (this.autoRegisterTimer) return; // a retry is already scheduled
+    void this.register()
+      .then(() => { this.autoRegisterAttempts = 0; })
+      .catch(() => {
+        const delay = Math.min(AUTO_REGISTER_MAX_BACKOFF_MS, 2 ** this.autoRegisterAttempts * 1000);
+        this.autoRegisterAttempts++;
+        this.autoRegisterTimer = setTimeout(() => {
+          this.autoRegisterTimer = null;
+          this.attemptAutoRegister();
+        }, delay);
+      });
   }
 
   // --- Live-relay connection (WSS primary, HTTP fallback) ---------------------------------
