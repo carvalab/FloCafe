@@ -718,6 +718,36 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 18,
+    name: 'fix_null_category_ids',
+    up: () => {
+      // Same bug as v13's fix_null_table_ids: POST /categories inserted without
+      // the id column, and categories.id (TEXT PRIMARY KEY, not a rowid alias)
+      // silently accepted NULL. Backfill so these rows become deletable and
+      // stop colliding with the "All" filter (which also compares against null).
+      db.exec(`UPDATE categories SET id = 'cat-' || rowid WHERE id IS NULL`);
+    },
+  },
+  {
+    version: 19,
+    name: 'backfill_product_cb_percent_and_tags',
+    up: () => {
+      // cb_percent/tags were added to createSchema() (CREATE TABLE IF NOT EXISTS)
+      // back when v1-v7 -> v8 was still a destructive dropAllTables()+recreate
+      // migration. Once migrations became incremental (non-destructive), no
+      // ALTER TABLE ever backfilled these columns onto pre-v8 installs that
+      // updated straight through — so POST /products 500s with "table products
+      // has no column named cb_percent" on any DB that never got the columns.
+      const productColumns = getColumns(db, 'products');
+      if (!productColumns.includes('cb_percent')) {
+        db.exec(`ALTER TABLE products ADD COLUMN cb_percent REAL DEFAULT 0`);
+      }
+      if (!productColumns.includes('tags')) {
+        db.exec(`ALTER TABLE products ADD COLUMN tags TEXT`);
+      }
+    },
+  },
 ];
 
 function runMigrations(): void {

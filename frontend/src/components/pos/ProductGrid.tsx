@@ -78,7 +78,7 @@ export default function ProductGrid({
           >
             All
           </button>
-          {categories.map((cat) => {
+          {categories.filter((cat) => cat.id != null).map((cat) => {
             const colorClasses = getCategoryColorClasses(cat.color);
             const isSelected = selectedCategory === cat.id;
             return (

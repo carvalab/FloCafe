@@ -608,6 +608,45 @@ router.patch('/:id/customer', requireRole('owner', 'manager'), (req: Request, re
   }
 });
 
+router.patch('/:id/convert-to-takeaway', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id) as any;
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found' });
+    }
+    if (order.type !== 'dine_in') {
+      return res.status(400).json({ error: 'Only dine-in orders can be converted to takeaway' });
+    }
+    if (['completed', 'cancelled'].includes(order.status)) {
+      return res.status(400).json({ error: 'Cannot convert a completed or cancelled order' });
+    }
+
+    const nowStr = now();
+    const tableId = order.table_id;
+
+    withTxn(() => {
+      db.prepare("UPDATE orders SET type = 'takeaway', table_id = NULL, updated_at = ? WHERE id = ?")
+        .run(nowStr, req.params.id);
+      if (tableId) {
+        db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?")
+          .run(nowStr, tableId);
+      }
+    });
+
+    const updatedOrder = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id)) as any;
+    const orderItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
+
+    cloudSync.recordOrderChanged(req.params.id, 'order.type_changed');
+    notifyKdsUpdate();
+    notifyOrderUpdated();
+
+    res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table: null }) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();

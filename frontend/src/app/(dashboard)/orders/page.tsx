@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight, UserPlus, User } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, DollarSign, Search, Plus, ChevronDown, ChevronRight, UserPlus, User, ShoppingBag } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -83,6 +83,7 @@ export default function OrdersPage() {
   // Consolidated cancel modal state
   const [cancelModal, setCancelModal] = useState<CancelModal | null>(null);
   const [cancellingOrderId, setCancellingOrderId] = useState<number | null>(null);
+  const [convertingOrderId, setConvertingOrderId] = useState<number | null>(null);
 
   // Consolidated discount modal state
   const [discountModal, setDiscountModal] = useState<DiscountModal | null>(null);
@@ -421,6 +422,22 @@ export default function OrdersPage() {
 
   const showCheckout = (order: Order) => {
     return !isOrderPaid(order) && !['completed', 'cancelled'].includes(order.status);
+  };
+
+  const handleConvertToTakeaway = async (order: Order) => {
+    const tableNote = order.table ? ` and free table ${order.table.name}` : '';
+    if (!await confirm(`Convert order #${order.order_number} to takeaway${tableNote}?`)) return;
+    setConvertingOrderId(order.id);
+    try {
+      await api.patch(`/orders/${order.id}/convert-to-takeaway`);
+      toast.success('Order converted to takeaway');
+      fetchOrders();
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string } } };
+      toast.error(axiosErr.response?.data?.error || 'Failed to convert order');
+    } finally {
+      setConvertingOrderId(null);
+    }
   };
 
   // Add Item modal: fetch products when modal opens
@@ -953,6 +970,18 @@ export default function OrdersPage() {
                       >
                         <Plus size={14} className="mr-1.5" />
                         Add Item
+                      </Button>
+                    )}
+                    {order.type === 'dine_in' && !['completed', 'cancelled'].includes(order.status) && (
+                      <Button
+                        variant="outline"
+                        onClick={() => handleConvertToTakeaway(order)}
+                        disabled={convertingOrderId === order.id}
+                        size="sm"
+                        className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                      >
+                        <ShoppingBag size={14} className="mr-1.5" />
+                        {convertingOrderId === order.id ? 'Converting...' : 'Convert to Takeaway'}
                       </Button>
                     )}
                     {!['completed', 'cancelled'].includes(order.status) && (

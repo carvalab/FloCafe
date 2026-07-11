@@ -161,7 +161,7 @@ export default function ProductsPage() {
     setEditingProduct(product);
     setForm({
       name: product.name,
-      category_id: String(product.category_id),
+      category_id: product.category_id != null ? String(product.category_id) : '',
       price: String(product.price),
       cost_price: String(product.cost_price || ''),
       cb_percent: String(product.cb_percent ?? 0),
