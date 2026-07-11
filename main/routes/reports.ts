@@ -157,7 +157,7 @@ router.get('/recentOrders', requireRole('owner', 'manager'), (req: Request, res:
     const limit = parseInt(req.query.limit as string) || 20;
 
     const recentOrders = db.prepare(`
-      SELECT o.*, t.name as table_name, c.name as customer_name
+      SELECT o.*, t.number as table_name, c.name as customer_name
       FROM orders o
       LEFT JOIN tables t ON o.table_id = t.id
       LEFT JOIN customers c ON o.customer_id = c.id
