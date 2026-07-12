@@ -2,6 +2,15 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.6] - 2026-07-12
+
+### Changed
+- Customers, dine-in tables, staff, addon groups, and kitchen stations are no longer hard-deleted — matching the existing products/categories behavior, they're now deactivated instead, so historical orders/bills/reports never lose a name to a deletion.
+- Dine-in tables gained a proper active/inactive state: a Deactivate/Reactivate toggle on the Tables page, and the POS table picker's `active` filter (previously a no-op) now actually excludes deactivated tables.
+
+### Fixed
+- Deactivating the sole remaining owner account is now blocked (previously only blocked on the old hard-delete path, not on deactivate).
+
 ## [1.8.5] - 2026-07-12
 
 ### Added
