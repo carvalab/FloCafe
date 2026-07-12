@@ -134,30 +134,32 @@ function parseTags(raw: any): string[] {
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    let query = `SELECT id, category_id, name, description, price, cost, sku, barcode,
-      is_active, sort_order, track_inventory, stock_quantity, low_stock_threshold,
-      tax_type, tax_rate, cb_percent, tags, deleted_at, created_at, updated_at,
-      CASE WHEN image_url IS NULL OR image_url = '' THEN 0 ELSE 1 END AS has_image
-      FROM products WHERE deleted_at IS NULL`;
+    let query = `SELECT p.id, p.category_id, p.name, p.description, p.price, p.cost, p.sku, p.barcode,
+      p.is_active, p.sort_order, p.track_inventory, p.stock_quantity, p.low_stock_threshold,
+      p.tax_type, p.tax_rate, p.cb_percent, p.tags, p.deleted_at, p.created_at, p.updated_at,
+      CASE WHEN p.image_url IS NULL OR p.image_url = '' THEN 0 ELSE 1 END AS has_image
+      FROM products p 
+      LEFT JOIN categories c ON p.category_id = c.id
+      WHERE p.deleted_at IS NULL`;
     const params: any[] = [];
 
     if (req.query.category_id) {
-      query += ' AND category_id = ?';
+      query += ' AND p.category_id = ?';
       params.push(req.query.category_id);
     }
     if (req.query.active === 'true' || req.query.active === '1') {
-      query += ' AND is_active = 1';
+      query += ' AND p.is_active = 1 AND (c.id IS NULL OR c.is_active = 1)';
     }
     if (req.query.search) {
-      query += ' AND (name LIKE ? OR sku LIKE ?)';
+      query += ' AND (p.name LIKE ? OR p.sku LIKE ?)';
       const searchTerm = `%${req.query.search}%`;
       params.push(searchTerm, searchTerm);
     }
     if (req.query.low_stock === 'true') {
-      query += ' AND track_inventory = 1 AND stock_quantity <= low_stock_threshold';
+      query += ' AND p.track_inventory = 1 AND p.stock_quantity <= p.low_stock_threshold';
     }
 
-    query += ' ORDER BY sort_order, name';
+    query += ' ORDER BY p.sort_order, p.name';
 
     const products = db.prepare(query).all(...params);
 
