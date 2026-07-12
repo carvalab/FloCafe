@@ -265,7 +265,10 @@ export default function ProductsPage() {
       }
       resetCategoryForm();
       fetchData();
-    } catch { toast.error('Failed to save category'); }
+    } catch (err) { 
+      console.error('[Category] Save error:', err);
+      toast.error('Failed to save category'); 
+    }
   };
 
   const handleCategoryDelete = async (id: number, name: string) => {

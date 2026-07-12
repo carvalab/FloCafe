@@ -90,13 +90,15 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
 
     const slug = name ? name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') : (category as any).slug;
 
+    const activeInt = is_active !== undefined ? (is_active ? 1 : 0) : undefined;
+
     db.prepare(`
       UPDATE categories SET name = COALESCE(?, name), slug = ?, description = COALESCE(?, description),
       parent_id = COALESCE(?, parent_id), sort_order = COALESCE(?, sort_order),
       is_active = COALESCE(?, is_active), color = COALESCE(?, color), icon = COALESCE(?, icon),
       updated_at = ?
       WHERE id = ?
-    `).run(name, slug, description, parent_id, sort_order, is_active, color, icon, now(), req.params.id);
+    `).run(name, slug, description, parent_id, sort_order, activeInt, color, icon, now(), req.params.id);
 
     const updated = db.prepare('SELECT * FROM categories WHERE id = ?').get(req.params.id);
     res.json({ category: updated });
