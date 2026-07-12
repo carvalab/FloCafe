@@ -1,4 +1,6 @@
-import { isAllowedPrivateIp } from '../main/middleware/security';
+import { isAllowedPrivateIp, rateLimit } from '../main/middleware/security';
+import express from 'express';
+import request from 'supertest';
 
 async function run() {
   console.log('Testing CORS IP Validation...');
@@ -37,7 +39,58 @@ async function run() {
   assert(isAllowedPrivateIp('100.64.0') === false, 'Should reject incomplete IP');
   assert(isAllowedPrivateIp('localhost') === false, 'localhost string itself is not an IP');
 
-  console.log('✅ All CORS IP Validation tests passed!');
+  // 6. Rate Limiter Bypass Tests
+  console.log('Testing Rate Limiter Bypass...');
+  
+  const createRateLimitedApp = (maxRequests: number, ipOverride?: string) => {
+    const app = express();
+    if (ipOverride) {
+      app.use((req, res, next) => {
+        Object.defineProperty(req, 'ip', {
+          get: () => ipOverride,
+          configurable: true
+        });
+        next();
+      });
+    }
+    app.use(rateLimit({ windowMs: 60 * 1000, max: maxRequests }));
+    app.get('/test', (req, res) => {
+      res.status(200).json({ ok: true });
+    });
+    return app;
+  };
+
+  // Test that public IPs get rate limited
+  const publicApp = createRateLimitedApp(2, '8.8.8.8');
+  let res = await request(publicApp).get('/test');
+  assert(res.status === 200, 'Public IP first request should be OK');
+  res = await request(publicApp).get('/test');
+  assert(res.status === 200, 'Public IP second request should be OK');
+  res = await request(publicApp).get('/test');
+  assert(res.status === 429, 'Public IP third request should be rate limited');
+
+  // Test that private/local IPs do NOT get rate limited
+  const privateApp = createRateLimitedApp(2, '192.168.1.100');
+  for (let i = 0; i < 5; i++) {
+    const resPrivate = await request(privateApp).get('/test');
+    assert(resPrivate.status === 200, `Private IP request ${i + 1} should bypass rate limiting`);
+  }
+
+  // Test IPv6 loopback
+  const loopbackV6App = createRateLimitedApp(2, '::1');
+  for (let i = 0; i < 5; i++) {
+    const resPrivate = await request(loopbackV6App).get('/test');
+    assert(resPrivate.status === 200, `IPv6 loopback request ${i + 1} should bypass rate limiting`);
+  }
+
+  // Test IPv4-mapped IPv6 address (::ffff:127.0.0.1)
+  const mappedV4App = createRateLimitedApp(2, '::ffff:127.0.0.1');
+  for (let i = 0; i < 5; i++) {
+    const resPrivate = await request(mappedV4App).get('/test');
+    assert(resPrivate.status === 200, `IPv4-mapped IPv6 request ${i + 1} should bypass rate limiting`);
+  }
+
+  console.log('✅ All CORS IP Validation & Rate Limiter tests passed!');
 }
 
 run().catch(err => {
