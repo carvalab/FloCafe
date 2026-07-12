@@ -251,52 +251,62 @@ export default function ImageUploader({ value, onChange, productId }: ImageUploa
       )}
 
       {/* Upload controls */}
-      <div className="flex flex-wrap gap-2">
-        {/* File drop zone */}
+      <div className="space-y-3">
+        {/* Large File drop zone */}
         <div
           {...getRootProps()}
-          className={`flex items-center gap-2 px-3 py-2 border border-dashed rounded-lg text-sm cursor-pointer transition-colors ${
-            isDragActive ? 'border-brand bg-brand/5 text-brand' : 'border-gray-200 text-gray-600 hover:border-gray-300'
+          className={`w-full flex flex-col items-center justify-center p-6 border-2 border-dashed rounded-xl cursor-pointer transition-colors ${
+            isDragActive ? 'border-brand bg-brand/5 text-brand' : 'border-gray-300 text-gray-500 hover:border-brand hover:bg-gray-50'
           }`}
         >
           <input {...getInputProps()} />
-          <Upload size={14} />
-          {isDragActive ? 'Drop here' : 'Upload'}
+          <Upload size={24} className="mb-2 text-gray-400" />
+          <p className="text-sm font-medium text-center">
+            {isDragActive ? 'Drop image here...' : 'Drag & drop an image here, or click to browse'}
+          </p>
         </div>
 
-        {/* Camera button (tablet POS) */}
-        <button type="button"
-          onClick={() => cameraInputRef.current?.click()}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:border-gray-300"
-        >
-          <Camera size={14} />
-          Camera
-        </button>
-        <input
-          ref={cameraInputRef}
-          type="file"
-          accept="image/*"
-          capture="environment"
-          className="hidden"
-          onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) processFile(file);
-            e.target.value = '';
-          }}
-        />
+        <div className="flex items-center gap-2 justify-center">
+          <div className="flex-1 h-px bg-gray-200"></div>
+          <span className="text-xs text-gray-400 font-medium uppercase px-2">OR USE</span>
+          <div className="flex-1 h-px bg-gray-200"></div>
+        </div>
 
-        {/* URL paste */}
-        <button type="button"
-          onClick={() => setMode('url-input')}
-          className="flex items-center gap-2 px-3 py-2 border border-gray-200 rounded-lg text-sm text-gray-600 hover:border-gray-300"
-        >
-          <Link size={14} />
-          URL
-        </button>
+        <div className="flex flex-wrap gap-2 justify-center">
+          {/* Camera button (tablet POS) */}
+          <button type="button"
+            onClick={() => cameraInputRef.current?.click()}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          >
+            <Camera size={16} />
+            Camera
+          </button>
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) processFile(file);
+              e.target.value = '';
+            }}
+          />
+
+          {/* URL paste */}
+          <button type="button"
+            onClick={() => setMode('url-input')}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-lg text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-colors"
+          >
+            <Link size={16} />
+            Paste URL
+          </button>
+        </div>
       </div>
 
-      <p className="text-xs text-gray-400">
-        Max {MAX_RAW_FILE_SIZE / 1024 / 1024} MB. Images are compressed to WebP and stored in the database.
+      <p className="text-xs text-gray-400 text-center mt-4">
+        Max {MAX_RAW_FILE_SIZE / 1024 / 1024} MB. Images are compressed to WebP.
       </p>
     </div>
   );
