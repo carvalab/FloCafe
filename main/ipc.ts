@@ -1,7 +1,10 @@
 import { ipcMain, dialog, app, BrowserWindow, shell } from 'electron';
 import * as path from 'path';
-import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, now, getDbPath, getCurrentSchemaVersion, getSchemaVersionFromBackup } from './db';
+import * as fs from 'fs';
+import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, now, getDbPath, getCurrentSchemaVersion, getSchemaVersionFromBackup, closeDatabase, initDatabase } from './db';
 import { getLocalIP } from './server';
+import { authorizeMasterPin, isMasterPinAvailable, isMasterPinSet } from './services/master-pin';
+import { runHealthCheck, applySafeFixes } from './services/schema-health';
 
 // Settings keys the renderer is allowed to write via IPC.
 // Must stay in sync with routes/settings.ts ALLOWED_WILDCARD_KEYS.
@@ -29,7 +32,10 @@ function maskSetting(key: string, value: string): string {
 
 export function registerIpcHandlers(): void {
   // Database backup/restore
-  ipcMain.handle('backup-database', async () => {
+  ipcMain.handle('backup-database', async (event, pin?: string) => {
+    const auth = authorizeMasterPin(pin, 'ipc:backup');
+    if (!auth.ok) return { success: false, error: auth.error };
+
     try {
       console.log('[IPC] backup-database: Starting...');
 
@@ -58,7 +64,10 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('restore-backup', async () => {
+  ipcMain.handle('restore-backup', async (event, pin?: string) => {
+    const auth = authorizeMasterPin(pin, 'ipc:restore');
+    if (!auth.ok) return { success: false, error: auth.error };
+
     try {
       const result = await dialog.showOpenDialog({
         filters: [{ name: 'SQLite Database', extensions: ['db'] }],
@@ -121,6 +130,51 @@ export function registerIpcHandlers(): void {
       };
     } catch (error: any) {
       console.error('[IPC] restore-backup: Error:', error);
+      return { success: false, error: error.message };
+    }
+  });
+
+  // DB health check / master PIN / initialize (menu + tray triggered)
+  ipcMain.handle('db-health-check', async () => {
+    try {
+      return runHealthCheck();
+    } catch (error: any) {
+      return { error: error.message };
+    }
+  });
+
+  ipcMain.handle('db-apply-safe-fixes', async (event, findingIds?: string[]) => {
+    try {
+      return applySafeFixes(findingIds);
+    } catch (error: any) {
+      return { applied: [], skipped: [], errors: [{ id: 'all', error: error.message }] };
+    }
+  });
+
+  ipcMain.handle('master-pin-status', async () => {
+    return { available: isMasterPinAvailable(), isSet: isMasterPinSet() };
+  });
+
+  ipcMain.handle('db-initialize', async (event, { pin, confirmationPhrase }: { pin?: string; confirmationPhrase?: string }) => {
+    const auth = authorizeMasterPin(pin, 'ipc:initialize');
+    if (!auth.ok) return { success: false, error: auth.error };
+    if (confirmationPhrase !== 'INITIALIZE') {
+      return { success: false, error: 'Confirmation phrase does not match' };
+    }
+
+    try {
+      const { path: backupPath } = await createBackup();
+
+      closeDatabase();
+      const dbPath = getDbPath();
+      for (const p of [dbPath, `${dbPath}-wal`, `${dbPath}-shm`]) {
+        if (fs.existsSync(p)) fs.unlinkSync(p);
+      }
+      initDatabase();
+
+      return { success: true, backupPath };
+    } catch (error: any) {
+      console.error('[IPC] db-initialize: Error:', error);
       return { success: false, error: error.message };
     }
   });

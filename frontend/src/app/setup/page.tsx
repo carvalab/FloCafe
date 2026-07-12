@@ -1,13 +1,13 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ArrowRight, Check, Database, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Database, KeyRound, Sparkles, UtensilsCrossed } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type SetupProfile = 'empty' | 'express' | 'demo';
@@ -78,6 +78,17 @@ export default function SetupPage() {
   const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
   const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
+  const [masterPinAvailable, setMasterPinAvailable] = useState<boolean | null>(null);
+  const [masterPin, setMasterPin] = useState('');
+  const [masterPinConfirm, setMasterPinConfirm] = useState('');
+  const masterPinValid = /^\d{4}$/.test(masterPin) && masterPin === masterPinConfirm;
+
+  useEffect(() => {
+    api.get('/auth/setup/status')
+      .then(({ data }) => setMasterPinAvailable(!!data.masterPinAvailable))
+      .catch(() => setMasterPinAvailable(false));
+  }, []);
+
   const completeSetup = () => {
     logout();
     toast.success('Setup complete');
@@ -110,6 +121,11 @@ export default function SetupPage() {
       setStep(1);
       return;
     }
+    if (masterPinAvailable && !masterPinValid) {
+      toast.error('Set a 4-digit Master PIN to continue');
+      setStep(2);
+      return;
+    }
 
     setLoading(true);
     try {
@@ -122,6 +138,7 @@ export default function SetupPage() {
         setup_profile: profile,
         service_model: serviceModel,
         terms_accepted: termsAccepted,
+        master_pin: masterPinAvailable ? masterPin : undefined,
       });
       completeSetup();
     } catch (err: unknown) {
@@ -142,7 +159,7 @@ export default function SetupPage() {
         </div>
 
         <div className="flex justify-center gap-2 mb-8">
-          {[1, 2, 3].map((s) => (
+          {[1, 2, 3, 4].map((s) => (
             <div
               key={s}
               className={`w-3 h-3 rounded-full transition-colors ${
@@ -264,6 +281,74 @@ export default function SetupPage() {
                 </button>
 
                 <div className="text-center">
+                  <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
+                    <KeyRound className="w-5 h-5 text-primary" />
+                  </div>
+                  <h2 className="text-xl font-semibold mb-2">Set Master PIN</h2>
+                  <p className="text-muted-foreground text-sm">
+                    A 4-digit PIN known only to you, required to back up, restore, or initialize this database — separate from your login password.
+                    If you forget it, you can reset it later from Settings while logged in as owner.
+                  </p>
+                </div>
+
+                {masterPinAvailable === false ? (
+                  <p className="text-sm text-center text-muted-foreground bg-muted rounded-lg p-4">
+                    Master PIN protection isn&apos;t available on this device. You can continue without it.
+                  </p>
+                ) : (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="master-pin">PIN</Label>
+                      <Input
+                        id="master-pin"
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={4}
+                        value={masterPin}
+                        onChange={(e) => setMasterPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="text-center text-lg tracking-[0.5em]"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="master-pin-confirm">Confirm PIN</Label>
+                      <Input
+                        id="master-pin-confirm"
+                        type="password"
+                        inputMode="numeric"
+                        pattern="[0-9]*"
+                        maxLength={4}
+                        value={masterPinConfirm}
+                        onChange={(e) => setMasterPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                        placeholder="••••"
+                        className="text-center text-lg tracking-[0.5em]"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                <Button
+                  onClick={() => setStep(3)}
+                  disabled={masterPinAvailable === true && !masterPinValid}
+                  className="w-full"
+                  size="lg"
+                >
+                  Continue <ArrowRight className="w-4 h-4 ml-2" />
+                </Button>
+              </div>
+            )}
+
+            {step === 3 && (
+              <div className="space-y-6">
+                <button
+                  onClick={() => setStep(2)}
+                  className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  <ArrowLeft className="w-4 h-4" /> Back
+                </button>
+
+                <div className="text-center">
                   <h2 className="text-xl font-semibold mb-2">Choose Setup Data</h2>
                   <p className="text-muted-foreground text-sm">Select how much data should be created on first launch.</p>
                 </div>
@@ -303,16 +388,16 @@ export default function SetupPage() {
                   })}
                 </div>
 
-                <Button onClick={() => setStep(3)} className="w-full" size="lg">
+                <Button onClick={() => setStep(4)} className="w-full" size="lg">
                   Continue <ArrowRight className="w-4 h-4 ml-2" />
                 </Button>
               </div>
             )}
 
-            {step === 3 && (
+            {step === 4 && (
               <div className="space-y-6">
                 <button
-                  onClick={() => setStep(2)}
+                  onClick={() => setStep(3)}
                   className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   <ArrowLeft className="w-4 h-4" /> Back

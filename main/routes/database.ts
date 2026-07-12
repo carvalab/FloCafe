@@ -2,6 +2,7 @@ import { Router, Request, Response } from 'express';
 import Database from 'better-sqlite3';
 import { getDatabase, getDbPath, createBackup, getCurrentSchemaVersion, isSafeIdentifier } from '../db';
 import { requireRole } from '../middleware/security';
+import { requireMasterPin } from '../middleware/master-pin';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -39,7 +40,9 @@ router.get('/export', requireRole('owner'), (req: Request, res: Response) => {
   }
 });
 
-router.post('/import', requireRole('owner'), async (req: Request, res: Response) => {
+router.post('/import', requireRole('owner'),
+  (req: Request, res: Response, next: () => void) => (req.body?.overwrite ? requireMasterPin(req, res, next) : next()),
+  async (req: Request, res: Response) => {
   try {
     const { data, overwrite } = req.body;
 
@@ -137,7 +140,7 @@ function getTableColumns(db: Database.Database, tableName: string): string[] {
   }
 }
 
-router.get('/backup', requireRole('owner'), async (req: Request, res: Response) => {
+router.post('/backup', requireRole('owner'), requireMasterPin, async (req: Request, res: Response) => {
   try {
     const { path: backupPath, schemaVersion } = await createBackup();
     res.json({ 

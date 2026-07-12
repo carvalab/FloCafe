@@ -1,8 +1,12 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  backupDatabase: () => ipcRenderer.invoke('backup-database'),
-  restoreBackup: () => ipcRenderer.invoke('restore-backup'),
+  backupDatabase: (pin?: string) => ipcRenderer.invoke('backup-database', pin),
+  restoreBackup: (pin?: string) => ipcRenderer.invoke('restore-backup', pin),
+  dbHealthCheck: () => ipcRenderer.invoke('db-health-check'),
+  dbApplySafeFixes: (findingIds?: string[]) => ipcRenderer.invoke('db-apply-safe-fixes', findingIds),
+  dbInitialize: (pin: string, confirmationPhrase: string) => ipcRenderer.invoke('db-initialize', { pin, confirmationPhrase }),
+  getMasterPinStatus: () => ipcRenderer.invoke('master-pin-status'),
 
   getSettings: () => ipcRenderer.invoke('get-settings'),
   setSetting: (key: string, value: string) => ipcRenderer.invoke('set-setting', key, value),
@@ -37,6 +41,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       'new-order', 'quick-search', 'backup-database', 'restore-backup',
       'view-orders', 'report-daily', 'report-sales', 'report-x', 'report-z',
       'settings-business', 'settings-tax', 'settings-printer', 'settings-kitchen',
+      'menu-db-health-check', 'menu-db-initialize', 'menu-master-pin',
     ];
     const handlers: (() => void)[] = [];
     channels.forEach((channel) => {

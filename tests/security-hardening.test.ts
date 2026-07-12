@@ -97,7 +97,8 @@ async function main() {
   const managerPairingPost = await request(app).post('/api/kds/pairing').set(managerAuth).send({});
   assertEqual(managerPairingPost.status, 201, 'manager can create KDS pairing tokens');
 
-  const managerBackup = await request(app).get('/api/db/backup').set(managerAuth);
+  // POST, not GET: a GET can't safely carry the Master PIN in a request body.
+  const managerBackup = await request(app).post('/api/db/backup').set(managerAuth).send({});
   assertEqual(managerBackup.status, 403, 'manager cannot create database backup through API');
 
   const ownerTables = await request(app).get('/api/db/tables').set(ownerAuth);

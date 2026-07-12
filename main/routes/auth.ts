@@ -4,6 +4,7 @@ import jwt from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import { randomBytes } from 'crypto';
 import { getCurrentSchemaVersion, getDatabase, now } from '../db';
+import { isMasterPinAvailable, setMasterPin } from '../services/master-pin';
 
 const router = Router();
 const JWT_EXPIRES_IN = '24h';
@@ -454,6 +455,7 @@ router.get('/setup/status', (_req: Request, res: Response) => {
       userCount,
       initialRole: INITIAL_ADMIN_ROLE,
       schemaVersion: getCurrentSchemaVersion(),
+      masterPinAvailable: isMasterPinAvailable(),
     });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -488,6 +490,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       tax_registered,
       billing_type,
       terms_accepted,
+      master_pin,
     } = req.body;
     const email = normalizeEmail(req.body.email);
     const displayName = String(name || '').trim();
@@ -510,6 +513,11 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
     if (terms_accepted !== true) {
       return res.status(400).json({ error: 'You must accept the Terms and Conditions, Privacy Policy, and No Warranty Disclaimer to continue.' });
+    }
+
+    const masterPinRequired = isMasterPinAvailable();
+    if (masterPinRequired && !/^\d{4}$/.test(String(master_pin || ''))) {
+      return res.status(400).json({ error: 'A 4-digit Master PIN is required to complete setup' });
     }
 
     if (!VALID_BUSINESS_TYPES.has(normalizedBusinessType)) {
@@ -574,6 +582,12 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
       seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel);
     })();
+
+    // Written to userData/, outside flo.db and outside this transaction — the
+    // Master PIN is deliberately independent of the database it gates.
+    if (masterPinRequired) {
+      setMasterPin(String(master_pin));
+    }
 
     const token = jwt.sign(
       { userId, email, role: INITIAL_ADMIN_ROLE },

@@ -8,8 +8,12 @@ export interface ElectronAPI {
   onMenuAction: (callback: (action: string) => void) => (() => void);
 
   // Database
-  backupDatabase: () => Promise<{ success: boolean; path?: string; error?: string }>;
-  restoreBackup: () => Promise<{ success: boolean; error?: string }>;
+  backupDatabase: (pin?: string) => Promise<{ success: boolean; path?: string; error?: string }>;
+  restoreBackup: (pin?: string) => Promise<{ success: boolean; error?: string }>;
+  dbHealthCheck: () => Promise<HealthCheckReport | { error: string }>;
+  dbApplySafeFixes: (findingIds?: string[]) => Promise<{ applied: string[]; skipped: string[]; errors: { id: string; error: string }[] }>;
+  dbInitialize: (pin: string, confirmationPhrase: string) => Promise<{ success: boolean; backupPath?: string; error?: string }>;
+  getMasterPinStatus: () => Promise<{ available: boolean; isSet: boolean }>;
 
   // App info
   getAppInfo: () => Promise<{
@@ -35,6 +39,30 @@ export interface ElectronAPI {
 
   // Platform
   platform: string;
+}
+
+export type HealthFindingRisk = 'safe' | 'manual_review';
+
+export interface HealthFinding {
+  id: string;
+  table: string;
+  column?: string;
+  index?: string;
+  kind: string;
+  risk: HealthFindingRisk;
+  autoApplicable: boolean;
+  description: string;
+  suggestedDdl?: string;
+  currentState?: string;
+  idealState?: string;
+}
+
+export interface HealthCheckReport {
+  generatedAt: string;
+  liveSchemaVersion: number;
+  idealSchemaVersion: number;
+  findings: HealthFinding[];
+  summary: { safeCount: number; manualReviewCount: number };
 }
 
 export interface UpdateStatus {

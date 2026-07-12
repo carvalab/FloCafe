@@ -20,6 +20,7 @@ import { kdsInfoRoutes } from './kds-info';
 import { moreAppsRoutes } from './more-apps';
 import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
+import { databaseToolsRoutes } from './database-tools';
 import { menuCsvRoutes } from './menu-csv';
 import { heldOrderRoutes } from './held-orders';
 import { getDatabase, now, parseItemJson, withTxn } from '../db';
@@ -49,6 +50,7 @@ export function registerRoutes(app: Express): void {
   app.use('/api/more-apps', moreAppsRoutes);
   app.use('/api/printers', printerRoutes);
   app.use('/api/db', databaseRoutes);
+  app.use('/api/db-tools', databaseToolsRoutes);
   app.use('/api/menu-csv', menuCsvRoutes);
   app.use('/api/held-orders', heldOrderRoutes);
 

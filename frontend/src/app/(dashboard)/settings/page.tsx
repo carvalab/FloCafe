@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
-import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent } from 'lucide-react';
+import { Settings, Building2, Globe, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -12,6 +12,10 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { COUNTRIES } from '@/lib/countries';
 import { useConfirm } from '@/hooks/use-confirm';
+import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
+import { HealthCheckDialog } from '@/components/settings/HealthCheckDialog';
+import { InitializeDatabaseDialog } from '@/components/settings/InitializeDatabaseDialog';
+import type { HealthCheckReport } from '@/types/electron';
 
 const CLASSIC_PREVIEW = `   STORE NAME
    Jane Doe
@@ -109,6 +113,145 @@ export default function SettingsPage() {
   // Table info dialog
   const [tableInfoOpen, setTableInfoOpen] = useState(false);
   const [tableInfo, setTableInfo] = useState<{ name: string; rows: number }[]>([]);
+
+  // ── DB tools: master PIN, health check, initialize ──────────────────────
+  const [activeTab, setActiveTab] = useState('general');
+  const [masterPinStatus, setMasterPinStatus] = useState<{ available: boolean; isSet: boolean }>({ available: false, isSet: false });
+  const [healthCheckOpen, setHealthCheckOpen] = useState(false);
+  const [healthReport, setHealthReport] = useState<HealthCheckReport | null>(null);
+  const [applyingFixes, setApplyingFixes] = useState(false);
+  const [initializeDbOpen, setInitializeDbOpen] = useState(false);
+
+  // Unified PIN gate: 'set' opens the set/change-PIN dialog; 'backup'/'import'
+  // open a verify prompt and, on success, run the pending action.
+  type ImportPayload = { app: string; schema_version?: string; data: Record<string, unknown[]> };
+  type PinGate = { mode: 'set' } | { mode: 'backup' } | { mode: 'import'; payload: { data: ImportPayload; overwrite: boolean } } | null;
+  const [pinGate, setPinGate] = useState<PinGate>(null);
+
+  const fetchMasterPinStatus = async () => {
+    try {
+      const { data } = await api.get('/db-tools/master-pin/status');
+      setMasterPinStatus(data);
+    } catch {
+      // ignore — card just shows "Unknown" state until retried
+    }
+  };
+
+  const runHealthCheck = async () => {
+    setHealthCheckOpen(true);
+    try {
+      const { data } = await api.get('/db-tools/health-check');
+      setHealthReport(data);
+    } catch {
+      toast.error('Health check failed');
+      setHealthCheckOpen(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchMasterPinStatus();
+
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const tab = params.get('tab');
+    const action = params.get('action');
+    if (tab) setActiveTab(tab);
+    if (action === 'health-check') runHealthCheck();
+    else if (action === 'initialize-db') setInitializeDbOpen(true);
+    else if (action === 'master-pin') setPinGate({ mode: 'set' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const applySafeFixes = async () => {
+    setApplyingFixes(true);
+    try {
+      const { data } = await api.post('/db-tools/apply-safe-fixes', {});
+      if (data.errors?.length) {
+        toast.error(`${data.applied.length} fix(es) applied, ${data.errors.length} failed`);
+      } else {
+        toast.success(`${data.applied.length} fix(es) applied`);
+      }
+      await runHealthCheck();
+    } catch {
+      toast.error('Applying fixes failed');
+    } finally {
+      setApplyingFixes(false);
+    }
+  };
+
+  const runImport = async (data: ImportPayload, overwrite: boolean, master_pin?: string) => {
+    try {
+      const response = await api.post('/db/import', { data, overwrite, master_pin });
+      if (response.data.success) toast.success(response.data.message);
+      return { success: true };
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      const message = error.response?.data?.error || 'Import failed - invalid file format';
+      toast.error(message);
+      return { success: false, error: message };
+    }
+  };
+
+  const handlePinGateSubmit = async (pin: string): Promise<{ success: boolean; error?: string }> => {
+    if (!pinGate) return { success: false, error: 'Nothing pending' };
+
+    if (pinGate.mode === 'set') {
+      try {
+        await api.post('/db-tools/master-pin/reset', { pin, confirm_pin: pin });
+        await fetchMasterPinStatus();
+        toast.success('Master PIN saved');
+        setPinGate(null);
+        return { success: true };
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        return { success: false, error: error.response?.data?.error || 'Failed to save PIN' };
+      }
+    }
+
+    if (pinGate.mode === 'backup') {
+      try {
+        await api.post('/db/backup', { master_pin: pin });
+        toast.success('Backup created successfully');
+        setPinGate(null);
+        return { success: true };
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        return { success: false, error: error.response?.data?.error || 'Backup failed' };
+      }
+    }
+
+    // mode === 'import'
+    const result = await runImport(pinGate.payload.data, pinGate.payload.overwrite, pin);
+    if (result.success) setPinGate(null);
+    return result;
+  };
+
+  const handleCreateBackup = async () => {
+    if (masterPinStatus.available && !masterPinStatus.isSet) {
+      toast.error('Set a Master PIN below before creating a backup');
+      return;
+    }
+    if (!masterPinStatus.available) {
+      try {
+        await api.post('/db/backup', {});
+        toast.success('Backup created successfully');
+      } catch {
+        toast.error('Backup failed');
+      }
+      return;
+    }
+    setPinGate({ mode: 'backup' });
+  };
+
+  const handleInitializeDatabase = async (pin: string) => {
+    try {
+      const { data } = await api.post('/db-tools/initialize', { master_pin: pin, confirmation_phrase: 'INITIALIZE' });
+      return { success: true, backupPath: data.backupPath };
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      return { success: false, error: error.response?.data?.error || 'Initialize failed' };
+    }
+  };
 
   // ── KDS pairing ──────────────────────────────────────────────────────────
   const [kdsInfo, setKdsInfo] = useState<{ 
@@ -723,7 +866,7 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">Settings</h1>
       </div>
 
-      <Tabs defaultValue="general">
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList className="mb-6">
           <TabsTrigger value="general">General</TabsTrigger>
           <TabsTrigger value="printers">Printers</TabsTrigger>
@@ -1723,14 +1866,7 @@ export default function SettingsPage() {
                 Create a complete backup of your SQLite database file.
               </p>
               <button
-                onClick={async () => {
-                  try {
-                    const response = await api.get('/db/backup');
-                    toast.success('Backup created successfully');
-                  } catch {
-                    toast.error('Backup failed');
-                  }
-                }}
+                onClick={handleCreateBackup}
                 className="px-5 py-2 text-sm bg-gray-600 text-white rounded-lg hover:opacity-90 font-medium"
               >
                 Create Backup
@@ -1766,10 +1902,16 @@ export default function SettingsPage() {
 
                       const overwrite = await confirm('Do you want to replace ALL existing data? Click Cancel to merge instead.', { confirmLabel: 'Replace All' });
 
-                      const response = await api.post('/db/import', { data, overwrite });
-                      if (response.data.success) {
-                        toast.success(response.data.message);
+                      if (overwrite && masterPinStatus.available) {
+                        if (!masterPinStatus.isSet) {
+                          toast.error('Set a Master PIN below before replacing all data');
+                          return;
+                        }
+                        setPinGate({ mode: 'import', payload: { data, overwrite } });
+                        return;
                       }
+
+                      await runImport(data, overwrite);
                     } catch {
                       toast.error('Import failed - invalid file format');
                     }
@@ -1808,6 +1950,66 @@ export default function SettingsPage() {
                 className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
               >
                 View Table Info
+              </button>
+            </div>
+
+            {/* Database Health Check */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <Wrench size={20} className="text-gray-500" />
+                <h2 className="font-semibold text-gray-900">Database Health Check</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Compares this database&apos;s structure against what the app expects, and proposes fixes — showing the risk of data loss for each one before anything changes.
+              </p>
+              <button
+                onClick={runHealthCheck}
+                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
+              >
+                Run Health Check
+              </button>
+            </div>
+
+            {/* Master PIN */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <KeyRound size={20} className="text-gray-500" />
+                <h2 className="font-semibold text-gray-900">Master PIN</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                A 4-digit PIN, separate from any staff login, required to back up, restore, or initialize this database. Stored encrypted on this device, independent of the database itself — so you can still use it even if the database is corrupted or locked.
+              </p>
+              {!masterPinStatus.available ? (
+                <p className="text-sm text-amber-600">Not available on this device.</p>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className={`text-sm font-medium ${masterPinStatus.isSet ? 'text-green-600' : 'text-amber-600'}`}>
+                    {masterPinStatus.isSet ? 'PIN is set' : 'Not set'}
+                  </span>
+                  <button
+                    onClick={() => setPinGate({ mode: 'set' })}
+                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
+                  >
+                    {masterPinStatus.isSet ? 'Change PIN' : 'Set PIN'}
+                  </button>
+                </div>
+              )}
+            </div>
+
+            {/* Danger Zone: Initialize Database */}
+            <div className="bg-white rounded-xl border border-red-200 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <AlertTriangle size={20} className="text-red-600" />
+                <h2 className="font-semibold text-red-600">Initialize Database</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                Permanently wipes every product, order, customer, and setting, and resets to a blank install. A backup is created automatically beforehand.
+              </p>
+              <button
+                onClick={() => setInitializeDbOpen(true)}
+                className="px-5 py-2 text-sm bg-red-600 text-white rounded-lg hover:opacity-90 font-medium"
+              >
+                Initialize Database…
               </button>
             </div>
           </div>
@@ -2128,6 +2330,32 @@ export default function SettingsPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <MasterPinPrompt
+        open={pinGate !== null}
+        mode={pinGate?.mode === 'set' ? 'set' : 'verify'}
+        title={pinGate?.mode === 'backup' ? 'Confirm Backup' : pinGate?.mode === 'import' ? 'Confirm Import' : undefined}
+        onCancel={() => setPinGate(null)}
+        onSubmit={handlePinGateSubmit}
+      />
+
+      <HealthCheckDialog
+        open={healthCheckOpen}
+        onOpenChange={setHealthCheckOpen}
+        report={healthReport}
+        applying={applyingFixes}
+        onApplySafeFixes={applySafeFixes}
+      />
+
+      <InitializeDatabaseDialog
+        open={initializeDbOpen}
+        onOpenChange={setInitializeDbOpen}
+        onConfirm={handleInitializeDatabase}
+        onSuccess={() => {
+          toast.success('Database initialized. Redirecting to setup...');
+          setTimeout(() => window.location.replace('/setup'), 1200);
+        }}
+      />
     </div>
   );
 }

@@ -339,7 +339,7 @@ function getColumns(dbInstance: Database.Database, tableName: string): string[] 
   }
 }
 
-function getTables(dbInstance: Database.Database): string[] {
+export function getTables(dbInstance: Database.Database): string[] {
   try {
     const tables = dbInstance.prepare(`
       SELECT name FROM sqlite_master WHERE type='table' 
@@ -491,6 +491,31 @@ export function getSchemaVersionFromBackup(backupPath: string): number {
 
 export function getCurrentSchemaVersion(): number {
   return db.pragma('user_version', { simple: true }) as number;
+}
+
+/**
+ * Builds a throwaway in-memory database by running the exact same
+ * createSchema()+MIGRATIONS pipeline a real fresh install takes. This is the
+ * "ideal" schema reference for the DB health check — deriving it from the
+ * live migration pipeline (instead of hand-maintaining a second schema spec)
+ * guarantees it can never drift from what main/db.ts actually produces.
+ *
+ * Temporarily swaps the module-level `db` binding since createSchema()/
+ * runMigrations() operate on it directly. Safe because better-sqlite3 is
+ * fully synchronous and Node is single-threaded — nothing else can observe
+ * the swapped binding as long as this function doesn't yield to the event loop.
+ * Caller owns the returned handle and must call .close() on it.
+ */
+export function buildIdealSchemaDb(): Database.Database {
+  const idealDb = new Database(':memory:');
+  const previousDb = db;
+  db = idealDb;
+  try {
+    runMigrations();
+  } finally {
+    db = previousDb;
+  }
+  return idealDb;
 }
 
 // ─── Migration registry ───────────────────────────────────────────────────────

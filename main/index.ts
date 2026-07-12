@@ -347,6 +347,7 @@ function createTray(): void {
             }
           },
         },
+        { type: 'separator' },
         {
           label: 'Quit',
           click: () => {
@@ -442,6 +443,20 @@ function stopMdns(): void {
 
 function createMenu(): void {
   const template: Electron.MenuItemConstructorOptions[] = [
+    ...(process.platform === 'darwin' ? [{
+      label: app.getName(),
+      submenu: [
+        { label: `About ${app.getName()}`, click: () => showAbout() },
+        { type: 'separator' as const },
+        { role: 'services' as const },
+        { type: 'separator' as const },
+        { role: 'hide' as const },
+        { role: 'hideOthers' as const },
+        { role: 'unhide' as const },
+        { type: 'separator' as const },
+        { label: 'Quit', accelerator: 'Cmd+Q', click: () => { isQuitting = true; app.quit(); } },
+      ],
+    }] : []),
     {
       label: 'File',
       submenu: [
@@ -451,7 +466,11 @@ function createMenu(): void {
         { label: 'Backup Database', click: () => mainWindow?.webContents.send('backup-database') },
         { label: 'Restore Backup', click: () => mainWindow?.webContents.send('restore-backup') },
         { type: 'separator' },
-        { label: 'Exit', accelerator: 'CmdOrCtrl+Q', click: () => { isQuitting = true; app.quit(); } },
+        { label: 'Database Health Check', click: () => mainWindow?.webContents.send('menu-db-health-check') },
+        { label: 'Initialize Database', click: () => mainWindow?.webContents.send('menu-db-initialize') },
+        { label: 'Master PIN…', click: () => mainWindow?.webContents.send('menu-master-pin') },
+        { type: 'separator' },
+        { label: 'Exit', accelerator: process.platform === 'darwin' ? undefined : 'CmdOrCtrl+Q', click: () => { isQuitting = true; app.quit(); } },
       ],
     },
     {
@@ -506,7 +525,7 @@ function createMenu(): void {
     {
       label: 'Help',
       submenu: [
-        { label: 'About Flo', click: () => showAbout() },
+        ...(process.platform !== 'darwin' ? [{ label: 'About Flo', click: () => showAbout() }] : []),
         ...(isStoreBuild
           ? []
           : [{ label: 'Check for Updates', click: () => checkForUpdates() }]),
