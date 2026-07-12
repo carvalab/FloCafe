@@ -71,7 +71,7 @@ export default function OrdersPage() {
   const heldOrdersStore = useHeldOrdersStore();
   const router = useRouter();
   const cartStore = useCartStore();
-  const { tablesRequired, setTablesRequired } = usePosSettingsStore();
+  const { tablesRequired, setTablesRequired, autoPrintBill } = usePosSettingsStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -353,9 +353,28 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePaymentComplete = () => {
+  const handlePaymentComplete = async () => {
+    const bill = paymentBill; // capture before clearing state
     setPaymentBill(null);
     fetchOrders();
+
+    if (bill && autoPrintBill) {
+      const order = orders.find((o) => o.bill?.id === bill.id);
+      if (order) {
+        try {
+          const { data } = await api.get(`/bills/${bill.id}`);
+          const latestBill = data.bill as Bill;
+          await printBill(
+            { ...latestBill, order },
+            { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' },
+            { isReprint: false }
+          );
+          await api.post(`/bills/${bill.id}/print`, { print_type: 'receipt' });
+        } catch {
+          toast.error('Receipt print failed — check printer connection');
+        }
+      }
+    }
   };
 
   const handlePrint = async (billId: number) => {
