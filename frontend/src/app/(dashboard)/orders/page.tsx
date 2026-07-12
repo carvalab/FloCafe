@@ -988,12 +988,13 @@ export default function OrdersPage() {
                 </div>
 
                 {/* Footer with actions */}
-                <div className="px-4 py-3 border-t border-gray-100 flex justify-end gap-2">
+                <div className="px-4 py-3 border-t border-gray-100 flex flex-wrap gap-2">
                     {showCheckout(order) && (
                       <Button
                         onClick={() => handleCheckout(order.id)}
                         disabled={generatingBill === order.id}
                         size="sm"
+                        className="flex-1 justify-center"
                       >
                         <CreditCard size={14} className="mr-1.5" />
                         {generatingBill === order.id ? 'Generating...' : 'Checkout'}
@@ -1004,7 +1005,7 @@ export default function OrdersPage() {
                         variant="outline"
                         onClick={() => setAddItemsOrder(order)}
                         size="sm"
-                        className="border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
+                        className="flex-1 justify-center border-green-300 text-green-600 hover:bg-green-50 hover:text-green-700"
                       >
                         <Plus size={14} className="mr-1.5" />
                         Add Item
@@ -1016,7 +1017,7 @@ export default function OrdersPage() {
                         onClick={() => handleConvertToTakeaway(order)}
                         disabled={convertingOrderId === order.id}
                         size="sm"
-                        className="border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
+                        className="flex-1 justify-center border-blue-300 text-blue-600 hover:bg-blue-50 hover:text-blue-700"
                       >
                         <ShoppingBag size={14} className="mr-1.5" />
                         {convertingOrderId === order.id ? 'Converting...' : 'Convert to Takeaway'}
@@ -1028,11 +1029,11 @@ export default function OrdersPage() {
                         onClick={() => setCancelModal({ order, reason: '', freeTable: true, overridePin: '' })}
                         disabled={cancellingOrderId === order.id}
                         size="sm"
-                        className={
+                        className={`flex-1 justify-center ${
                           order.status === 'pending'
                             ? 'border-red-300 text-red-600 hover:bg-red-50 hover:text-red-700'
                             : 'border-orange-300 text-orange-600 hover:bg-orange-50 hover:text-orange-700'
-                        }
+                        }`}
                       >
                         {order.status === 'pending' ? (
                           <XCircle size={14} className="mr-1.5" />

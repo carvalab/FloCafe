@@ -54,7 +54,7 @@ export default function POSPage() {
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const { printBill, printKot } = usePrinterStore();
   const billingIsPrepaid = billingType === 'prepaid';
-  const shouldTakePaymentNow = billingIsPrepaid || cart.orderType !== 'dine_in';
+  const shouldTakePaymentNow = billingIsPrepaid;
 
   const printKotIfEnabled = async (order: Order) => {
     if (!autoPrintKot) return;
