@@ -2,6 +2,19 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.5] - 2026-07-12
+
+### Added
+- Product image upload and display: full upload pipeline with compression and cropping, thumbnails on the POS grid and Products list, and colored placeholder tiles with product initials for items without images.
+
+### Fixed
+- Long order cards now expand properly in grid view on the Orders page.
+- Products are hidden from POS when their category is disabled.
+- `is_active` is now coerced to an integer for SQLite category updates, with added error logging.
+- Deleting a category with active products no longer throws a console 400 — product count is checked client-side first.
+- Image caching bug that prevented overwritten product images from updating in the UI.
+- Deleting an existing product image no longer fails.
+
 ## [1.8.3] - 2026-07-12
 
 ### Added
