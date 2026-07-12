@@ -2,6 +2,24 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.8.7] - 2026-07-12
+
+### Added
+- POS: "New Order" button on a customer's order card copies their profile straight into a fresh POS order.
+- POS: Enter key now confirms customer selection, and the auto-select-after-timeout behavior was removed in favor of explicit selection.
+
+### Changed
+- Settings: General tab save buttons merged into a single inline footer card.
+- Orders: action buttons on order cards now wrap and stretch on narrow viewports instead of overflowing.
+- Orders: postpaid unpaid orders now follow their own flow, decoupled from the standard button layout.
+- Products: form modals widened and the drag-and-drop image uploader redesigned for clarity; scrollbars no longer protrude through rounded corners.
+- POS: table fetching is skipped when table settings are disabled, reducing unnecessary requests.
+
+### Fixed
+- Orders: receipts now auto-print when checkout is completed from the orders list.
+- Security: the local rate limiter no longer throttles requests from loopback and private-subnet IPs.
+- Data: table "active" UI checks, soft-deleted customer/addon leaks, and CSV reactivation edge cases corrected.
+
 ## [1.8.6] - 2026-07-12
 
 ### Changed
