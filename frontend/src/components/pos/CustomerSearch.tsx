@@ -69,7 +69,6 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   const [searched, setSearched] = useState(false);
   const [creating, setCreating] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  const autoSelectRef = useRef<ReturnType<typeof setTimeout>>(undefined);
   const nameRef = useRef<HTMLInputElement>(null);
 
   const customer = cart.customer;
@@ -88,13 +87,11 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   useEffect(() => {
     return () => {
       clearTimeout(debounceRef.current);
-      clearTimeout(autoSelectRef.current);
     };
   }, []);
 
   const searchByPhone = (p: string) => {
     clearTimeout(debounceRef.current);
-    clearTimeout(autoSelectRef.current);
     if (p.length < 3) { setMatched(null); setName(''); setSearched(false); return; }
     debounceRef.current = setTimeout(async () => {
       try {
@@ -105,19 +102,6 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
         setMatched(found);
         setName(found ? found.name : '');
         setSearched(true);
-        if (exactMatch) {
-          // Let the matched name stay visible for a beat before auto-selecting,
-          // otherwise the field snaps straight to the "selected" pill and the
-          // autofill is never actually seen — it just looks broken.
-          autoSelectRef.current = setTimeout(() => {
-            cart.setCustomer(exactMatch);
-            setPhone('');
-            setName('');
-            setMatched(null);
-            setSearched(false);
-            onSelected?.();
-          }, 600);
-        }
       } catch {
         setMatched(null);
         setName('');
@@ -161,10 +145,15 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
 
   const handleSelectMatched = () => {
     if (!matched) return;
-    clearTimeout(autoSelectRef.current);
     cart.setCustomer(matched);
     setPhone(''); setName(''); setMatched(null); setSearched(false);
     onSelected?.();
+  };
+
+  const handlePhoneKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && matched) {
+      handleSelectMatched();
+    }
   };
 
   const handleCreate = async () => {
@@ -234,6 +223,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             value={phone}
             onChange={handlePhoneChange}
             onFocus={handlePhoneFocus}
+            onKeyDown={handlePhoneKeyDown}
             placeholder="Phone"
             className="h-10 w-44 shrink-0 px-3 text-sm border border-amber-400 bg-amber-50 placeholder:text-amber-600/70 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
           />
@@ -297,6 +287,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
           inputMode="numeric"
           value={phone}
           onChange={handlePhoneChange}
+          onKeyDown={handlePhoneKeyDown}
           placeholder="Phone"
           className={`${baseInput} w-full py-2`}
         />
