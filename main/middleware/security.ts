@@ -27,8 +27,16 @@ export function rateLimit(options: RateLimitOptions = {}) {
   const requests = new Map<string, RateLimitRecord>();
 
   return (req: Request, res: Response, next: NextFunction) => {
-    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    let ip = req.ip || req.socket.remoteAddress || 'unknown';
     const now = Date.now();
+
+    // Normalize IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 -> 127.0.0.1)
+    const normalizedIp = ip.startsWith('::ffff:') ? ip.substring(7) : ip;
+
+    // Bypass rate limit for local / private / Tailscale IPs
+    if (isAllowedPrivateIp(normalizedIp)) {
+      return next();
+    }
 
     let record = requests.get(ip);
     if (!record || record.resetAt <= now) {

@@ -54,7 +54,7 @@ export default function POSPage() {
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const { printBill, printKot } = usePrinterStore();
   const billingIsPrepaid = billingType === 'prepaid';
-  const shouldTakePaymentNow = billingIsPrepaid || cart.orderType !== 'dine_in';
+  const shouldTakePaymentNow = billingIsPrepaid;
 
   const printKotIfEnabled = async (order: Order) => {
     if (!autoPrintKot) return;
@@ -89,7 +89,7 @@ export default function POSPage() {
   };
 
   const refreshTables = async () => {
-    if (!isRestaurant) return;
+    if (!isRestaurant || !tablesRequired) return;
     try {
       const { data } = await api.get('/tables?active=1');
       setTables(data.tables || []);
@@ -99,33 +99,43 @@ export default function POSPage() {
   useEffect(() => {
     const fetchData = async () => {
       try {
+        // 1. Fetch business settings first
+        const settingsRes = await api.get('/settings/business');
+        const d = settingsRes.data;
+        setBillingType(d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
+        const isTablesRequired = typeof d.tables_required === 'boolean' ? d.tables_required : true;
+        setTablesRequired(isTablesRequired);
+
+        // 2. Fetch other menu data
         const requests: Promise<{ data: Record<string, unknown> }>[] = [
           api.get('/categories?active=1'),
           api.get('/products?active=1'),
         ];
-        if (isRestaurant) requests.push(api.get('/tables?active=1'));
+        
+        if (isRestaurant && isTablesRequired) {
+          requests.push(api.get('/tables?active=1'));
+        }
+        
         const [catRes, prodRes, tableRes] = await Promise.all(requests);
         setCategories((catRes.data.categories as Category[]) || []);
         setProducts((prodRes.data.products as Product[]) || []);
-        if (tableRes) setTables((tableRes.data.tables as Table[]) || []);
         
-        await heldOrders.fetchHeldOrders();
+        if (tableRes) {
+          setTables((tableRes.data.tables as Table[]) || []);
+        } else {
+          setTables([]);
+        }
+
+        // 3. Fetch held orders conditionally
+        if (isTablesRequired) {
+          await heldOrders.fetchHeldOrders();
+        }
       } catch {
         toast.error('Failed to load menu data');
       }
     };
     fetchData();
-  }, [isRestaurant]);
-
-  useEffect(() => {
-    api.get('/settings/business')
-      .then((res) => {
-        const d = res.data;
-        setBillingType(d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid');
-        setTablesRequired(typeof d.tables_required === 'boolean' ? d.tables_required : true);
-      })
-      .catch(() => {});
-  }, [setBillingType, setTablesRequired]);
+  }, [isRestaurant, setBillingType, setTablesRequired]);
 
   const handleProductClick = (product: Product) => {
     // Always open modal so user can add notes and adjust quantity
@@ -150,13 +160,13 @@ export default function POSPage() {
       return;
     }
 
-    // Prepaid stores and non-dine-in orders collect payment before finishing the order.
+    // Prepaid stores collect payment before finishing the order.
     if (shouldTakePaymentNow) {
       setShowPrepaidCheckout(true);
       return;
     }
 
-    // Dine-in → place order, kitchen gets the ticket, payment collected later
+    // Postpaid store / unpaid order → place order, kitchen gets the ticket, payment collected later
     setSubmitting(true);
     try {
       let orderForKot: Order;

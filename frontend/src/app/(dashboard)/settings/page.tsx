@@ -434,7 +434,47 @@ export default function SettingsPage() {
   const [registeringCloud, setRegisteringCloud] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
 
-  const resetBusiness = () => setForm(savedBusiness);
+  const resetBusiness = async () => {
+    try {
+      const [businessRes, loyaltyRes, discountRes] = await Promise.all([
+        api.get('/settings/business'),
+        api.get('/settings/loyalty'),
+        api.get('/settings/discount')
+      ]);
+
+      const d = businessRes.data;
+      const matchedCountry = COUNTRIES.find(c => c.currency === d.currency && c.timezone === d.timezone);
+      const loaded: BusinessForm = {
+        businessName: d.business_name || '',
+        countryCode: matchedCountry?.code || '',
+        timezone: d.timezone || '',
+        currency: d.currency || '',
+        billingType: d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid',
+        tablesRequired: typeof d.tables_required === 'boolean' ? d.tables_required : true,
+        gstin: d.gstin || '',
+        businessAddress: d.business_address || '',
+        businessPhone: d.business_phone || '',
+        instagramHandle: d.instagram_handle || '',
+        billShowName: typeof d.bill_show_name === 'boolean' ? d.bill_show_name : true,
+        billShowAddress: typeof d.bill_show_address === 'boolean' ? d.bill_show_address : true,
+        billShowPhone: typeof d.bill_show_phone === 'boolean' ? d.bill_show_phone : true,
+        billShowGstn: typeof d.bill_show_gstn === 'boolean' ? d.bill_show_gstn : false,
+      };
+      setSavedBusiness(loaded);
+      setForm(loaded);
+
+      setLoyaltyEnabled(!!loyaltyRes.data.loyalty_enabled);
+
+      if (discountRes.data.discount_max_percentage !== undefined) setDiscountMaxPct(Number(discountRes.data.discount_max_percentage));
+      if (discountRes.data.discount_max_amount !== undefined) setDiscountMaxAmount(Number(discountRes.data.discount_max_amount));
+      if (discountRes.data.discount_mode) setDiscountMode(discountRes.data.discount_mode);
+      if (discountRes.data.discount_requires_approval !== undefined) setDiscountRequiresApproval(!!discountRes.data.discount_requires_approval);
+
+      toast.success('Settings reloaded from database');
+    } catch {
+      toast.error('Failed to reload settings');
+    }
+  };
 
   useEffect(() => {
     fetchPrinters();
@@ -574,14 +614,15 @@ export default function SettingsPage() {
         loyalty_enabled: loyaltyEnabled,
       });
       if (!silent) toast.success('Loyalty settings saved');
-    } catch {
+    } catch (err) {
       if (!silent) toast.error('Failed to save');
+      throw err;
     } finally {
       setSavingLoyalty(false);
     }
   };
 
-  const saveDiscount = async () => {
+  const saveDiscount = async (silent = false) => {
     setSavingDiscount(true);
     try {
       await api.put('/settings/discount', {
@@ -590,9 +631,10 @@ export default function SettingsPage() {
         discount_mode: discountMode,
         discount_requires_approval: discountRequiresApproval,
       });
-      toast.success('Discount settings saved');
-    } catch {
-      toast.error('Failed to save');
+      if (!silent) toast.success('Discount settings saved');
+    } catch (err) {
+      if (!silent) toast.error('Failed to save');
+      throw err;
     } finally {
       setSavingDiscount(false);
     }
@@ -628,8 +670,9 @@ export default function SettingsPage() {
       posSettings.setTablesRequired(form.tablesRequired);
       updateCurrentTenant({ currency: form.currency, timezone: form.timezone });
       if (!silent) toast.success('Store details saved');
-    } catch {
+    } catch (err) {
       if (!silent) toast.error('Failed to save');
+      throw err;
     } finally {
       setSavingBusiness(false);
     }
@@ -637,7 +680,7 @@ export default function SettingsPage() {
 
   const saveAllSettings = async () => {
     try {
-      await Promise.all([saveBusinessInfo(true), saveLoyalty(true)]);
+      await Promise.all([saveBusinessInfo(true), saveLoyalty(true), saveDiscount(true)]);
       toast.success('Settings saved');
     } catch {
       toast.error('Failed to save settings');
@@ -1035,11 +1078,6 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                {/* Save button */}
-                <button onClick={saveDiscount} disabled={savingDiscount}
-                  className="w-full py-2 px-4 bg-brand text-white rounded-lg text-sm font-medium hover:bg-brand/90 disabled:opacity-50 transition-colors">
-                  {savingDiscount ? 'Saving...' : 'Save Changes'}
-                </button>
               </div>
             </div>
 
@@ -1116,23 +1154,28 @@ export default function SettingsPage() {
                   {rotatingCode ? 'Generating...' : 'Generate Pairing Code'}
                 </button>
               )}
-              {/* Save buttons - moved from sticky bottom */}
-              {isAdmin && (
-                <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
-                  <button onClick={resetBusiness} disabled={savingBusiness || savingLoyalty}
-                    className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50">
-                    Cancel
-                  </button>
-                  <button
-                    onClick={saveAllSettings}
-                    disabled={savingBusiness || savingLoyalty}
-                    className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium">
-                    {(savingBusiness || savingLoyalty) ? 'Saving...' : 'Save All'}
-                  </button>
-                </div>
-              )}
             </div>
           </div>
+
+          {/* Consolidated Save/Cancel buttons */}
+          {isAdmin && (
+            <div className="mt-6 flex justify-end gap-3">
+              <button
+                onClick={resetBusiness}
+                disabled={savingBusiness || savingLoyalty || savingDiscount}
+                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={saveAllSettings}
+                disabled={savingBusiness || savingLoyalty || savingDiscount}
+                className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium transition-colors"
+              >
+                {(savingBusiness || savingLoyalty || savingDiscount) ? 'Saving...' : 'Save All'}
+              </button>
+            </div>
+          )}
         </TabsContent>
 
         {/* ================================================================

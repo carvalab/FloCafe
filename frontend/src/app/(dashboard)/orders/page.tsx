@@ -16,6 +16,7 @@ import { usePrinterStore } from '@/hooks/usePrinter';
 import { useHeldOrdersStore } from '@/store/held-orders';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cart';
+import { usePosSettingsStore } from '@/store/pos-settings';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
   pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
@@ -70,6 +71,7 @@ export default function OrdersPage() {
   const heldOrdersStore = useHeldOrdersStore();
   const router = useRouter();
   const cartStore = useCartStore();
+  const { tablesRequired, setTablesRequired, autoPrintBill } = usePosSettingsStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -137,11 +139,31 @@ export default function OrdersPage() {
   };
 
   useEffect(() => {
-    fetchOrders();
-    heldOrdersStore.fetchHeldOrders();
-    api.get('/settings/discount')
-      .then((res) => setDiscountRequiresApproval(!!res.data.discount_requires_approval))
-      .catch(() => {});
+    const initPage = async () => {
+      let isTablesRequired = true;
+      try {
+        const { data } = await api.get('/settings/business');
+        isTablesRequired = typeof data.tables_required === 'boolean' ? data.tables_required : true;
+        setTablesRequired(isTablesRequired);
+      } catch {
+        // Ignore and fallback to default (true)
+      }
+
+      fetchOrders();
+
+      if (isTablesRequired) {
+        heldOrdersStore.fetchHeldOrders();
+        api.get('/tables')
+          .then((res) => setTables(res.data.tables || []))
+          .catch(() => {});
+      }
+
+      api.get('/settings/discount')
+        .then((res) => setDiscountRequiresApproval(!!res.data.discount_requires_approval))
+        .catch(() => {});
+    };
+
+    initPage();
 
     // 10-second backup polling interval (WebSocket handles real-time updates)
     const interval = setInterval(fetchOrders, 10000);
@@ -197,19 +219,7 @@ export default function OrdersPage() {
         ws.close();
       }
     };
-  }, []);
-
-  useEffect(() => {
-    const fetchTables = async () => {
-      try {
-        const { data } = await api.get('/tables');
-        setTables(data.tables || []);
-      } catch {
-        // Ignore error
-      }
-    };
-    fetchTables();
-  }, []);
+  }, [setTablesRequired]);
 
   const fetchPrintHistory = async (billId: number) => {
     try {
@@ -343,9 +353,28 @@ export default function OrdersPage() {
     }
   };
 
-  const handlePaymentComplete = () => {
+  const handlePaymentComplete = async () => {
+    const bill = paymentBill; // capture before clearing state
     setPaymentBill(null);
     fetchOrders();
+
+    if (bill && autoPrintBill) {
+      const order = orders.find((o) => o.bill?.id === bill.id);
+      if (order) {
+        try {
+          const { data } = await api.get(`/bills/${bill.id}`);
+          const latestBill = data.bill as Bill;
+          await printBill(
+            { ...latestBill, order },
+            { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' },
+            { isReprint: false }
+          );
+          await api.post(`/bills/${bill.id}/print`, { print_type: 'receipt' });
+        } catch {
+          toast.error('Receipt print failed — check printer connection');
+        }
+      }
+    }
   };
 
   const handlePrint = async (billId: number) => {
