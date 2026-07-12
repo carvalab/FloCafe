@@ -19,6 +19,8 @@
 
 FloCafe runs entirely on your own machine — no internet, no subscriptions, no cloud dependency. Your data stays local, your business stays private.
 
+**FloCafe is donationware.** Every feature, in every app across the ecosystem — FloCafe, FloRetail, FloSalon, and RevFlo (our companion mobile reporting app, short for *Revenue Flow*) — is free, with no tiers, no subscriptions, and no paywalled features. There is no plan to ever change that. If FloCafe saves your business money, consider supporting development with a voluntary donation — links are being rolled out across the apps.
+
 ## Table of Contents
 
 - [Why FloCafe](#why-flocafe)
@@ -56,21 +58,17 @@ FloCafe runs entirely on your own machine — no internet, no subscriptions, no 
   </a>
 </p>
 
-Or download directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases):
+Or grab the latest build directly from [Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases) — always the top-most release, filenames are versioned (e.g. `Flo.Cafe-<version>.dmg`):
 
-| Platform | File | Description |
+| Platform | Asset | Description |
 |----------|------|-------------|
 | **macOS** | [Mac App Store](https://apps.apple.com/in/app/flo-cafe/id6763136018) | Recommended — auto-updates |
-| **macOS (Intel DMG)** | `Flo.Cafe-1.8.0.dmg` | Direct download for Intel Macs |
-| **macOS (Apple Silicon DMG)** | `Flo.Cafe-1.8.0-arm64.dmg` | Direct download for M1/M2/M3/M4 |
+| **macOS (Intel DMG)** | `Flo.Cafe-<version>.dmg` | Direct download for Intel Macs |
+| **macOS (Apple Silicon DMG)** | `Flo.Cafe-<version>-arm64.dmg` | Direct download for M1/M2/M3/M4 |
 | **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
-| **Windows (EXE)** | `Flo.Cafe.Setup.1.8.0.exe` | Direct download installer |
-| **Linux (AppImage)** | `Flo.Cafe-1.8.0.AppImage` | Portable Linux binary built for Ubuntu 20.04-compatible glibc |
-| **Linux (Debian)** | `flo-desktop_1.8.0_amd64.deb` | Debian/Ubuntu package built for Ubuntu 20.04-compatible glibc |
-
-**Latest Version:** v1.8.0
-
-**Release note:** Linux artifacts are now built on `ubuntu-22.04` (GitHub retired the `ubuntu-20.04` hosted runner) so the native `better-sqlite3` module stays compatible with Ubuntu 22.04 and other reasonably recent glibc-based distributions.
+| **Windows (EXE)** | `Flo.Cafe.Setup.<version>.exe` | Direct download installer |
+| **Linux (AppImage)** | `Flo.Cafe-<version>.AppImage` | Portable Linux binary, built on `ubuntu-22.04` for glibc compatibility with Ubuntu 22.04+ and similarly recent distros |
+| **Linux (Debian)** | `flo-desktop_<version>_amd64.deb` | Debian/Ubuntu package, same `ubuntu-22.04` build target |
 
 ## 🚀 Features
 
