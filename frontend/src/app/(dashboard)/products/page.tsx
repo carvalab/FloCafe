@@ -8,8 +8,10 @@ import toast from 'react-hot-toast';
 import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
+import ImageUploader from '@/components/products/ImageUploader';
 import { getCurrencySymbol } from '@/lib/countries';
 import { useConfirm } from '@/hooks/use-confirm';
+import { nameToColor } from '@/lib/image-utils';
 
 const PRESET_TAGS = [
   { key: 'veg', label: 'Veg' },
@@ -74,7 +76,9 @@ export default function ProductsPage() {
     tags: [] as string[],
     customTag: '',
     addon_group_ids: [] as number[],
+    image_url: null as string | null,
   });
+  const [imageTouched, setImageTouched] = useState(false);
 
   const [showCsvModal, setShowCsvModal] = useState(false);
   const [csvType, setCsvType] = useState<'categories' | 'products' | 'addons'>('categories');
@@ -151,8 +155,9 @@ export default function ProductsPage() {
       name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '',
       tax_type: 'inclusive', tax_rate: '5', description: '',
       track_inventory: false, stock_quantity: '0', is_active: true,
-      tags: [], customTag: '', addon_group_ids: [],
+      tags: [], customTag: '', addon_group_ids: [], image_url: null,
     });
+    setImageTouched(false);
     setEditingProduct(null);
     setShowForm(false);
   };
@@ -175,6 +180,7 @@ export default function ProductsPage() {
       tags: product.tags || [],
       customTag: '',
       addon_group_ids: product.addon_groups?.map((g) => g.id) || [],
+      image_url: product.has_image ? 'EXISTING' : null,
     });
     setShowForm(true);
   };
@@ -182,7 +188,7 @@ export default function ProductsPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = {
+      const payload: Record<string, unknown> = {
         name: form.name,
         category_id: form.category_id || null,
         price: Number(form.price),
@@ -198,6 +204,13 @@ export default function ProductsPage() {
         tags: form.tags.length > 0 ? form.tags : null,
         addon_group_ids: form.addon_group_ids,
       };
+
+      // Only include image_url when the user actually touched the image field
+      // (avoids sending 50KB payloads when the image wasn't changed)
+      if (imageTouched) {
+        payload.image_url = form.image_url; // Can be a data URI or null (to clear)
+      }
+
       if (editingProduct) {
         await api.put(`/products/${editingProduct.id}`, payload);
         toast.success('Product updated');
@@ -401,14 +414,35 @@ export default function ProductsPage() {
               return (
               <tr key={product.id} className="hover:bg-gray-50">
                 <td className="p-4 max-w-[220px]">
-                  <p className="font-medium text-gray-900">{product.name}</p>
-                  <p className="text-[10px] text-gray-400 font-mono mt-0.5 break-all">{product.id}</p>
-                  {product.sku && <p className="text-xs text-gray-400">SKU: {product.sku}</p>}
-                  {product.tags && product.tags.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1.5">
-                      {product.tags.map((tag: string) => <TagBadge key={tag} tag={tag} />)}
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-lg overflow-hidden shrink-0 relative flex items-center justify-center">
+                      <div
+                        className="absolute inset-0 flex items-center justify-center"
+                        style={{ backgroundColor: nameToColor(product.name) }}
+                      >
+                        <span className="text-sm font-bold text-white/80">
+                          {product.name.substring(0, 2).toUpperCase()}
+                        </span>
+                      </div>
+                      {product.has_image && (
+                        <img 
+                          src={`${api.defaults.baseURL}/products/${product.id}/image?t=${product.updated_at ? new Date(product.updated_at).getTime() : 0}`}
+                          alt="" 
+                          className="absolute inset-0 w-full h-full object-cover"
+                          onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      )}
                     </div>
-                  )}
+                    <div>
+                      <p className="font-medium text-gray-900">{product.name}</p>
+                      {product.sku && <p className="text-xs text-gray-400 mt-0.5">SKU: {product.sku}</p>}
+                      {product.tags && product.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1.5">
+                          {product.tags.map((tag: string) => <TagBadge key={tag} tag={tag} />)}
+                        </div>
+                      )}
+                    </div>
+                  </div>
                 </td>
                 <td className="p-4 text-sm text-gray-600">{product.category?.name || '—'}</td>
                 <td className="p-4 text-right">
@@ -469,6 +503,17 @@ export default function ProductsPage() {
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <ImageUploader
+                  value={form.image_url}
+                  onChange={(val) => {
+                    setForm({ ...form, image_url: val });
+                    setImageTouched(true);
+                  }}
+                  productId={editingProduct?.id ? String(editingProduct.id) : undefined}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>

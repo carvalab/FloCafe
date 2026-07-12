@@ -63,7 +63,8 @@ export interface Product {
   low_stock_threshold: number | null;
   is_active: boolean;
   available_online: boolean;
-  image_url: string | null;
+  has_image: boolean;
+  updated_at: string;
   tags: string[] | null;
   variants: Record<string, unknown>[] | null;
   modifiers: Record<string, unknown>[] | null;
