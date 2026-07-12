@@ -502,13 +502,14 @@ export default function ProductsPage() {
 
       {/* Product Form Modal */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-            <div className="flex justify-between items-center mb-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+            <div className="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
               <h2 className="text-lg font-bold">{editingProduct ? 'Edit Product' : 'Add Product'}</h2>
               <button onClick={resetForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
             </div>
-            <form onSubmit={handleSubmit} className="space-y-4">
+            <div className="p-6 overflow-y-auto flex-1">
+              <form onSubmit={handleSubmit} className="space-y-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
@@ -685,6 +686,7 @@ export default function ProductsPage() {
                 {editingProduct ? 'Update Product' : 'Create Product'}
               </Button>
             </form>
+            </div>
           </div>
         </div>
       )}
@@ -829,13 +831,14 @@ export default function ProductsPage() {
           </div>
 
           {showAddonModal && (
-            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-              <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[90vh] overflow-y-auto">
-                <div className="flex justify-between items-center mb-4">
+            <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden shadow-2xl">
+                <div className="flex justify-between items-center p-6 border-b border-gray-100 shrink-0">
                   <h2 className="text-lg font-bold">{editingAddonGroup ? 'Edit Addon Group' : 'Add Addon Group'}</h2>
                   <button onClick={resetAddonForm} className="text-gray-400 hover:text-gray-600"><X size={20} /></button>
                 </div>
-                <form onSubmit={handleAddonGroupSubmit} className="space-y-4">
+                <div className="p-6 overflow-y-auto flex-1">
+                  <form onSubmit={handleAddonGroupSubmit} className="space-y-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
                     <input type="text" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
@@ -875,6 +878,7 @@ export default function ProductsPage() {
                   </div>
                   <Button type="submit" className="w-full">{editingAddonGroup ? 'Update' : 'Create'}</Button>
                 </form>
+                </div>
               </div>
             </div>
           )}
