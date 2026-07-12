@@ -272,6 +272,13 @@ export default function ProductsPage() {
   };
 
   const handleCategoryDelete = async (id: number, name: string) => {
+    const productCount = products.filter(p => p.category_id === id).length;
+    if (productCount > 0) {
+      setCatReassignTo('');
+      setCatDeleteModal({ open: true, id, name, productCount });
+      return;
+    }
+
     try {
       await api.delete(`/categories/${id}`);
       toast.success('Category deleted');
