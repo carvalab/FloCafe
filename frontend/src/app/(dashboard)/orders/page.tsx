@@ -624,7 +624,7 @@ export default function OrdersPage() {
             <p>No held orders found</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start">
+          <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start items-start auto-rows-max">
             {Object.values(heldOrdersStore.orders).map((heldOrder) => (
               <div key={heldOrder.tableId} className="bg-white rounded-xl border border-blue-200 overflow-hidden flex flex-col shadow-sm hover:shadow-md transition-shadow">
                  <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
@@ -681,7 +681,7 @@ export default function OrdersPage() {
           <p>No orders found</p>
         </div>
       ) : (
-        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start">
+        <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start items-start auto-rows-max">
           {filteredOrders.map((order) => {
             const activeItems = (order.items || []).filter((i: OrderItem) => i.status !== 'cancelled');
             const cancelledItems = (order.items || []).filter((i: OrderItem) => i.status === 'cancelled');
