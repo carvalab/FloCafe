@@ -337,6 +337,8 @@ router.post('/import/addons', requireRole('owner', 'manager'), (req: Request, re
         const existing = db.prepare('SELECT id FROM addon_groups WHERE name = ?').get(r.group_name) as any;
         if (existing) {
           groupId = existing.id;
+          // Reactivate if it was soft-deleted
+          db.prepare('UPDATE addon_groups SET is_active = 1, updated_at = ? WHERE id = ?').run(now(), groupId);
         } else {
           groupId = uuidv4();
           db.prepare(
@@ -350,9 +352,18 @@ router.post('/import/addons', requireRole('owner', 'manager'), (req: Request, re
       }
 
       const addonExists = db
-        .prepare('SELECT id FROM addons WHERE addon_group_id = ? AND name = ?')
-        .get(groupId, r.addon_name);
-      if (addonExists) { skipped++; continue; }
+        .prepare('SELECT id, is_active FROM addons WHERE addon_group_id = ? AND name = ?')
+        .get(groupId, r.addon_name) as any;
+      if (addonExists) {
+        if (addonExists.is_active === 0) {
+          db.prepare('UPDATE addons SET is_active = 1, price = ?, updated_at = ? WHERE id = ?')
+            .run(price, now(), addonExists.id);
+          addonsCreated++;
+        } else {
+          skipped++;
+        }
+        continue;
+      }
 
       db.prepare(
         `INSERT INTO addons (id, addon_group_id, name, price, is_active, sort_order, created_at, updated_at)

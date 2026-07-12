@@ -77,7 +77,7 @@ function loadProductRelationsBatch(db: any, products: any[]) {
   if (allAddonGroupIds.length > 0) {
     const agPlaceholders = allAddonGroupIds.map(() => '?').join(',');
     const addonGroups = db.prepare(
-      `SELECT * FROM addon_groups WHERE id IN (${agPlaceholders})`
+      `SELECT * FROM addon_groups WHERE is_active = 1 AND id IN (${agPlaceholders})`
     ).all(...allAddonGroupIds) as any[];
     for (const ag of addonGroups) {
       addonGroupMap.set(ag.id, ag);
@@ -89,7 +89,7 @@ function loadProductRelationsBatch(db: any, products: any[]) {
   if (allAddonGroupIds.length > 0) {
     const agPlaceholders = allAddonGroupIds.map(() => '?').join(',');
     const addons = db.prepare(
-      `SELECT * FROM addons WHERE addon_group_id IN (${agPlaceholders})`
+      `SELECT * FROM addons WHERE is_active = 1 AND addon_group_id IN (${agPlaceholders})`
     ).all(...allAddonGroupIds) as any[];
     for (const addon of addons) {
       const list = addonMap.get(addon.addon_group_id) || [];

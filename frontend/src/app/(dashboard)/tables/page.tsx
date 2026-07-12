@@ -265,8 +265,9 @@ export default function TablesPage() {
     try {
       await api.post(`/tables/${table.id}/${table.is_active ? 'deactivate' : 'reactivate'}`);
       fetchTables();
-    } catch (err: any) {
-      toast.error(err?.response?.data?.error || 'Failed to update');
+    } catch (err: unknown) {
+      const e = err as { response?: { data?: { error?: string } } };
+      toast.error(e.response?.data?.error || 'Failed to update');
     }
   };
 
@@ -308,7 +309,7 @@ export default function TablesPage() {
               <div key={table.id}
                 className={`bg-white rounded-xl border border-gray-100 hover:shadow-md transition-shadow ${
                   hasOrders ? 'border-l-4 border-l-brand' : ''
-                } ${table.is_active === false ? 'opacity-60' : ''}`}>
+                } ${!table.is_active ? 'opacity-60' : ''}`}>
                 {/* Table header */}
                 <div className="px-4 py-3 border-b border-gray-50 flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -376,8 +377,8 @@ export default function TablesPage() {
                     </button>
                   )}
                   <button onClick={() => toggleActive(table)}
-                    className={`text-xs font-medium flex items-center gap-1 ${table.is_active === false ? 'text-green-600 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}>
-                    {table.is_active === false ? <><RotateCcw size={12} /> Reactivate</> : 'Deactivate'}
+                    className={`text-xs font-medium flex items-center gap-1 ${!table.is_active ? 'text-green-600 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}>
+                    {!table.is_active ? <><RotateCcw size={12} /> Reactivate</> : 'Deactivate'}
                   </button>
                 </div>
               </div>
@@ -388,7 +389,7 @@ export default function TablesPage() {
         <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-4">
           {tables.map((table) => (
             <div key={table.id}
-              className={`bg-white rounded-xl p-5 border border-gray-100 text-center hover:shadow-md transition-shadow ${table.is_active === false ? 'opacity-60' : ''}`}>
+              className={`bg-white rounded-xl p-5 border border-gray-100 text-center hover:shadow-md transition-shadow ${!table.is_active ? 'opacity-60' : ''}`}>
               <div className={`w-3 h-3 rounded-full ${statusColors[table.status]} mx-auto mb-3`} />
               <h3 className="font-bold text-lg text-gray-900">{table.name}</h3>
               <p className="text-sm text-gray-500">{table.capacity} seats</p>
@@ -414,8 +415,8 @@ export default function TablesPage() {
                 </button>
               )}
               <button onClick={() => toggleActive(table)}
-                className={`mt-2 block mx-auto text-xs font-medium ${table.is_active === false ? 'text-green-600 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}>
-                {table.is_active === false ? 'Reactivate' : 'Deactivate'}
+                className={`mt-2 block mx-auto text-xs font-medium ${!table.is_active ? 'text-green-600 hover:text-green-700' : 'text-red-500 hover:text-red-700'}`}>
+                {!table.is_active ? 'Reactivate' : 'Deactivate'}
               </button>
             </div>
           ))}

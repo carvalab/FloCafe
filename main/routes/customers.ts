@@ -48,7 +48,7 @@ router.get('/', (req: Request, res: Response) => {
         COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'credit' AND (ll.expires_at IS NULL OR ll.expires_at > datetime('now'))), 0) -
         COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'debit'), 0)
       ) as wallet_balance
-      FROM customers c WHERE 1=1`;
+      FROM customers c WHERE c.is_active = 1`;
     const params: any[] = [];
 
     if (req.query.search) {
@@ -82,7 +82,7 @@ router.get('/search', (req: Request, res: Response) => {
 
     const customers = db.prepare(`
       SELECT * FROM customers
-      WHERE phone LIKE ? OR name LIKE ? OR email LIKE ?
+      WHERE is_active = 1 AND (phone LIKE ? OR name LIKE ? OR email LIKE ?)
       ORDER BY name LIMIT 20
     `).all(searchTerm, searchTerm, searchTerm);
 
@@ -151,9 +151,31 @@ router.post('/', (req: Request, res: Response) => {
     const db = getDatabase();
 
     if (phone) {
-      const existing = db.prepare('SELECT * FROM customers WHERE phone = ?').get(phone);
+      const existing = db.prepare('SELECT * FROM customers WHERE phone = ?').get(phone) as any;
       if (existing) {
-        return res.status(400).json({ message: 'Customer with this phone already exists' });
+        if (existing.is_active === 0) {
+          db.prepare(`
+            UPDATE customers SET
+              name = ?,
+              email = ?,
+              address = ?,
+              notes = ?,
+              is_active = 1,
+              updated_at = ?
+            WHERE id = ?
+          `).run(
+            String(name).trim(),
+            email ? String(email).trim() : null,
+            address ? String(address).trim() : null,
+            notes ? String(notes).trim() : null,
+            now(),
+            existing.id
+          );
+          const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id);
+          return res.status(201).json({ customer });
+        } else {
+          return res.status(400).json({ message: 'Customer with this phone already exists' });
+        }
       }
     }
 

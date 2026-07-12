@@ -88,6 +88,15 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     }
 
     const db = getDatabase();
+    const existing = db.prepare('SELECT * FROM tables WHERE number = ?').get(tableNumber) as any;
+    if (existing) {
+      if (existing.is_active === 0) {
+        return res.status(400).json({ error: `Table ${tableNumber} already exists but is deactivated. Please reactivate it from the list.` });
+      } else {
+        return res.status(400).json({ error: 'Table number already exists' });
+      }
+    }
+
     const tableId = `tbl-${randomUUID().slice(0, 8)}`;
     const result = db.prepare(`
       INSERT INTO tables (id, number, capacity, floor, section, position_x, position_y, kitchen_station_id, created_at, updated_at)
@@ -113,6 +122,13 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
     if (!table) {
       return res.status(404).json({ error: 'Table not found' });
+    }
+
+    if (tableNumber) {
+      const existing = db.prepare('SELECT * FROM tables WHERE number = ? AND id != ?').get(tableNumber, req.params.id);
+      if (existing) {
+        return res.status(400).json({ error: 'Table number already exists' });
+      }
     }
 
     db.prepare(`
