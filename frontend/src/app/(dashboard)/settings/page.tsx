@@ -576,6 +576,8 @@ export default function SettingsPage() {
   const [testingCloud, setTestingCloud] = useState(false);
   const [registeringCloud, setRegisteringCloud] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
+  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
+  const [registerEmail, setRegisterEmail] = useState('');
 
   const resetBusiness = async () => {
     try {
@@ -720,10 +722,10 @@ export default function SettingsPage() {
     }
   };
 
-  const registerCloud = async () => {
+  const registerCloud = async (email: string) => {
     setRegisteringCloud(true);
     try {
-      const res = await api.post('/settings/cloud/register');
+      const res = await api.post('/settings/cloud/register', { email });
       setCloudStatus({
         cloud_registration_status: res.data.cloud_registration_status || 'unregistered',
         cloud_pending_store_id: res.data.cloud_pending_store_id || null,
@@ -738,7 +740,7 @@ export default function SettingsPage() {
         cloud_store_id: res.data.cloud_store_id || prev.cloud_store_id,
       }));
       if (res.data.cloud_registration_status === 'pending') {
-        toast.success('Registered — waiting for FloAdmin to approve this store');
+        toast.success('Request sent — your API key will arrive by email within 7 days. RevFlo reports and other features unlock once it\'s applied.');
       } else if (res.data.cloud_registration_status === 'registered') {
         toast.success('Registered with FloAdmin');
       }
@@ -2099,8 +2101,8 @@ export default function SettingsPage() {
               <div className="flex items-center gap-2">
                 <Cloud size={20} className="text-brand" />
                 <div>
-                  <h2 className="font-semibold text-gray-900">FloAdmin — Sales Reporting</h2>
-                  <p className="text-xs text-gray-500 mt-0.5">Push every paid bill to the cloud so the ReFlo mobile app can show live reports</p>
+                  <h2 className="font-semibold text-gray-900">RevFlo — Sales Reporting</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">Push every paid bill to FloAdmin, our cloud server, so the RevFlo mobile app can show live reports</p>
                 </div>
               </div>
 
@@ -2122,7 +2124,7 @@ export default function SettingsPage() {
                     </p>
                     <p className="text-xs text-gray-500">
                       {cloudStatus.cloud_registration_status === 'registered' && `Live channel: ${cloudStatus.cloud_relay_mode === 'websocket' ? 'realtime' : cloudStatus.cloud_relay_mode === 'http_fallback' ? 'fallback polling' : 'disconnected'}${cloudStatus.cloud_last_heartbeat ? ` · last heartbeat ${new Date(cloudStatus.cloud_last_heartbeat).toLocaleTimeString()}` : ''}`}
-                      {cloudStatus.cloud_registration_status === 'pending' && `Store ID ${cloudStatus.cloud_pending_store_id || '—'} — a FloAdmin team member needs to claim this install`}
+                      {cloudStatus.cloud_registration_status === 'pending' && `Store ID ${cloudStatus.cloud_pending_store_id || '—'} — check your email within 7 days for the API key`}
                       {cloudStatus.cloud_registration_status === 'rejected' && 'Contact support — this install was not approved'}
                       {cloudStatus.cloud_registration_status === 'registration_failed' && (cloudStatus.cloud_last_error || 'Last attempt failed — will keep retrying automatically')}
                       {cloudStatus.cloud_registration_status === 'unregistered' && 'Register to announce this POS to FloAdmin, or paste an API key below'}
@@ -2131,7 +2133,7 @@ export default function SettingsPage() {
                 </div>
                 {cloudStatus.cloud_registration_status !== 'registered' && (
                   <button
-                    onClick={registerCloud}
+                    onClick={() => { setRegisterEmail(user?.email || ''); setShowRegisterConfirm(true); }}
                     disabled={registeringCloud}
                     className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium shrink-0"
                   >
@@ -2142,8 +2144,7 @@ export default function SettingsPage() {
 
               <div className="space-y-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key <span className="text-gray-400 font-normal">(manual — optional if registered above)</span></label>
-                  <p className="text-xs text-gray-500 mb-2">Get this from <span className="font-mono">soflo.codify.tech</span> → register your store → copy the API key</p>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">API Key</label>
                   <div className="flex gap-2">
                     <input
                       type="password"
@@ -2203,13 +2204,6 @@ export default function SettingsPage() {
                   <h2 className="font-semibold text-gray-900">OrderFlow — Online Orders</h2>
                   <p className="text-xs text-gray-500 mt-0.5">Receive orders from Zomato, Swiggy, and other platforms directly in this POS</p>
                 </div>
-              </div>
-
-              <div className="bg-amber-50 border border-amber-100 rounded-lg px-4 py-3 text-xs text-amber-700 space-y-1">
-                <p className="font-medium">How it works</p>
-                <p>1. Register your store on <span className="font-mono">reportingserver.codify.tech</span></p>
-                <p>2. Give Zomato/Swiggy your webhook URL (shown after registering)</p>
-                <p>3. Enable online orders below — POS will poll every 5 seconds and show a notification for each new order</p>
               </div>
 
               <label className="flex items-center gap-3 cursor-pointer">
@@ -2327,6 +2321,38 @@ export default function SettingsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTableInfoOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Register with FloAdmin — confirmation Dialog */}
+      <Dialog open={showRegisterConfirm} onOpenChange={setShowRegisterConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Send registration request?</DialogTitle>
+            <DialogDescription>
+              This sends your store's details to FloAdmin. Your API key will be emailed to the address
+              below within 7 days — RevFlo reports and other cloud features unlock once it&apos;s applied.
+            </DialogDescription>
+          </DialogHeader>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Email for the API key</label>
+            <input
+              type="email"
+              value={registerEmail}
+              onChange={(e) => setRegisterEmail(e.target.value)}
+              placeholder="owner@yourcafe.com"
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none"
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowRegisterConfirm(false)}>Cancel</Button>
+            <Button
+              disabled={!registerEmail.trim() || registeringCloud}
+              onClick={() => { setShowRegisterConfirm(false); registerCloud(registerEmail.trim()); }}
+            >
+              {registeringCloud ? 'Sending…' : 'Send'}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

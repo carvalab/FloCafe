@@ -274,7 +274,8 @@ router.post('/cloud/register', requireRole('owner', 'manager'), async (req: Requ
         cloud_server_url: normalizeCloudServerUrl(req.body.cloud_server_url || DEFAULT_CLOUD_SERVER_URL),
       });
     }
-    const result = await cloudSync.register();
+    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
+    const result = await cloudSync.register(email);
     res.json(result);
   } catch (error: any) {
     res.status(502).json({ error: error.message });

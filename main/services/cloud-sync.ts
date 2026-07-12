@@ -259,7 +259,7 @@ class CloudSyncService {
     };
   }
 
-  async register(): Promise<Record<string, unknown>> {
+  async register(email?: string): Promise<Record<string, unknown>> {
     const db = getDatabase();
     const settings = this.readSettings(db);
     const { posHash, deviceSecret } = ensureCloudIdentity();
@@ -275,6 +275,7 @@ class CloudSyncService {
       business: {
         name: settings.business_name || '',
         phone: settings.business_phone || settings.phone || '',
+        email: email || settings.email || '',
         country: settings.country || 'IN',
         timezone: settings.timezone || 'Asia/Kolkata',
       },
