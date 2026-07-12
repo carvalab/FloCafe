@@ -236,6 +236,37 @@ export default function OrdersPage() {
     return `${Math.floor(minutes / 60)}h ${minutes % 60}m ago`;
   };
 
+  const handleCreateNewOrderForCustomer = async (order: Order) => {
+    if (!order.customer) return;
+
+    // Check for active POS cart items to avoid accidental loss of progress
+    if (cartStore.items.length > 0) {
+      const proceed = await confirm(
+        'You have items in your active POS cart. Starting a new order will clear them. Proceed?'
+      );
+      if (!proceed) return;
+    }
+
+    cartStore.clearCart();
+    cartStore.setCustomer(order.customer);
+    
+    const posOrderType = (order.type === 'dine_in' || order.type === 'takeaway' || order.type === 'delivery')
+      ? order.type
+      : 'takeaway';
+    cartStore.setOrderType(posOrderType);
+
+    if (posOrderType === 'dine_in' && order.table_id) {
+      cartStore.setTableId(order.table_id);
+    }
+
+    if (posOrderType === 'delivery' && order.customer.address) {
+      cartStore.setDeliveryAddress(order.customer.address);
+    }
+
+    router.push('/pos');
+    toast.success(`Started new order for ${order.customer.name}`);
+  };
+
   const searchCustomersForLink = (query: string) => {
     clearTimeout(linkSearchRef.current);
     if (query.length < 2) {
@@ -756,14 +787,21 @@ export default function OrdersPage() {
 
                 {/* Customer info strip */}
                 {order.customer ? (
-                  <div className="px-4 py-2 bg-blue-50 border-b border-blue-100">
-                    <div className="flex items-center gap-2">
+                  <div className="px-4 py-2 bg-blue-50 border-b border-blue-100 flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
                       <User size={14} className="text-blue-600 shrink-0" />
-                      <span className="text-sm font-medium text-blue-800">{order.customer.name}</span>
+                      <span className="text-sm font-medium text-blue-800 truncate">{order.customer.name}</span>
                       {order.customer.phone && (
-                        <span className="text-xs text-blue-600">{order.customer.phone}</span>
+                        <span className="text-xs text-blue-600 shrink-0">{order.customer.phone}</span>
                       )}
                     </div>
+                    <button
+                      onClick={() => handleCreateNewOrderForCustomer(order)}
+                      className="flex items-center gap-1 text-xs font-semibold text-blue-700 hover:text-blue-900 bg-blue-100 hover:bg-blue-200 px-2.5 py-1 rounded-lg transition-colors shrink-0"
+                      title="Start new order for this customer"
+                    >
+                      <Plus size={12} /> New Order
+                    </button>
                   </div>
                 ) : isOwnerOrManager && !['completed', 'cancelled'].includes(order.status) ? (
                   <div className="px-4 py-2 bg-gray-50 border-b border-gray-100">

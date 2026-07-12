@@ -123,6 +123,7 @@ export interface Customer {
   dietary_preferences?: string[] | null;
   favourite_dishes?: string[] | null;
   tag_counts?: Record<string, number> | null;
+  address?: string | null;
 }
 
 export interface Order {
