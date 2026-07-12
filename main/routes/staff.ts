@@ -176,32 +176,10 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
   }
 });
 
-// ── Delete ────────────────────────────────────────────────────────────────────
-
-router.delete('/:id', requireRole('owner'), (req: Request, res: Response) => {
-  try {
-    const db = getDatabase();
-    const member = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
-    if (!member) {
-      return res.status(404).json({ error: 'Staff member not found' });
-    }
-
-    // Prevent deleting the last owner
-    if (member.role === 'owner') {
-      const ownerCount = (db.prepare('SELECT COUNT(*) as c FROM users WHERE role = ?').get('owner') as any).c;
-      if (ownerCount <= 1) {
-        return res.status(400).json({ error: 'Cannot delete the last owner account' });
-      }
-    }
-
-    db.prepare('DELETE FROM users WHERE id = ?').run(req.params.id);
-    res.json({ message: 'Staff member deleted' });
-  } catch (error: any) {
-    res.status(500).json({ error: error.message });
-  }
-});
-
 // ── Activate / Deactivate ─────────────────────────────────────────────────────
+// Staff are never hard-deleted — orders.user_id and print_logs.user_id reference
+// them, and losing the row would orphan historical order/print records.
+// Deactivating is the only removal path.
 
 router.post('/:id/deactivate', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
@@ -209,6 +187,14 @@ router.post('/:id/deactivate', requireRole('owner', 'manager'), (req: Request, r
     const member = db.prepare('SELECT * FROM users WHERE id = ?').get(req.params.id) as any;
     if (!member) return res.status(404).json({ error: 'Staff member not found' });
     if (member.is_active === 0) return res.status(400).json({ error: 'Already deactivated' });
+
+    // Prevent deactivating the last owner
+    if (member.role === 'owner') {
+      const ownerCount = (db.prepare('SELECT COUNT(*) as c FROM users WHERE role = ? AND is_active = 1').get('owner') as any).c;
+      if (ownerCount <= 1) {
+        return res.status(400).json({ error: 'Cannot deactivate the last owner account' });
+      }
+    }
 
     db.prepare('UPDATE users SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     const updated = db.prepare(

@@ -7,12 +7,8 @@ const router = Router();
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    let query = 'SELECT * FROM kitchen_stations WHERE 1=1';
+    let query = 'SELECT * FROM kitchen_stations WHERE is_active = 1';
     const params: any[] = [];
-
-    if (req.query.active === 'true') {
-      query += ' AND is_active = 1';
-    }
 
     query += ' ORDER BY sort_order, name';
 
@@ -113,7 +109,7 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
       return res.status(400).json({ error: 'Cannot delete station with assigned tables' });
     }
 
-    db.prepare('DELETE FROM kitchen_stations WHERE id = ?').run(req.params.id);
+    db.prepare('UPDATE kitchen_stations SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Kitchen station deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

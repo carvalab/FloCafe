@@ -45,11 +45,9 @@ router.get('/', (req: Request, res: Response) => {
       query += ' AND kitchen_station_id = ?';
       params.push(req.query.kitchen_station_id);
     }
-    // `active` has no backing column — tables are hard-deleted (see DELETE /:id
-    // below), there's no is_active/deleted_at concept, so every remaining row is
-    // implicitly "active". Accept the param for API compatibility with the
-    // frontend's `?active=1` call (issue #33) without querying a column that
-    // doesn't exist.
+    if (req.query.active === 'true' || req.query.active === '1') {
+      query += ' AND is_active = 1';
+    }
 
     query += ' ORDER BY number';
 
@@ -137,23 +135,46 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
   }
 });
 
-router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.post('/:id/deactivate', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
+    const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id) as any;
     if (!table) {
       return res.status(404).json({ error: 'Table not found' });
     }
-
-    const activeOrder = db.prepare(`
-      SELECT * FROM orders WHERE table_id = ? AND status NOT IN ('completed', 'cancelled')
-    `).get(req.params.id);
-    if (activeOrder) {
-      return res.status(400).json({ error: 'Cannot delete table with active orders' });
+    if (table.is_active === 0) {
+      return res.status(400).json({ error: 'Already deactivated' });
     }
 
-    db.prepare('DELETE FROM tables WHERE id = ?').run(req.params.id);
-    res.json({ message: 'Table deleted' });
+    const activeOrder = db.prepare(`
+      SELECT * FROM orders WHERE table_id = ? AND ${ACTIVE_ORDER_STATUS_SQL}
+    `).get(req.params.id);
+    if (activeOrder) {
+      return res.status(400).json({ error: 'Cannot deactivate table with active orders' });
+    }
+
+    db.prepare('UPDATE tables SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
+    const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
+    res.json({ table: tableShape(updated as any) });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/:id/reactivate', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const table = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id) as any;
+    if (!table) {
+      return res.status(404).json({ error: 'Table not found' });
+    }
+    if (table.is_active === 1) {
+      return res.status(400).json({ error: 'Already active' });
+    }
+
+    db.prepare('UPDATE tables SET is_active = 1, updated_at = ? WHERE id = ?').run(now(), req.params.id);
+    const updated = db.prepare('SELECT * FROM tables WHERE id = ?').get(req.params.id);
+    res.json({ table: tableShape(updated as any) });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

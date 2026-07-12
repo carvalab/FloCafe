@@ -216,19 +216,14 @@ router.put('/:id', (req: Request, res: Response) => {
 router.delete('/:id', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
+    const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id) as any;
     if (!customer) {
       return res.status(404).json({ error: 'Customer not found' });
     }
 
-    const recentOrders = db.prepare(`
-      SELECT * FROM orders WHERE customer_id = ? AND date(created_at) > date('now', '-30 days')
-    `).get(req.params.id);
-    if (recentOrders) {
-      return res.status(400).json({ error: 'Cannot delete customer with recent orders' });
-    }
-
-    db.prepare('DELETE FROM customers WHERE id = ?').run(req.params.id);
+    // Never hard-delete — orders/bills/loyalty_ledger reference customer_id with
+    // no FK, so removing the row would silently orphan historical records.
+    db.prepare('UPDATE customers SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Customer deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });

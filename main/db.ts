@@ -748,6 +748,19 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 20,
+    name: 'add_tables_is_active',
+    up: () => {
+      // Tables were hard-deleted, orphaning orders.table_id/held_orders.table_id
+      // on any historical order still pointing at them. Add is_active so tables
+      // can be deactivated (like products/categories/staff) instead of destroyed.
+      const tableColumns = getColumns(db, 'tables');
+      if (!tableColumns.includes('is_active')) {
+        db.exec(`ALTER TABLE tables ADD COLUMN is_active INTEGER DEFAULT 1`);
+      }
+    },
+  },
 ];
 
 function runMigrations(): void {
@@ -872,6 +885,7 @@ function createSchema(): void {
       position_x REAL,
       position_y REAL,
       kitchen_station_id TEXT,
+      is_active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

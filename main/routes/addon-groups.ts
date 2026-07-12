@@ -8,10 +8,10 @@ const router = Router();
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const groups = db.prepare('SELECT * FROM addon_groups ORDER BY sort_order, name').all();
+    const groups = db.prepare('SELECT * FROM addon_groups WHERE is_active = 1 ORDER BY sort_order, name').all();
 
     const groupsWithAddons = groups.map((group: any) => {
-      const addons = db.prepare('SELECT * FROM addons WHERE addon_group_id = ? ORDER BY sort_order, name').all(group.id);
+      const addons = db.prepare('SELECT * FROM addons WHERE addon_group_id = ? AND is_active = 1 ORDER BY sort_order, name').all(group.id);
       return { ...group, addons };
     });
 
@@ -120,12 +120,10 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
       return res.status(404).json({ error: 'Addon group not found' });
     }
 
-    withTxn(() => {
-      db.prepare('DELETE FROM addons WHERE addon_group_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM addon_group_product WHERE addon_group_id = ?').run(req.params.id);
-      db.prepare('DELETE FROM addon_groups WHERE id = ?').run(req.params.id);
-    });
-
+    // Soft delete — order_items already snapshot chosen addons as JSON at order
+    // time, but keeping the row lets historical orders/product editors resolve
+    // addon_group_id without a dangling reference.
+    db.prepare('UPDATE addon_groups SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Addon group deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
@@ -189,7 +187,7 @@ router.delete('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req
       return res.status(404).json({ error: 'Addon not found' });
     }
 
-    db.prepare('DELETE FROM addons WHERE id = ?').run(req.params.addonId);
+    db.prepare('UPDATE addons SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.addonId);
     res.json({ message: 'Addon deleted' });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
