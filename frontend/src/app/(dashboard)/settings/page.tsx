@@ -2331,7 +2331,7 @@ export default function SettingsPage() {
           <DialogHeader>
             <DialogTitle>Send registration request?</DialogTitle>
             <DialogDescription>
-              This sends your store's details to FloAdmin. Your API key will be emailed to the address
+              This sends your store&apos;s details to FloAdmin. Your API key will be emailed to the address
               below within 7 days — RevFlo reports and other cloud features unlock once it&apos;s applied.
             </DialogDescription>
           </DialogHeader>
