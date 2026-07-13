@@ -44,9 +44,21 @@ function LoginContent() {
     loadFromStorage();
   }, [loadFromStorage]);
 
+  const handleTenantSelect = useCallback(async (tenantId: number) => {
+    setLoading(true);
+    try {
+      await selectTenant(tenantId);
+      // useEffect on currentTenant will handle the redirect
+    } catch {
+      toast.error('Failed to select business');
+    } finally {
+      setLoading(false);
+    }
+  }, [selectTenant]);
+
   useEffect(() => {
     if (user && currentTenant) {
-      router.push(getLandingPage(currentTenant.role));
+      router.push(getLandingPage());
     } else if (user && tenants.length === 1) {
       // Only one business — auto-select it
       handleTenantSelect(tenants[0].id);
@@ -80,17 +92,7 @@ function LoginContent() {
     }
   };
 
-  const handleTenantSelect = useCallback(async (tenantId: number) => {
-    setLoading(true);
-    try {
-      await selectTenant(tenantId);
-      // useEffect on currentTenant will handle the redirect
-    } catch {
-      toast.error('Failed to select business');
-    } finally {
-      setLoading(false);
-    }
-  }, [selectTenant]);
+
 
   if (showTenantSelect) {
     return (

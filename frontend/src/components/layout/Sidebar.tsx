@@ -59,7 +59,7 @@ export default function AppSidebar() {
     return item.roles.includes(role)
       && (item.businessTypes === null || item.businessTypes.includes(businessType));
   });
-  const homeHref = getLandingPage(role, businessType);
+  const homeHref = getLandingPage();
 
   useEffect(() => {
     if (!currentTenant) return;
