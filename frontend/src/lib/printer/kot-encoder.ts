@@ -25,7 +25,7 @@ export function buildKotBytes(
   order: Order,
   opts: KotOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, stationName } = opts;
+  const { paperWidth = 58 } = opts;
   const cols = CHARS[paperWidth];
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });

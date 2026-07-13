@@ -5,7 +5,7 @@ import type { Category, Product } from '@/lib/types';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { nameToColor } from '@/lib/image-utils';
-import TagBadge, { firstTagBg } from './DietaryBadge';
+import TagBadge from './DietaryBadge';
 import api from '@/lib/api';
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; activeBg: string; activeText: string }> = {

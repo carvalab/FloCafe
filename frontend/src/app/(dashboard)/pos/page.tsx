@@ -135,6 +135,7 @@ export default function POSPage() {
       }
     };
     fetchData();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isRestaurant, setBillingType, setTablesRequired]);
 
   const handleProductClick = (product: Product) => {

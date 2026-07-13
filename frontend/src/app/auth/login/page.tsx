@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, Suspense } from 'react';
+import { useState, useEffect, Suspense, useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { getLandingPage } from '@/components/layout/AuthGuard';
 import { useAuthStore } from '@/store/auth';
@@ -56,6 +56,8 @@ function LoginContent() {
     if (searchParams.get('select_tenant') === 'true' && user) {
       setShowTenantSelect(true);
     }
+   
+   
   }, [user, tenants, currentTenant, router, searchParams, handleTenantSelect]);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -78,7 +80,7 @@ function LoginContent() {
     }
   };
 
-  const handleTenantSelect = async (tenantId: number) => {
+  const handleTenantSelect = useCallback(async (tenantId: number) => {
     setLoading(true);
     try {
       await selectTenant(tenantId);
@@ -88,7 +90,7 @@ function LoginContent() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectTenant]);
 
   if (showTenantSelect) {
     return (

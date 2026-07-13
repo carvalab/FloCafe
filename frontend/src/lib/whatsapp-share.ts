@@ -53,7 +53,7 @@ export function getWhatsAppShareUrl(
 
   // Determine phone number to send to
   const phone = customer?.phone?.replace(/\D/g, '') || '';
-  const countryCode = customer?.country_code?.replace(/\D/g, '') || '91';
+
 
   // Use wa.me API - works for both personal and business WhatsApp
   // If businessPhone is provided, send to business account, otherwise to customer

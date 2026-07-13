@@ -45,7 +45,7 @@ export function buildGstBillBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: GstBillOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, showFooter = true, gstin, address, phone, stateCode, useUnicode = false } = opts;
+  const { paperWidth = 58, showFooter = true, gstin, address, phone, useUnicode = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '₹';
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
@@ -95,7 +95,7 @@ export function buildGstBillBytes(
   const items = order?.items ?? [];
   for (const item of items) {
     const line = `${item.product_name}`;
-    const qtyRate = `${item.quantity}x ${formatAmount(Number(item.unit_price), currency)}`;
+
     enc.text(padRow(line, formatAmount(item.total, currency), cols)).newline();
 
     // Show HSN if available

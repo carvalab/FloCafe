@@ -67,7 +67,7 @@ export default function ProductsPage() {
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', color: '', is_active: true });
   const [addonForm, setAddonForm] = useState({ name: '', description: '', is_required: false, min_selection: 0, max_selection: 10 });
   const [showAddonModal, setShowAddonModal] = useState(false);
-  const [editingAddon, setEditingAddon] = useState<{ id?: number; name: string; price: string } | null>(null);
+
   const [addonList, setAddonList] = useState<{ id?: number; name: string; price: number; is_active?: boolean }[]>([]);
   const [form, setForm] = useState({
     name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '',
@@ -110,6 +110,7 @@ export default function ProductsPage() {
     }
   };
 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { fetchData(); }, []);
 
   const openCsvModal = (type: 'categories' | 'products' | 'addons') => {

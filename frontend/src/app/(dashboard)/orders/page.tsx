@@ -71,7 +71,7 @@ export default function OrdersPage() {
   const heldOrdersStore = useHeldOrdersStore();
   const router = useRouter();
   const cartStore = useCartStore();
-  const { tablesRequired, setTablesRequired, autoPrintBill } = usePosSettingsStore();
+  const { setTablesRequired, autoPrintBill } = usePosSettingsStore();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -219,6 +219,8 @@ export default function OrdersPage() {
         ws.close();
       }
     };
+     
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [setTablesRequired]);
 
   const fetchPrintHistory = async (billId: number) => {

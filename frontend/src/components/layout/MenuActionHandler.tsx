@@ -115,6 +115,7 @@ export default function MenuActionHandler() {
     });
 
     return () => { unsubscribe?.(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [router]);
 
   return (
