@@ -5,6 +5,24 @@ import { requireRole } from '../middleware/security';
 
 const router = Router();
 
+const COUNTRY_PROFILES: Record<string, { language: string; locale: string; taxIdLabel: string; taxName: string; documentTitle: string }> = {
+  AR: { language: 'es', locale: 'es-AR', taxIdLabel: 'CUIT', taxName: 'IVA', documentTitle: 'Comprobante' },
+  MX: { language: 'es', locale: 'es-MX', taxIdLabel: 'RFC', taxName: 'IVA', documentTitle: 'Factura' },
+  CL: { language: 'es', locale: 'es-CL', taxIdLabel: 'RUT', taxName: 'IVA', documentTitle: 'Boleta' },
+  UY: { language: 'es', locale: 'es-UY', taxIdLabel: 'RUT', taxName: 'IVA', documentTitle: 'Comprobante' },
+  PY: { language: 'es', locale: 'es-PY', taxIdLabel: 'RUC', taxName: 'IVA', documentTitle: 'Comprobante' },
+  IN: { language: 'en', locale: 'en-IN', taxIdLabel: 'GSTIN', taxName: 'GST', documentTitle: 'Tax Invoice' },
+  US: { language: 'en', locale: 'en-US', taxIdLabel: 'EIN', taxName: 'Sales Tax', documentTitle: 'Invoice' },
+};
+
+const DEFAULT_COUNTRY_PROFILE = {
+  language: 'en',
+  locale: 'en-US',
+  taxIdLabel: 'Tax ID',
+  taxName: 'Tax',
+  documentTitle: 'Receipt',
+};
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function getAllSettings(db: ReturnType<typeof getDatabase>): Record<string, string> {
@@ -61,6 +79,13 @@ function businessShape(s: Record<string, string>) {
     timezone: s.timezone || 'Asia/Kolkata',
     currency: s.currency || 'INR',
     country: s.country || 'IN',
+    language: s.language || 'en',
+    locale: s.locale || 'en-US',
+    tax_id_label: s.tax_id_label || '',
+    tax_name: s.tax_name || '',
+    document_title: s.document_title || 'Receipt',
+    business_tax_id: s.business_tax_id || '',
+    business_tax_condition: s.business_tax_condition || '',
     gstin: s.gstin || '',
     state_code: s.state_code || '',
     business_address: s.business_address || '',
@@ -82,6 +107,8 @@ function taxShape(s: Record<string, string>) {
     state_code: s.state_code || '',
     tax_scheme: s.tax_scheme || 'regular',
     country: s.country || 'IN',
+    tax_id_label: s.tax_id_label || '',
+    tax_name: s.tax_name || '',
     loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
   };
 }
@@ -101,13 +128,23 @@ router.put('/business', requireRole('owner', 'manager'), (req: Request, res: Res
   try {
     const { business_name, timezone, currency, country, gstin, state_code,
       business_address, business_phone, instagram_handle, billing_type, tables_required,
-      bill_show_name, bill_show_address, bill_show_phone, bill_show_gstn } = req.body;
+      bill_show_name, bill_show_address, bill_show_phone, bill_show_gstn,
+      language, locale, tax_id_label, tax_name, document_title,
+      business_tax_id, business_tax_condition } = req.body;
 
     const db = getDatabase();
+    const normalizedCountry = String(country || '').trim().toUpperCase();
+    const profile = COUNTRY_PROFILES[normalizedCountry] || DEFAULT_COUNTRY_PROFILE;
     upsertSettings(db, {
       business_name, timezone, currency, country, gstin, state_code,
       business_address, business_phone, instagram_handle, billing_type, tables_required,
       bill_show_name, bill_show_address, bill_show_phone, bill_show_gstn,
+      language: language || profile.language,
+      locale: locale || profile.locale,
+      tax_id_label: tax_id_label || profile.taxIdLabel,
+      tax_name: tax_name || profile.taxName,
+      document_title: document_title || profile.documentTitle,
+      business_tax_id, business_tax_condition,
     });
 
     res.json(businessShape(getAllSettings(db)));
@@ -135,6 +172,7 @@ router.put('/tax', requireRole('owner', 'manager'), (req: Request, res: Response
     res.status(500).json({ error: error.message });
   }
 });
+
 
 router.get('/loyalty', (req: Request, res: Response) => {
   try {

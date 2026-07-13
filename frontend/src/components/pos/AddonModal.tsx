@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useI18n } from '@/hooks/useI18n';
 import type { Product, Addon, AddonGroup } from '@/lib/types';
 
 interface Props {
@@ -13,6 +14,7 @@ interface Props {
 }
 
 export default function AddonModal({ product, currency, onAdd, onClose }: Props) {
+  const { t } = useI18n();
   const [selected, setSelected] = useState<Record<number, Addon[]>>({});
   const [quantity, setQuantity] = useState(1);
   const [instructions, setInstructions] = useState('');
@@ -75,7 +77,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
                   <h3 className="font-semibold text-sm text-gray-900">{group.name}</h3>
                   <span className="flex items-center gap-2">
                     {group.is_required && (
-                      <span className="text-xs text-red-500 font-medium">Required</span>
+                      <span className="text-xs text-red-500 font-medium">{t('pos.required')}</span>
                     )}
                     {group.max_selection ? (() => {
                       const remaining = Math.max(0, group.max_selection - count);
@@ -86,7 +88,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
                             ? 'text-sm text-amber-500'
                             : 'text-xs text-sky-500'
                         }`}>
-                          {isZero ? 'Selection complete' : `${remaining} remaining`}
+                          {isZero ? t('pos.selectionComplete') : t('pos.remainingCount', { count: remaining })}
                         </span>
                       );
                     })() : null}
@@ -106,25 +108,25 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
                     >
                       <span className="font-medium">{addon.name}</span>
                       <span className={isSelected(group.id, addon.id) ? 'text-brand font-semibold' : 'text-gray-500'}>
-                        {Number(addon.price) === 0 ? 'Free' : `+${currency}${Number(addon.price).toLocaleString()}`}
+                        {Number(addon.price) === 0 ? t('pos.freeAddon') : t('pos.addonPrice', { currency, price: Number(addon.price).toLocaleString() })}
                       </span>
                     </button>
                   ))}
                 </div>
                 {group.is_required && count < group.min_selection && (
-                  <p className="text-xs text-red-500 mt-1">Select at least {group.min_selection}</p>
+                  <p className="text-xs text-red-500 mt-1">{t('pos.selectAtLeast', { count: group.min_selection })}</p>
                 )}
               </div>
             );
           })}
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Special Instructions</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">{t('pos.specialInstructions')}</label>
             <input
               type="text"
               value={instructions}
               onChange={(e) => setInstructions(e.target.value.slice(0, 100))}
-              placeholder="e.g., no onions, extra spicy..."
+              placeholder={t('pos.specialInstructionsPlaceholder')}
               maxLength={100}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand"
             />
@@ -149,7 +151,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
             </button>
           </div>
           <Button onClick={handleAdd} disabled={!isValid} className="w-full" size="lg">
-            Add to Cart - {currency}{itemTotal.toLocaleString()}
+            {t('pos.addToCart', { currency, total: itemTotal.toLocaleString() })}
           </Button>
         </div>
       </div>

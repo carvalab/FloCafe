@@ -366,7 +366,13 @@ export default function OrdersPage() {
           const latestBill = data.bill as Bill;
           await printBill(
             { ...latestBill, order },
-            { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' },
+            {
+              business_name: currentTenant?.business_name || 'Store',
+              currency: currentTenant?.currency || 'INR',
+              country: currentTenant?.country || '',
+              locale: currentTenant?.locale || '',
+              tax_id_label: currentTenant?.tax_id_label || '',
+            },
             { isReprint: false }
           );
           await api.post(`/bills/${bill.id}/print`, { print_type: 'receipt' });
@@ -390,7 +396,13 @@ export default function OrdersPage() {
       // otherwise a disconnected printer would silently report "success" (it was only logging before).
       await printBill(
         { ...order.bill, order },
-        { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' },
+        {
+          business_name: currentTenant?.business_name || 'Store',
+          currency: currentTenant?.currency || 'INR',
+          country: currentTenant?.country || '',
+          locale: currentTenant?.locale || '',
+          tax_id_label: currentTenant?.tax_id_label || '',
+        },
         { isReprint }
       );
       await api.post(`/bills/${billId}/print`, { print_type: isReprint ? 'reprint' : 'receipt' });
