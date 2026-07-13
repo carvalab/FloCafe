@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, X, Edit, RotateCcw } from 'lucide-react';
 import type { Staff } from '@/lib/types';
+import { useI18n } from '@/hooks/useI18n';
 
 const VALID_ROLES = ['owner', 'manager', 'cashier', 'waiter', 'chef'];
 
@@ -26,6 +27,7 @@ const roleColors: Record<string, string> = {
 };
 
 export default function StaffPage() {
+  const { t } = useI18n();
   const [staff, setStaff] = useState<Staff[]>([]);
   const [, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -146,7 +148,7 @@ export default function StaffPage() {
             </div>
             <div className="flex gap-2 mt-3">
               <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
-                <Edit size={14} className="mr-1" /> Edit
+                <Edit size={14} className="mr-1" /> {t('common.edit')}
               </Button>
               <Button variant="outline" size="sm" onClick={() => openResetPw(s)}>
                 <RotateCcw size={14} className="mr-1" /> Reset PW
@@ -178,7 +180,7 @@ export default function StaffPage() {
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand" required
               />
               <input
-                type="email" placeholder="Email (optional)" value={form.email}
+                type="email" placeholder={`${t('auth.email')} (${t('common.optional')})`} value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
               />

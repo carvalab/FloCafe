@@ -224,7 +224,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Checkout</h2>
+            <h2 className="text-lg font-bold text-gray-900">{t('pos.checkout')}</h2>
             <p className="text-xs text-gray-400 mt-0.5 capitalize">
               {cart.orderType.replace('_', '-')} order
             </p>
@@ -244,7 +244,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">
-                  {taxLoading ? 'Subtotal' : 'Total Due'}
+                  {taxLoading ? t('pos.subtotal') : t('pos.totalDue')}
                 </p>
                 {taxLoading || !preview ? (
                   <div className="h-10 w-32 bg-white/10 rounded animate-pulse mt-1" />
@@ -259,12 +259,12 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 {!taxLoading && preview && (
                   <div className="mt-2 space-y-1">
                     <div className="flex justify-between text-xs text-slate-300">
-                      <span>Subtotal</span>
+                      <span>{t('pos.subtotal')}</span>
                       <span>{currency}{fmt(preview.subtotal)}</span>
                     </div>
                     {preview.discountAmount > 0 && (
                       <div className="flex justify-between text-xs text-emerald-400 font-medium">
-                        <span>Discount</span>
+                        <span>{t('pos.discount')}</span>
                         <span>− {currency}{fmt(preview.discountAmount)}</span>
                       </div>
                     )}
@@ -275,13 +275,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     />
                     {preview.packagingCharge > 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
-                        <span>Packaging</span>
+                        <span>{t('pos.packaging')}</span>
                         <span>{currency}{fmt(preview.packagingCharge)}</span>
                       </div>
                     )}
                     {preview.roundOff !== 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
-                        <span>Round off</span>
+                        <span>{t('pos.roundOff')}</span>
                         <span>{preview.roundOff > 0 ? '+' : ''}{currency}{fmt(preview.roundOff)}</span>
                       </div>
                     )}
@@ -304,7 +304,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             <div className="flex items-center gap-2 px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
               <Sparkles size={13} className="text-gray-400 shrink-0" />
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                <span className="text-gray-700 font-medium">Loyalty</span>
+                <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
                     ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE))})`
@@ -333,7 +333,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 }}
                 className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
               />
-              <span className="text-sm font-medium text-gray-700">Apply Discount</span>
+              <span className="text-sm font-medium text-gray-700">{t('pos.applyDiscount')}</span>
             </label>
 
             {showDiscount && (
@@ -471,7 +471,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Wallet size={16} className={walletBalance > 0 ? 'text-purple-600' : 'text-gray-400'} />
-                  <span className={`text-sm font-medium ${walletBalance > 0 ? 'text-purple-900' : 'text-gray-500'}`}>Loyalty Wallet</span>
+                  <span className={`text-sm font-medium ${walletBalance > 0 ? 'text-purple-900' : 'text-gray-500'}`}>{t('pos.loyaltyWallet')}</span>
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0

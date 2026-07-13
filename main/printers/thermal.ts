@@ -606,7 +606,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   lines.push(bar);
   if (biz.address) lines.push(biz.address);
   if (biz.phone) lines.push('Ph: ' + biz.phone);
-  if (biz.gstin) lines.push(((biz.tax_id_label || '').toString().trim() || 'GSTIN') + ': ' + biz.gstin);
+  if (biz.gstin) lines.push('GSTIN: ' + biz.gstin);
   lines.push('{CENTER}Thank you!{/CENTER}');
   lines.push('{CUT}');
 
@@ -720,7 +720,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store').toUpperCase() + '{/BOLD}{/CENTER}');
   lines.push(bar);
-  lines.push('{CENTER}' + ((biz.document_title || '').toString().trim() || (String(biz.country || '').toUpperCase() === 'AR' ? 'Comprobante' : (String(biz.country || '').toUpperCase() === 'IN' ? 'TAX INVOICE' : 'INVOICE'))) + '{/CENTER}');
+  lines.push('{CENTER}TAX INVOICE{/CENTER}');
   lines.push(bar);
   lines.push('Invoice #: ' + (bill.bill_number || order.order_number));
   lines.push('Date: ' + date.toLocaleDateString());
@@ -786,7 +786,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   lines.push(bar);
   if (biz.address) lines.push('Address: ' + biz.address);
   if (biz.phone) lines.push('Phone: ' + biz.phone);
-  if (biz.gstin) lines.push(((biz.tax_id_label || '').toString().trim() || 'GSTIN') + ': ' + biz.gstin);
+  if (biz.gstin) lines.push('GSTIN: ' + biz.gstin);
   lines.push('{CENTER}Thank you for your business!{/CENTER}');
   lines.push('{CUT}');
 

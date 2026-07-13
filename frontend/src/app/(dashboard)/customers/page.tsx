@@ -114,13 +114,13 @@ export default function CustomersPage() {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Customer</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('customers.columnCustomer')}</th>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.phone')}</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.visits')}</th>
               <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.totalSpent')}</th>
               <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.loyalty')}</th>
-              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
-              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Ledger</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('customers.columnActions')}</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('customers.columnLedger')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -159,7 +159,7 @@ export default function CustomersPage() {
             ))}
           </tbody>
         </table>
-        {customers.length === 0 && <p className="text-center text-gray-500 py-12">No customers found</p>}
+        {customers.length === 0 && <p className="text-center text-gray-500 py-12">{t('customers.empty')}</p>}
       </div>
 
       {/* Loyalty Ledger Modal */}
@@ -168,7 +168,7 @@ export default function CustomersPage() {
           <div className="bg-white rounded-2xl w-full max-w-lg max-h-[85vh] flex flex-col shadow-xl">
             <div className="flex items-center justify-between px-6 pt-5 pb-4 border-b border-gray-100">
               <div>
-                <h2 className="text-lg font-bold text-gray-900">Loyalty Ledger</h2>
+                <h2 className="text-lg font-bold text-gray-900">{t('customers.loyaltyLedger')}</h2>
                 <p className="text-sm text-gray-500">{ledgerCustomer.name}</p>
               </div>
               <button onClick={() => setLedgerCustomer(null)} className="w-8 h-8 flex items-center justify-center rounded-full bg-gray-100 hover:bg-gray-200">
@@ -183,12 +183,12 @@ export default function CustomersPage() {
                 {/* Summary row */}
                 <div className="flex items-center gap-6 px-6 py-4 bg-gray-50 border-b border-gray-100">
                   <div>
-                    <p className="text-xs text-gray-500 mb-0.5">Total Balance</p>
+                    <p className="text-xs text-gray-500 mb-0.5">{t('customers.totalBalance')}</p>
                     <p className="text-2xl font-bold text-gray-900">{ledgerData.balance} <span className="text-sm font-normal text-gray-500">pts</span></p>
                   </div>
                   {ledgerData.next_expiry && (
                     <div>
-                      <p className="text-xs text-gray-500 mb-0.5">Next Expiry</p>
+                      <p className="text-xs text-gray-500 mb-0.5">{t('customers.nextExpiry')}</p>
                       <p className="text-sm font-semibold text-orange-500">{fmtDate(ledgerData.next_expiry)}</p>
                     </div>
                   )}
@@ -197,12 +197,12 @@ export default function CustomersPage() {
                 {/* Ledger table */}
                 <div className="flex-1 overflow-y-auto">
                   {ledgerData.transactions.length === 0 ? (
-                    <p className="text-center text-gray-400 py-12">No transactions yet</p>
+                    <p className="text-center text-gray-400 py-12">{t('customers.noTransactions')}</p>
                   ) : (
                     <table className="w-full text-sm">
                       <thead className="bg-gray-50 sticky top-0">
                         <tr>
-                          <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Date</th>
+                          <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">{t('customers.columnDate')}</th>
                           <th className="text-left px-4 py-2.5 text-xs font-medium text-gray-500">Description</th>
                           <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Points</th>
                           <th className="text-right px-4 py-2.5 text-xs font-medium text-gray-500">Expires</th>

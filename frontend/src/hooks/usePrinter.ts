@@ -18,7 +18,6 @@ import type { Bill, Tenant, Order } from '@/lib/types';
 
 type PrintModeType = 'receipt' | 'gst' | 'kot';
 type PaperWidth = 58 | 80;
-type TenantPrintSource = Pick<Tenant, 'business_name' | 'currency' | 'country' | 'locale' | 'tax_id_label'>;
 
 export interface HardwarePrinter {
   id: string;
@@ -43,8 +42,8 @@ interface PrinterState {
 
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;
-  printBill: (bill: Bill, tenant: TenantPrintSource, opts?: ReceiptOptions) => Promise<void>;
-  printGstBill: (bill: Bill, tenant: TenantPrintSource, opts?: GstBillOptions) => Promise<void>;
+  printBill: (bill: Bill, tenant: Pick<Tenant, 'business_name' | 'currency'>, opts?: ReceiptOptions) => Promise<void>;
+  printGstBill: (bill: Bill, tenant: Pick<Tenant, 'business_name' | 'currency'>, opts?: GstBillOptions) => Promise<void>;
   printKot: (order: Order, opts?: KotOptions) => Promise<void>;
   setPrintMode: (mode: PrintModeType) => void;
   setPaperWidth: (width: PaperWidth) => void;
@@ -144,9 +143,6 @@ export const usePrinterStore = create<PrinterState>()(
             showTaxBreakdown: billShowGstn,
             useUnicode: printerUseUnicode,
             isReprint,
-            country: tenant.country ?? opts?.country,
-            taxIdLabel: tenant.tax_id_label ?? opts?.taxIdLabel,
-            locale: tenant.locale ?? opts?.locale,
           };
 
           let bytes: Uint8Array;
@@ -171,14 +167,7 @@ export const usePrinterStore = create<PrinterState>()(
         try {
           const { paperWidth } = get();
           const { printerUseUnicode } = usePosSettingsStore.getState();
-          const bytes = buildGstBillBytes(bill, tenant, {
-            ...opts,
-            paperWidth,
-            useUnicode: printerUseUnicode,
-            country: tenant.country ?? opts?.country,
-            taxIdLabel: tenant.tax_id_label ?? opts?.taxIdLabel,
-            locale: tenant.locale ?? opts?.locale,
-          });
+          const bytes = buildGstBillBytes(bill, tenant, { ...opts, paperWidth, useUnicode: printerUseUnicode });
           set({ lastPrintedBytes: bytes });
           
           if (get().printMethod === 'escpos') {

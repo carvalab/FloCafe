@@ -36,14 +36,14 @@ import {
 
 // null = show for all business types
 const ALL_NAV_ITEMS = [
-  { href: '/pos', key: 'nav.pos', icon: ShoppingCart, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
-  { href: '/dashboard', key: 'nav.dashboard', icon: LayoutDashboard, roles: ['owner'], businessTypes: null },
-  { href: '/orders', key: 'nav.orders', icon: ClipboardList, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
-  { href: '/products', key: 'nav.products', icon: Package, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/tables', key: 'nav.tables', icon: Grid3X3, roles: ['owner', 'manager'], businessTypes: ['restaurant'] },
-  { href: '/customers', key: 'nav.customers', icon: Users, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/staff', key: 'nav.staff', icon: UserCog, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/settings', key: 'nav.settings', icon: Settings, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/pos', labelKey: 'nav.pos', icon: ShoppingCart, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/dashboard', labelKey: 'nav.dashboard', icon: LayoutDashboard, roles: ['owner'], businessTypes: null },
+  { href: '/orders', labelKey: 'nav.orders', icon: ClipboardList, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/products', labelKey: 'nav.products', icon: Package, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/tables', labelKey: 'nav.tables', icon: Grid3X3, roles: ['owner', 'manager'], businessTypes: ['restaurant'] },
+  { href: '/customers', labelKey: 'nav.customers', icon: Users, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/staff', labelKey: 'nav.staff', icon: UserCog, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/settings', labelKey: 'nav.settings', icon: Settings, roles: ['owner', 'manager'], businessTypes: null },
 ];
 
 export default function AppSidebar() {
@@ -103,13 +103,12 @@ export default function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
-                const label = t(item.key);
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={t(item.labelKey)}>
                       <Link href={item.href} onClick={closeMobile}>
                         <item.icon />
-                        <span>{label}</span>
+                        <span>{t(item.labelKey)}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

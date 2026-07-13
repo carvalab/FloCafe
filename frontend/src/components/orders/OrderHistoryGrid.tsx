@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/countries';
 import type { Order, OrderItem, Bill } from '@/lib/types';
+import { useI18n } from '@/hooks/useI18n';
 
 // --- Mock data ---------------------------------------------------------
 // Shaped like the real `Order` / `Bill` types (src/lib/types.ts) so this
@@ -120,6 +121,7 @@ function formatTimestamp(iso: string): string {
 }
 
 function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: string }) {
+  const { t } = useI18n();
   const items: OrderItem[] = order.items ?? [];
   const bill = order.bill;
   const fmt = (n: number) => formatCurrency(n, currency);
@@ -184,7 +186,7 @@ function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: 
           )}
           {order.delivery_charge > 0 && (
             <div className="flex justify-between text-muted-foreground">
-              <span>Delivery</span>
+              <span>{t('orders.delivery')}</span>
               <span className="tabular-nums">{fmt(order.delivery_charge)}</span>
             </div>
           )}

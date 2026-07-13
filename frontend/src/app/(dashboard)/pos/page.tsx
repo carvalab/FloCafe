@@ -29,12 +29,12 @@ import { getCurrencySymbol } from '@/lib/countries';
 
 export default function POSPage() {
   const { currentTenant } = useAuthStore();
-  const { t } = useI18n();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
   const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, setBillingType, setTablesRequired } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
+  const { t } = useI18n();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -83,9 +83,6 @@ export default function POSPage() {
       await printBill(bill, {
         business_name: currentTenant.business_name,
         currency,
-        country: currentTenant.country,
-        locale: currentTenant.locale,
-        tax_id_label: currentTenant.tax_id_label,
       });
     } catch {
       // Non-fatal: print failure should not block the checkout flow.
@@ -154,7 +151,7 @@ export default function POSPage() {
 
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) {
-      toast.error(t('pos.cartEmpty'));
+      toast.error('Cart is empty');
       return;
     }
     if (customerMandatory && !cart.customerId) {
@@ -325,7 +322,7 @@ export default function POSPage() {
 
   const handleHoldTable = async (tableId: string) => {
     if (cart.items.length === 0) {
-      toast.error(t('pos.cartEmpty'));
+      toast.error('Cart is empty');
       return;
     }
     const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
@@ -333,11 +330,11 @@ export default function POSPage() {
       await heldOrders.holdOrder(tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
       cart.clearCart();
       setShowTablePicker(false);
-      toast.success(t('pos.orderHeldFor', { table: tableName }));
+      toast.success(`Order held for ${tableName}`);
       await refreshTables();
     } catch (err: unknown) {
       const e = err as Error;
-      toast.error(e.message || t('pos.holdOrderFailed'));
+      toast.error(e.message || 'Failed to hold order');
     }
   };
 
@@ -347,13 +344,13 @@ export default function POSPage() {
     cart.setOrderType('dine_in');
     cart.setOrderNotes(order.special_instructions || '');
     setPendingOrder(order);
-    toast(`${t('pos.addingItemsToOrder', { number: order.order_number })}. ${t('pos.placeOrderReady')}`, { icon: 'ℹ️' });
+    toast(`${t('pos.addingItemsToOrder', { number: order.order_number })} ${t('pos.placeOrderReady')}`, { icon: 'ℹ️' });
   };
 
   // Add cart items directly to existing order
   const handleAddCartToOrder = async (table: Table, order: Order) => {
     if (cart.items.length === 0) {
-      toast.error(t('pos.cartEmpty'));
+      toast.error('Cart is empty');
       return;
     }
     setSubmitting(true);
@@ -391,7 +388,7 @@ export default function POSPage() {
       try {
         await printBillForTenant(await fetchLatestBill(bill.id));
       } catch {
-        toast.error('Receipt print failed — check printer connection');
+        toast.error(t('pos.receiptPrintFailed'));
       }
     }
   };

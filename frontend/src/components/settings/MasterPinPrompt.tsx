@@ -12,6 +12,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useI18n } from '@/hooks/useI18n';
 
 interface MasterPinPromptProps {
   open: boolean;
@@ -25,6 +26,7 @@ interface MasterPinPromptProps {
 const PIN_REGEX = /^\d{4}$/;
 
 export function MasterPinPrompt({ open, mode, title, description, onCancel, onSubmit }: MasterPinPromptProps) {
+  const { t } = useI18n();
   const [pin, setPin] = useState('');
   const [confirmPin, setConfirmPin] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -72,7 +74,7 @@ export function MasterPinPrompt({ open, mode, title, description, onCancel, onSu
     <Dialog open={open} onOpenChange={(next) => !next && handleCancel()}>
       <DialogContent className="sm:max-w-sm" showCloseButton={false}>
         <DialogHeader>
-          <DialogTitle>{title || (mode === 'set' ? 'Set Master PIN' : 'Enter Master PIN')}</DialogTitle>
+          <DialogTitle>{title || t('settings.masterPin')}</DialogTitle>
           <DialogDescription>
             {description || (mode === 'set'
               ? 'Choose a 4-digit PIN known only to you. It will be required for backups, restores, and initializing the database.'
@@ -82,7 +84,7 @@ export function MasterPinPrompt({ open, mode, title, description, onCancel, onSu
 
         <div className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="master-pin">{mode === 'set' ? 'New PIN' : 'Master PIN'}</Label>
+            <Label htmlFor="master-pin">{mode === 'set' ? 'New PIN' : t('settings.masterPin')}</Label>
             <Input
               id="master-pin"
               type="password"
@@ -121,10 +123,10 @@ export function MasterPinPrompt({ open, mode, title, description, onCancel, onSu
 
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={submitting}>
-            Cancel
+            {t('common.cancel')}
           </Button>
           <Button onClick={handleSubmit} disabled={submitting || pin.length !== 4}>
-            {submitting ? 'Checking…' : mode === 'set' ? 'Set PIN' : 'Confirm'}
+            {submitting ? t('common.loading') : mode === 'set' ? 'Set PIN' : 'Confirm'}
           </Button>
         </DialogFooter>
       </DialogContent>

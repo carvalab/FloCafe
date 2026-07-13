@@ -12,6 +12,7 @@ import ImageUploader from '@/components/products/ImageUploader';
 import { getCurrencySymbol } from '@/lib/countries';
 import { useConfirm } from '@/hooks/use-confirm';
 import { nameToColor } from '@/lib/image-utils';
+import { useI18n } from '@/hooks/useI18n';
 
 const PRESET_TAGS = [
   { key: 'veg', label: 'Veg' },
@@ -53,6 +54,7 @@ const CATEGORY_COLORS = [
 type TabType = 'products' | 'categories' | 'addons';
 
 export default function ProductsPage() {
+  const { t } = useI18n();
   const { currentTenant } = useAuthStore();
   const [activeTab, setActiveTab] = useState<TabType>('products');
   const [products, setProducts] = useState<Product[]>([]);
@@ -231,7 +233,7 @@ export default function ProductsPage() {
   };
 
   const handleDelete = async (id: number) => {
-    if (!await confirm('Delete this product?', { destructive: true, confirmLabel: 'Delete' })) return;
+    if (!await confirm('Delete this product?', { destructive: true, confirmLabel: t('common.delete') })) return;
     try {
       await api.delete(`/products/${id}`);
       toast.success('Product deleted');
@@ -352,7 +354,7 @@ export default function ProductsPage() {
   };
 
   const handleAddonGroupDelete = async (id: number) => {
-    if (!await confirm('Delete this addon group?', { destructive: true, confirmLabel: 'Delete' })) return;
+    if (!await confirm('Delete this addon group?', { destructive: true, confirmLabel: t('common.delete') })) return;
     try {
       await api.delete(`/addon-groups/${id}`);
       toast.success('Addon group deleted');
@@ -375,7 +377,7 @@ export default function ProductsPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Products</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('products.title')}</h1>
       </div>
 
       <div className="flex gap-1 mb-6 border-b">
@@ -399,7 +401,7 @@ export default function ProductsPage() {
               <FileSpreadsheet size={16} className="mr-1" /> CSV
             </Button>
             <Button onClick={() => { resetForm(); setShowForm(true); }}>
-              <Plus size={16} className="mr-1" /> Add Product
+              <Plus size={16} className="mr-1" /> {t('common.add')} Product
             </Button>
           </div>
 
@@ -408,13 +410,13 @@ export default function ProductsPage() {
         <table className="w-full">
           <thead className="bg-gray-50">
             <tr>
-              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Product</th>
-              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Category</th>
-              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Price</th>
-              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Tax</th>
-              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Stock</th>
-              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Status</th>
-              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnProduct')}</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnCategory')}</th>
+              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnPrice')}</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnTax')}</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnStock')}</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnStatus')}</th>
+              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnActions')}</th>
             </tr>
           </thead>
           <tbody className="divide-y divide-gray-100">
@@ -497,7 +499,7 @@ export default function ProductsPage() {
           </tbody>
         </table>
         {products.length === 0 && (
-          <p className="text-center text-gray-500 py-12">No products yet. Add your first product!</p>
+          <p className="text-center text-gray-500 py-12">{t('products.empty')}</p>
         )}
       </div>
 
@@ -512,12 +514,12 @@ export default function ProductsPage() {
             <div className="p-6 overflow-y-auto flex-1">
               <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Product Image</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldImage')}</label>
                 <ImageUploader
                   value={form.image_url}
                   onChange={(val) => {
@@ -529,15 +531,15 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Category</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldCategory')}</label>
                   <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required>
-                    <option value="">Select</option>
+                    <option value="">{t('products.selectPlaceholder')}</option>
                     {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                   </select>
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">SKU</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldSku')}</label>
                   <input type="text" value={form.sku} onChange={(e) => setForm({ ...form, sku: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                 </div>
@@ -549,7 +551,7 @@ export default function ProductsPage() {
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Cost Price</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldCostPrice')}</label>
                   <input type="number" step="0.01" value={form.cost_price} onChange={(e) => setForm({ ...form, cost_price: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                 </div>
@@ -562,12 +564,12 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Tax Type</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldTaxType')}</label>
                   <select value={form.tax_type} onChange={(e) => setForm({ ...form, tax_type: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none">
-                    <option value="none">No Tax</option>
-                    <option value="inclusive">Inclusive</option>
-                    <option value="exclusive">Exclusive</option>
+                    <option value="none">{t('products.taxNone')}</option>
+                    <option value="inclusive">{t('products.taxInclusive')}</option>
+                    <option value="exclusive">{t('products.taxExclusive')}</option>
                   </select>
                 </div>
                 <div>
@@ -577,7 +579,7 @@ export default function ProductsPage() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Tags</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">{t('products.fieldTags')}</label>
                 {/* Selected tags */}
                 {form.tags.length > 0 && (
                   <div className="flex flex-wrap gap-1.5 mb-2">
@@ -619,7 +621,7 @@ export default function ProductsPage() {
                         }
                       }
                     }}
-                    placeholder="Type custom tag + Enter"
+                    placeholder={t('products.tagPlaceholder')}
                     className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand outline-none"
                   />
                   <button
@@ -638,7 +640,7 @@ export default function ProductsPage() {
               </div>
               {isRestaurant && addonGroups.length > 0 && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">Addon Groups</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">{t('products.fieldAddonGroups')}</label>
                   <div className="space-y-2 max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-3">
                     {addonGroups.map((group) => {
                       const isChecked = form.addon_group_ids.includes(group.id);
@@ -675,12 +677,12 @@ export default function ProductsPage() {
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={form.track_inventory} onChange={(e) => setForm({ ...form, track_inventory: e.target.checked })}
                     className="rounded border-gray-300 text-brand focus:ring-brand" />
-                  <span className="text-sm text-gray-700">Track inventory</span>
+                  <span className="text-sm text-gray-700">{t('products.fieldTrackInventory')}</span>
                 </label>
                 <label className="flex items-center gap-2">
                   <input type="checkbox" checked={form.is_active} onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
                     className="rounded border-gray-300 text-brand focus:ring-brand" />
-                  <span className="text-sm text-gray-700">Active</span>
+                  <span className="text-sm text-gray-700">{t('products.fieldActive')}</span>
                 </label>
               </div>
               <Button type="submit" className="w-full">
@@ -708,10 +710,10 @@ export default function ProductsPage() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Color</th>
-                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Status</th>
-                  <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.categoryName')}</th>
+                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.categoryColor')}</th>
+                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnStatus')}</th>
+                  <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -745,7 +747,7 @@ export default function ProductsPage() {
                 })}
               </tbody>
             </table>
-            {categories.length === 0 && <p className="text-center text-gray-500 py-12">No categories yet. Add your first category!</p>}
+            {categories.length === 0 && <p className="text-center text-gray-500 py-12">{t('products.categoryEmpty')}</p>}
           </div>
 
           {showForm && (
@@ -757,11 +759,11 @@ export default function ProductsPage() {
                 </div>
                 <form onSubmit={handleCategorySubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
                     <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.categoryDescription')}</label>
                     <textarea value={categoryForm.description} onChange={(e) => setCategoryForm({ ...categoryForm, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" rows={2} />
                   </div>
                   <div>
@@ -774,7 +776,7 @@ export default function ProductsPage() {
                   </div>
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={categoryForm.is_active} onChange={(e) => setCategoryForm({ ...categoryForm, is_active: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
-                    <span className="text-sm text-gray-700">Active</span>
+                    <span className="text-sm text-gray-700">{t('products.fieldActive')}</span>
                   </label>
                   <Button type="submit" className="w-full">{editingCategory ? 'Update' : 'Create'}</Button>
                 </form>
@@ -798,11 +800,11 @@ export default function ProductsPage() {
             <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
-                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Name</th>
-                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Required</th>
-                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Selection</th>
-                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Addons</th>
-                  <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
+                  <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.categoryName')}</th>
+                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnRequired')}</th>
+                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnSelection')}</th>
+                  <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnAddons')}</th>
+                  <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnActions')}</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-100">
@@ -828,7 +830,7 @@ export default function ProductsPage() {
                 ))}
               </tbody>
             </table>
-            {addonGroups.length === 0 && <p className="text-center text-gray-500 py-12">No addon groups yet.</p>}
+            {addonGroups.length === 0 && <p className="text-center text-gray-500 py-12">{t('products.addonEmpty')}</p>}
           </div>
 
           {showAddonModal && (
@@ -841,30 +843,30 @@ export default function ProductsPage() {
                 <div className="p-6 overflow-y-auto flex-1">
                   <form onSubmit={handleAddonGroupSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
                     <input type="text" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Description</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.categoryDescription')}</label>
                     <input type="text" value={addonForm.description} onChange={(e) => setAddonForm({ ...addonForm, description: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Min Selection</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.addonMin')}</label>
                       <input type="number" min="0" value={addonForm.min_selection} onChange={(e) => setAddonForm({ ...addonForm, min_selection: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Max Selection</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.addonMax')}</label>
                       <input type="number" min="0" value={addonForm.max_selection} onChange={(e) => setAddonForm({ ...addonForm, max_selection: Number(e.target.value) })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                     </div>
                   </div>
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={addonForm.is_required} onChange={(e) => setAddonForm({ ...addonForm, is_required: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
-                    <span className="text-sm text-gray-700">Required</span>
+                    <span className="text-sm text-gray-700">{t('products.addonRequired')}</span>
                   </label>
                   <div>
                     <div className="flex justify-between items-center mb-2">
-                      <label className="block text-sm font-medium text-gray-700">Addons</label>
+                      <label className="block text-sm font-medium text-gray-700">{t('products.addonAddons')}</label>
                       <button type="button" onClick={addAddonItem} className="text-xs text-brand hover:underline">+ Add Addon</button>
                     </div>
                     <div className="space-y-2">
@@ -902,7 +904,7 @@ export default function ProductsPage() {
             <div className="space-y-5">
               {/* Download section */}
               <div className="bg-gray-50 rounded-xl p-4 space-y-3">
-                <p className="text-sm font-medium text-gray-700">Download</p>
+                <p className="text-sm font-medium text-gray-700">{t('products.download')}</p>
                 <div className="flex gap-3">
                   <button
                     onClick={() => downloadCsv(`/menu-csv/template/${csvType}`, `${csvType}-template.csv`)}
@@ -930,7 +932,7 @@ export default function ProductsPage() {
 
               {/* Upload section */}
               <div className="space-y-3">
-                <p className="text-sm font-medium text-gray-700">Upload CSV</p>
+                <p className="text-sm font-medium text-gray-700">{t('products.uploadCsv')}</p>
                 <label className="flex flex-col items-center justify-center w-full h-28 border-2 border-dashed border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-colors">
                   <Upload size={20} className="text-gray-400 mb-1" />
                   <span className="text-sm text-gray-500">
@@ -955,7 +957,7 @@ export default function ProductsPage() {
                 <div className="rounded-xl border border-gray-100 overflow-hidden">
                   <div className="flex items-center gap-2 px-4 py-3 bg-green-50 border-b border-gray-100">
                     <CheckCircle size={15} className="text-green-600" />
-                    <span className="text-sm font-medium text-green-800">Import complete</span>
+                    <span className="text-sm font-medium text-green-800">{t('products.importComplete')}</span>
                   </div>
                   <div className="px-4 py-3 text-sm text-gray-700 space-y-1">
                     {csvType === 'addons' ? (

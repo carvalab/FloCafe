@@ -50,7 +50,7 @@ export default function TableCheckoutModal({
       }
     };
     fetchOrder();
-  }, [table.id]);
+  }, [table.id, t]);
 
   const handleCheckout = async () => {
     if (!order) return;
@@ -94,8 +94,8 @@ export default function TableCheckoutModal({
     return (
       <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
         <div className="bg-white rounded-2xl p-6 w-full max-w-md">
-          <p className="text-gray-500 text-center py-4">No active order found for this table</p>
-          <Button onClick={onClose} variant="outline" className="w-full">Close</Button>
+          <p className="text-gray-500 text-center py-4">{t('pos.noActiveOrder')}</p>
+          <Button onClick={onClose} variant="outline" className="w-full">{t('pos.close')}</Button>
         </div>
       </div>
     );
@@ -152,7 +152,7 @@ export default function TableCheckoutModal({
 
         <div className="p-5 border-t border-gray-100 space-y-3">
           <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Subtotal</span>
+            <span className="text-gray-500">{t('pos.subtotal')}</span>
             <span>{currency}{Number(order.subtotal).toLocaleString()}</span>
           </div>
           <TaxBreakdown
@@ -162,12 +162,12 @@ export default function TableCheckoutModal({
             theme="light"
           />
           <div className="flex justify-between text-lg font-bold">
-            <span>Total</span>
+            <span>{t('pos.total')}</span>
             <span className="text-brand">{currency}{Number(order.total).toLocaleString()}</span>
           </div>
           {order.bill && order.bill.payment_status !== 'paid' && Number(order.bill.balance) > 0 && (
             <div className="flex justify-between text-sm font-medium">
-              <span className="text-orange-600">Balance Due</span>
+              <span className="text-orange-600">{t('pos.balanceDue')}</span>
               <span className="text-orange-600">{currency}{Number(order.bill.balance).toLocaleString()}</span>
             </div>
           )}
@@ -196,7 +196,7 @@ export default function TableCheckoutModal({
                 Add Items
               </Button>
               <Button onClick={handleCheckout} disabled={generating}>
-                {generating ? 'Generating...' : 'Checkout'}
+                {generating ? 'Generating...' : t('pos.checkout')}
               </Button>
             </div>
           )}

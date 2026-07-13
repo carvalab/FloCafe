@@ -1,9 +1,9 @@
 'use client';
 
 import { X } from 'lucide-react';
-import { useI18n } from '@/hooks/useI18n';
 import type { Table } from '@/lib/types';
 import { useHeldOrdersStore } from '@/store/held-orders';
+import { useI18n } from '@/hooks/useI18n';
 
 interface Props {
   tables: Table[];
@@ -16,33 +16,19 @@ interface Props {
   onClose: () => void;
 }
 
-const STATUS_BADGE_KEYS: Record<string, string> = {
-  occupied: 'pos.tableOccupied',
-  reserved: 'pos.tableReserved',
-  cleaning: 'pos.tableCleaning',
-  held: 'pos.tableHeld',
-};
-
-const BORDER_STYLES: Record<string, string> = {
-  available: 'border-gray-200 hover:border-brand/40',
-  occupied: 'border-orange-300 bg-orange-50',
-  reserved: 'border-yellow-300 bg-yellow-50',
-  cleaning: 'border-gray-300 bg-gray-100',
-  held: 'border-blue-400 bg-blue-50',
-};
-
-const BADGE_BG: Record<string, string> = {
-  occupied: 'bg-orange-500',
-  reserved: 'bg-yellow-500',
-  cleaning: 'bg-gray-500',
-  held: 'bg-blue-500',
+const statusStyles: Record<string, { border: string; badge: string; badgeKey: string | null }> = {
+  available: { border: 'border-gray-200 hover:border-brand/40', badge: '', badgeKey: null },
+  occupied: { border: 'border-orange-300 bg-orange-50', badge: 'bg-orange-500', badgeKey: 'pos.tableOccupied' },
+  reserved: { border: 'border-yellow-300 bg-yellow-50', badge: 'bg-yellow-500', badgeKey: 'pos.tableReserved' },
+  cleaning: { border: 'border-gray-300 bg-gray-100', badge: 'bg-gray-500', badgeKey: 'pos.tableCleaning' },
+  held: { border: 'border-blue-400 bg-blue-50', badge: 'bg-blue-500', badgeKey: 'pos.tableHeld' },
 };
 
 export default function TablePickerModal({
   tables, selectedTableId, onSelectAvailable, onSelectOccupied, onSelectHeld, onPlaceOrder, onHoldTable, onClose,
 }: Props) {
-  const { t } = useI18n();
   const heldOrders = useHeldOrdersStore();
+  const { t } = useI18n();
 
   const handleClick = (table: Table) => {
     if (heldOrders.hasHeldOrder(table.id)) {
@@ -76,7 +62,7 @@ export default function TablePickerModal({
           {tables.map((table) => {
             const isHeld = heldOrders.hasHeldOrder(table.id);
             const isSelected = selectedTableId === table.id;
-            const borderClass = BORDER_STYLES[table.status] || BORDER_STYLES.available;
+            const style = statusStyles[table.status] || statusStyles.available;
             const isDisabled = table.status === 'cleaning';
 
             return (
@@ -89,7 +75,7 @@ export default function TablePickerModal({
                     ? 'border-brand bg-brand-light'
                     : isHeld
                       ? 'border-blue-400 bg-blue-50'
-                      : borderClass
+                      : style.border
                 } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {isHeld && (
@@ -97,9 +83,9 @@ export default function TablePickerModal({
                     {t('pos.tableHeld')}
                   </span>
                 )}
-                {!isHeld && STATUS_BADGE_KEYS[table.status] && (
-                  <span className={`absolute -top-2 -right-2 ${BADGE_BG[table.status]} text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold`}>
-                    {t(STATUS_BADGE_KEYS[table.status])}
+                {!isHeld && style.badgeKey && (
+                  <span className={`absolute -top-2 -right-2 ${style.badge} text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold`}>
+                    {t(style.badgeKey)}
                   </span>
                 )}
                 <p className="font-bold text-gray-900">{table.name}</p>

@@ -11,6 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import type { HealthCheckReport, HealthFinding } from '@/types/electron';
 import { AlertTriangle, CheckCircle2, Wrench } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 
 interface HealthCheckDialogProps {
   open: boolean;
@@ -47,6 +48,7 @@ function FindingRow({ finding }: { finding: HealthFinding }) {
 }
 
 export function HealthCheckDialog({ open, onOpenChange, report, applying, onApplySafeFixes }: HealthCheckDialogProps) {
+  const { t } = useI18n();
   const safeFindings = (report?.findings ?? []).filter((f) => f.risk === 'safe');
   const reviewFindings = (report?.findings ?? []).filter((f) => f.risk === 'manual_review');
   const isClean = report && report.findings.length === 0;
@@ -55,7 +57,7 @@ export function HealthCheckDialog({ open, onOpenChange, report, applying, onAppl
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-2xl max-h-[85vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Database Health Check</DialogTitle>
+          <DialogTitle>{t('settings.databaseHealthCheck')}</DialogTitle>
           <DialogDescription>
             Compares this database&apos;s structure against what the app expects and flags anything that&apos;s missing or unexpected.
           </DialogDescription>
@@ -63,7 +65,7 @@ export function HealthCheckDialog({ open, onOpenChange, report, applying, onAppl
 
         <div className="flex-1 overflow-y-auto space-y-6 py-2">
           {!report && (
-            <p className="text-sm text-gray-500 text-center py-10">Checking database structure…</p>
+            <p className="text-sm text-gray-500 text-center py-10">{t('common.loading')}</p>
           )}
 
           {isClean && (
@@ -102,7 +104,7 @@ export function HealthCheckDialog({ open, onOpenChange, report, applying, onAppl
         </div>
 
         <DialogFooter>
-          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>{t('settings.close')}</Button>
           {safeFindings.length > 0 && (
             <Button onClick={onApplySafeFixes} disabled={applying}>
               {applying ? 'Applying…' : `Apply ${safeFindings.length} Safe Fix${safeFindings.length === 1 ? '' : 'es'}`}

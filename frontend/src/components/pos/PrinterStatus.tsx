@@ -32,21 +32,33 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
 import type { PrinterStatus } from '@/lib/printer/PrinterService';
-import { useI18n } from '@/hooks/useI18n';
 import toast from 'react-hot-toast';
+import { useI18n } from '@/hooks/useI18n';
 
-const STATUS_ICONS: Record<PrinterStatus, { color: string; Icon: React.ElementType }> = {
-  disconnected: { color: 'text-gray-400', Icon: Printer },
-  connecting:   { color: 'text-amber-500', Icon: Loader2 },
-  connected:    { color: 'text-green-600', Icon: PrinterCheck },
-  error:        { color: 'text-red-500', Icon: PrinterX },
-};
-
-const STATUS_LABEL_KEYS: Record<PrinterStatus, string> = {
-  disconnected: 'pos.printerNoPrinter',
-  connecting: 'pos.printerConnecting',
-  connected: 'pos.printerReady',
-  error: 'pos.printerError',
+const STATUS_CONFIG: Record<
+  PrinterStatus,
+  { labelKey: string; color: string; Icon: React.ElementType }
+> = {
+  disconnected: {
+    labelKey: 'pos.printerNoPrinter',
+    color: 'text-gray-400',
+    Icon: Printer,
+  },
+  connecting: {
+    labelKey: 'pos.printerConnecting',
+    color: 'text-amber-500',
+    Icon: Loader2,
+  },
+  connected: {
+    labelKey: 'pos.printerReady',
+    color: 'text-green-600',
+    Icon: PrinterCheck,
+  },
+  error: {
+    labelKey: 'pos.printerError',
+    color: 'text-red-500',
+    Icon: PrinterX,
+  },
 };
 
 export default function PrinterStatus() {
@@ -60,9 +72,8 @@ export default function PrinterStatus() {
   const { t } = useI18n();
 
   const effectiveStatus: PrinterStatus = hardwarePrinter ? 'connected' : status;
-  const cfg = STATUS_ICONS[effectiveStatus];
+  const cfg = STATUS_CONFIG[effectiveStatus];
   const Icon = cfg.Icon;
-  const label = t(STATUS_LABEL_KEYS[effectiveStatus]);
 
   const handleConnect = async () => {
     clearError();
@@ -95,7 +106,7 @@ export default function PrinterStatus() {
             className={isConnecting ? 'animate-spin' : undefined}
           />
           <span className="hidden sm:inline text-xs font-medium truncate max-w-[140px]">
-            {hardwarePrinter ? hardwarePrinter.name : label}
+            {hardwarePrinter ? hardwarePrinter.name : t(cfg.labelKey)}
           </span>
           <ChevronDown size={12} className="text-gray-400" />
         </Button>
@@ -148,7 +159,7 @@ export default function PrinterStatus() {
                 className="text-sm cursor-pointer"
               >
                 <Printer size={14} className="mr-2" />
-                {isConnecting ? 'Connecting…' : 'Connect USB Printer'}
+                {isConnecting ? t('pos.printerConnecting') : 'Connect USB Printer'}
               </DropdownMenuItem>
             )}
 

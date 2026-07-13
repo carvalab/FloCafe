@@ -7,6 +7,7 @@ import { usePosSettingsStore } from '@/store/pos-settings';
 import { nameToColor } from '@/lib/image-utils';
 import TagBadge from './DietaryBadge';
 import api from '@/lib/api';
+import { useI18n } from '@/hooks/useI18n';
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; activeBg: string; activeText: string }> = {
   red: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', activeBg: 'bg-red-500', activeText: 'text-white' },
@@ -51,6 +52,7 @@ export default function ProductGrid({
 }: Props) {
   const cart = useCartStore();
   const { showProductImages } = usePosSettingsStore();
+  const { t } = useI18n();
 
   const filtered = products.filter((p) => {
     const matchCat = !selectedCategory || p.category_id === selectedCategory;
@@ -67,7 +69,7 @@ export default function ProductGrid({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="Search products..."
+            placeholder={t('pos.searchProducts')}
             className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-xl focus:border-brand outline-none transition-colors text-sm"
           />
         </div>
@@ -78,7 +80,7 @@ export default function ProductGrid({
               !selectedCategory ? 'bg-brand text-white' : 'bg-white text-gray-700 border border-gray-200 hover:bg-gray-50'
             }`}
           >
-            All
+            {t('pos.allCategories')}
           </button>
           {categories.filter((cat) => cat.id != null).map((cat) => {
             const colorClasses = getCategoryColorClasses(cat.color);
@@ -176,7 +178,7 @@ export default function ProductGrid({
                           onProductClick(product);
                         }}
                         className="text-gray-400 hover:text-gray-600 transition-colors"
-                        title="Customisable"
+                        title={t('pos.customisable')}
                       >
                         <SlidersHorizontal size={12} />
                       </button>

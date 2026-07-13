@@ -77,11 +77,6 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
     plan: 'desktop',
     status: 'active',
     role: userRole,  // user's role — AuthGuard uses this for routing
-    language: s.language || 'en',
-    locale: s.locale || 'en-US',
-    tax_id_label: s.tax_id_label || '',
-    tax_name: s.tax_name || '',
-    document_title: s.document_title || 'Receipt',
   };
 }
 
@@ -139,11 +134,11 @@ function insertTable(db: ReturnType<typeof getDatabase>, id: string, number: str
   `).run(id, number, capacity, now(), now());
 }
 
-function insertCustomer(db: ReturnType<typeof getDatabase>, id: string, name: string, phone: string, countryCode: string = '+91'): void {
+function insertCustomer(db: ReturnType<typeof getDatabase>, id: string, name: string, phone: string): void {
   db.prepare(`
     INSERT OR IGNORE INTO customers (id, name, phone, country_code, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, ?, 1, ?, ?)
-  `).run(id, name, phone, countryCode, now(), now());
+    VALUES (?, ?, ?, '+91', 1, ?, ?)
+  `).run(id, name, phone, now(), now());
 }
 
 function insertStaffUser(db: ReturnType<typeof getDatabase>, id: string, name: string, email: string, role: string, password: string): void {
@@ -206,54 +201,11 @@ function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: st
   insertStaffUser(db, 'user-demo-chef', 'Demo Chef', 'chef@flo.local', 'chef', 'demo12345');
 }
 
-function seedArgentinaDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string): void {
-  const cats = [
-    ['cat-demo-burger', 'Hamburguesas', '#E63946', '🍔', 1],
-    ['cat-demo-papas', 'Papas', '#F4A261', '🍟', 2],
-    ['cat-demo-bebidas', 'Bebidas', '#45B7D1', '🥤', 3],
-    ['cat-demo-postres', 'Postres', '#C77DFF', '🍰', 4],
-  ] as const;
-  for (const [id, name, color, icon, sort] of cats) insertCategory(db, id, name, color, icon, sort);
-
-  const products = [
-    ['prod-demo-hamburguesa-clasica', 'cat-demo-burger', 'Hamburguesa Clásica', 4500, 1],
-    ['prod-demo-hamburguesa-doble', 'cat-demo-burger', 'Hamburguesa Doble', 5800, 2],
-    ['prod-demo-hamburguesa-bacon', 'cat-demo-burger', 'Hamburguesa con Bacon', 6200, 3],
-    ['prod-demo-hamburguesa-veggie', 'cat-demo-burger', 'Hamburguesa Veggie', 5200, 4],
-    ['prod-demo-papas-clasicas', 'cat-demo-papas', 'Papas Clásicas', 2200, 1],
-    ['prod-demo-papas-con-cheddar', 'cat-demo-papas', 'Papas con Cheddar', 3200, 2],
-    ['prod-demo-coca-cola', 'cat-demo-bebidas', 'Coca-Cola', 1500, 1],
-    ['prod-demo-agua-mineral', 'cat-demo-bebidas', 'Agua Mineral', 1200, 2],
-    ['prod-demo-cerveza-artesanal', 'cat-demo-bebidas', 'Cerveza Artesanal', 2800, 3],
-    ['prod-demo-flan-casero', 'cat-demo-postres', 'Flan Casero', 2400, 1],
-  ] as const;
-  for (const [id, categoryId, name, price, sort] of products) insertProduct(db, id, categoryId, name, price, sort);
-
-  if (serviceModel === 'finedine') {
-    insertTable(db, 'tbl-demo-1', 'M1', 4);
-    insertTable(db, 'tbl-demo-2', 'M2', 4);
-    insertTable(db, 'tbl-demo-3', 'M3', 6);
-    insertTable(db, 'tbl-demo-4', 'M4', 2);
-  }
-
-  insertCustomer(db, 'cust-demo-1', 'Sofía Pérez', '1145678901', '+54');
-  insertCustomer(db, 'cust-demo-2', 'Martina Suárez', '1145678902', '+54');
-  insertCustomer(db, 'cust-demo-3', 'Thiago Giménez', '1145678903', '+54');
-
-  insertStaffUser(db, 'user-demo-manager', 'Gerente Demo', 'manager@flo.local', 'manager', 'demo12345');
-  insertStaffUser(db, 'user-demo-cashier', 'Cajero Demo', 'cashier@flo.local', 'cashier', 'demo12345');
-  insertStaffUser(db, 'user-demo-chef', 'Cocinero Demo', 'chef@flo.local', 'chef', 'demo12345');
-}
-
-export function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string, country: string): void {
+function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string): void {
   if (profile === 'express') {
     seedExpressRestaurant(db, serviceModel);
   } else if (profile === 'demo') {
-    if (String(country || '').toUpperCase() === 'AR') {
-      seedArgentinaDemoRestaurant(db, serviceModel);
-    } else {
-      seedDemoRestaurant(db, serviceModel);
-    }
+    seedDemoRestaurant(db, serviceModel);
   }
 }
 
@@ -539,13 +491,6 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       billing_type,
       terms_accepted,
       master_pin,
-      language,
-      locale,
-      tax_id_label,
-      tax_name,
-      document_title,
-      business_tax_id,
-      business_tax_condition,
     } = req.body;
     const email = normalizeEmail(req.body.email);
     const displayName = String(name || '').trim();
@@ -553,7 +498,6 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
     const normalizedSetupProfile = String(setup_profile || 'express').trim().toLowerCase();
     const normalizedServiceModel = String(service_model || 'qsr').trim().toLowerCase();
     const normalizedCurrency = String(currency || 'INR').trim().toUpperCase();
-    const normalizedCountry = String(country || 'IN').trim().toUpperCase();
     const storeName = String(store_name || business_name || '').trim();
     const resolvedStoreName = storeName || 'Store';
     const outletAddress = String(business_address || address || '').trim();
@@ -634,16 +578,9 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         service_model: normalizedServiceModel,
         setup_profile: normalizedSetupProfile,
         onboarding_completed: 'true',
-        language,
-        locale,
-        tax_id_label,
-        tax_name,
-        document_title,
-        business_tax_id,
-        business_tax_condition,
       });
 
-      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, normalizedCountry);
+      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel);
     })();
 
     // Written to userData/, outside flo.db and outside this transaction — the

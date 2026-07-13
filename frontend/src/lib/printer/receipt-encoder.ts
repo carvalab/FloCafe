@@ -16,7 +16,6 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
 import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
-import { resolveTaxIdLabel } from './tax-label';
 
 export interface ReceiptOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -37,15 +36,8 @@ export interface ReceiptOptions {
   useUnicode?: boolean;
   /** Print a large "REPRINT" banner at the top so a reprinted receipt can't be mistaken for the original. */
   isReprint?: boolean;
-  /** ISO country code used to derive the tax-id label. Default: 'IN'. */
-  country?: string;
-  /** Explicit label for the tax id (overrides country mapping). */
-  taxIdLabel?: string;
-  /** Locale for date formatting. Default: 'en'. */
-  locale?: string;
 }
 
-/** Resolve the tax-id label: explicit label wins, else map by country, else 'Tax ID'. */
 function printReprintBanner(enc: ReceiptPrinterEncoder): void {
   enc
     .align('center')
@@ -129,14 +121,10 @@ export function buildClassicReceiptBytes(
     showTaxBreakdown = false,
     useUnicode = false,
     isReprint = false,
-    country = 'IN',
-    taxIdLabel,
-    locale = 'en',
   } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
-  const resolvedTaxIdLabel = resolveTaxIdLabel(country, taxIdLabel);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -168,7 +156,7 @@ export function buildClassicReceiptBytes(
 
   enc
     .size('small')
-    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
+    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
     .newline()
     .size('normal')
     .align('left')
@@ -251,7 +239,7 @@ export function buildClassicReceiptBytes(
   if (showFooter) {
     if (gstin) {
       enc
-        .text(padRow(`${resolvedTaxIdLabel}: ${gstin}`, `Bill #${bill.bill_number}`, cols))
+        .text(padRow(`GSTIN: ${gstin}`, `Bill #${bill.bill_number}`, cols))
         .newline();
     }
     if (address) {
@@ -282,7 +270,7 @@ export function buildCompactReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote, useUnicode = false, isReprint = false, locale = 'en' } = opts;
+  const { paperWidth = 58, footerNote, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
@@ -305,7 +293,7 @@ export function buildCompactReceiptBytes(
 
   // Bill # and date on one line
   enc
-    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
+    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
     .newline();
 
   if (order?.table?.name) {
@@ -379,11 +367,10 @@ export function buildDetailedReceiptBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: ReceiptOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false, isReprint = false, country = 'IN', taxIdLabel, locale = 'en' } = opts;
+  const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '';
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
-  const resolvedTaxIdLabel = resolveTaxIdLabel(country, taxIdLabel);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -404,7 +391,7 @@ export function buildDetailedReceiptBytes(
     .newline();
 
   if (gstin) {
-    enc.bold(true).text(`${resolvedTaxIdLabel}: ${gstin}`).bold(false).newline();
+    enc.bold(true).text(`GSTIN: ${gstin}`).bold(false).newline();
   }
 
   enc.bold(true).text('TAX INVOICE').bold(false).newline();
@@ -420,7 +407,7 @@ export function buildDetailedReceiptBytes(
 
   // Bill info
   enc
-    .text(padRow(`Bill #: ${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
+    .text(padRow(`Bill #: ${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
     .newline();
 
   if (order?.customer?.name) {
@@ -554,10 +541,10 @@ function capitalise(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function formatDate(iso?: string, locale: string = 'en'): string {
+function formatDate(iso?: string): string {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleString(locale, {
+    return new Date(iso).toLocaleString('en', {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

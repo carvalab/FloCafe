@@ -6,10 +6,12 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
+import { useI18n } from '@/hooks/useI18n';
 
 export default function RegisterPage() {
   const router = useRouter();
   const { register, selectTenant } = useAuthStore();
+  const { t } = useI18n();
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({
@@ -82,7 +84,7 @@ export default function RegisterPage() {
               </div>
 
               <div className="col-span-2">
-                <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
                 <input
                   type="email"
                   name="email"
@@ -94,7 +96,7 @@ export default function RegisterPage() {
               </div>
 
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
                 <input
                   type="password"
                   name="password"
@@ -153,14 +155,14 @@ export default function RegisterPage() {
             </div>
 
             <Button type="submit" disabled={loading || !passwordsMatch} className="w-full" size="lg">
-              {loading ? 'Creating...' : 'Create Account'}
+              {loading ? t('auth.signingIn') : 'Create Account'}
             </Button>
           </form>
 
           <p className="text-center text-sm text-gray-500 mt-6">
             Already have an account?{' '}
             <Link href="/auth/login" className="text-brand hover:text-brand-hover font-medium">
-              Sign In
+              {t('auth.signIn')}
             </Link>
           </p>
         </div>
