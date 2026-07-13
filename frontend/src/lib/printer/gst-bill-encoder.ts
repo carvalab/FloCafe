@@ -9,6 +9,7 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
 import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
+import { resolveTaxIdLabel } from './tax-label';
 
 export interface GstBillOptions {
   /** 58 mm (2.5", 32 chars) or 80 mm (3.5", 48 chars). Default: 58 */
@@ -25,8 +26,15 @@ export interface GstBillOptions {
   stateCode?: string;
   /** If false (default), replace ₹/€/£/etc. with ASCII (Rs, EUR, GBP…). */
   useUnicode?: boolean;
+  /** ISO country code used to derive the tax-id label. Default: 'IN'. */
+  country?: string;
+  /** Explicit label for the tax id (overrides country mapping). */
+  taxIdLabel?: string;
+  /** Locale for date formatting. Default: 'en'. */
+  locale?: string;
 }
 
+/** Resolve the tax-id label: explicit label wins, else map by country, else 'Tax ID'. */
 const CHARS: Record<58 | 80, number> = { 58: 32, 80: 48 };
 
 /**
@@ -45,10 +53,11 @@ export function buildGstBillBytes(
   tenant: Pick<Tenant, 'business_name' | 'currency'>,
   opts: GstBillOptions = {}
 ): Uint8Array {
-  const { paperWidth = 58, showFooter = true, gstin, address, phone, useUnicode = false } = opts;
+  const { paperWidth = 58, showFooter = true, gstin, address, phone, useUnicode = false, country = 'IN', taxIdLabel, locale = 'en' } = opts;
   const cols = CHARS[paperWidth];
   const rawCurrency = tenant.currency ?? '₹';
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
+  const resolvedTaxIdLabel = resolveTaxIdLabel(country, taxIdLabel);
   const order = bill.order;
 
   const enc = new ReceiptPrinterEncoder({ columns: cols });
@@ -65,7 +74,7 @@ export function buildGstBillBytes(
     enc.text(`Ph: ${phone}`).newline();
   }
   if (gstin) {
-    enc.text(`GSTIN: ${gstin}`).newline();
+    enc.text(`${resolvedTaxIdLabel}: ${gstin}`).newline();
   }
 
   enc.newline();
@@ -73,7 +82,7 @@ export function buildGstBillBytes(
   // ── Bill Details ─────────────────────────────────────────────────────────
   enc.align('left');
   enc.text(`Bill #: ${bill.bill_number}`).newline();
-  enc.text(`Date: ${formatDate(bill.order?.created_at)}`).newline();
+  enc.text(`Date: ${formatDate(bill.order?.created_at, locale)}`).newline();
 
   if (order?.table?.name) {
     enc.text(`Table: ${order.table.name}`).newline();
@@ -218,10 +227,10 @@ function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
 }
 
-function formatDate(iso?: string): string {
+function formatDate(iso?: string, locale: string = 'en'): string {
   if (!iso) return '';
   try {
-    return new Date(iso).toLocaleString('en', {
+    return new Date(iso).toLocaleString(locale, {
       year: 'numeric',
       month: 'short',
       day: 'numeric',

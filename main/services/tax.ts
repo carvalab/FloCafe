@@ -33,6 +33,26 @@ const INDIA_FIXED_RATES: Record<string, number> = {
 
 const THAILAND_VAT_RATE = 7.0;
 
+// Argentina v1: single-rate IVA per product using `product.tax_rate`. No AFIP,
+// no CAE, no perceptions, no provincial breaks. Supports inclusive/exclusive
+// the same way India/Thailand do — pass the rate on the product, the engine
+// computes the tax and emits a single `IVA` line in the breakdown.
+function calculateArgentinaTax(product: Product, taxableAmount: number): TaxResult {
+  const rate = product.tax_rate || 0;
+
+  if (rate <= 0) {
+    return { tax_amount: 0, tax_breakdown: [], tax_type: product.tax_type };
+  }
+
+  const taxAmount = computeTaxAmount(product.tax_type, taxableAmount, rate);
+
+  return {
+    tax_amount: round(taxAmount, 2),
+    tax_breakdown: [{ title: 'IVA', rate, amount: round(taxAmount, 2) }],
+    tax_type: product.tax_type,
+  };
+}
+
 function round(value: number, decimals: number = 2): number {
   return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }
@@ -58,6 +78,8 @@ export function calculateItemTax(
       return calculateIndiaTax(tenant, product, taxableAmount, customer);
     case 'TH':
       return calculateThailandTax(product, taxableAmount);
+    case 'AR':
+      return calculateArgentinaTax(product, taxableAmount);
     default:
       return calculateDefaultTax(product, taxableAmount);
   }

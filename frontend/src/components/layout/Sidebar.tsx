@@ -19,6 +19,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { getLandingPage } from '@/components/layout/AuthGuard';
 import api from '@/lib/api';
+import { useI18n } from '@/hooks/useI18n';
 import {
   Sidebar,
   SidebarContent,
@@ -35,14 +36,14 @@ import {
 
 // null = show for all business types
 const ALL_NAV_ITEMS = [
-  { href: '/pos', label: 'POS', icon: ShoppingCart, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['owner'], businessTypes: null },
-  { href: '/orders', label: 'Orders', icon: ClipboardList, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
-  { href: '/products', label: 'Products', icon: Package, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/tables', label: 'Tables', icon: Grid3X3, roles: ['owner', 'manager'], businessTypes: ['restaurant'] },
-  { href: '/customers', label: 'Customers', icon: Users, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/staff', label: 'Staff', icon: UserCog, roles: ['owner', 'manager'], businessTypes: null },
-  { href: '/settings', label: 'Settings', icon: Settings, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/pos', key: 'nav.pos', icon: ShoppingCart, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/dashboard', key: 'nav.dashboard', icon: LayoutDashboard, roles: ['owner'], businessTypes: null },
+  { href: '/orders', key: 'nav.orders', icon: ClipboardList, roles: ['owner', 'manager', 'cashier'], businessTypes: null },
+  { href: '/products', key: 'nav.products', icon: Package, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/tables', key: 'nav.tables', icon: Grid3X3, roles: ['owner', 'manager'], businessTypes: ['restaurant'] },
+  { href: '/customers', key: 'nav.customers', icon: Users, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/staff', key: 'nav.staff', icon: UserCog, roles: ['owner', 'manager'], businessTypes: null },
+  { href: '/settings', key: 'nav.settings', icon: Settings, roles: ['owner', 'manager'], businessTypes: null },
 ];
 
 export default function AppSidebar() {
@@ -50,6 +51,7 @@ export default function AppSidebar() {
   const { currentTenant, logout } = useAuthStore();
   const { tablesRequired, setTablesRequired } = usePosSettingsStore();
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
+  const { t } = useI18n();
   const closeMobile = () => { if (isMobile) setOpenMobile(false); };
 
   const role = currentTenant?.role || 'cashier';
@@ -101,12 +103,13 @@ export default function AppSidebar() {
             <SidebarMenu>
               {navItems.map((item) => {
                 const isActive = pathname === item.href || pathname?.startsWith(item.href + '/');
+                const label = t(item.key);
                 return (
                   <SidebarMenuItem key={item.href}>
-                    <SidebarMenuButton asChild isActive={isActive} tooltip={item.label}>
+                    <SidebarMenuButton asChild isActive={isActive} tooltip={label}>
                       <Link href={item.href} onClick={closeMobile}>
                         <item.icon />
-                        <span>{item.label}</span>
+                        <span>{label}</span>
                       </Link>
                     </SidebarMenuButton>
                   </SidebarMenuItem>

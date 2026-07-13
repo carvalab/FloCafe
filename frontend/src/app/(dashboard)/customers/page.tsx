@@ -9,17 +9,21 @@ import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
 import { Plus, Search, X, Edit, Wallet, History, TrendingUp, TrendingDown } from 'lucide-react';
 import type { Customer } from '@/lib/types';
-import { getCurrencySymbol } from '@/lib/countries';
+import { getCurrencySymbol, getCountryByCode } from '@/lib/countries';
+import { useI18n } from '@/hooks/useI18n';
 
 export default function CustomersPage() {
   const { currentTenant } = useAuthStore();
+  const { t } = useI18n();
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
+  const tenantCountry = getCountryByCode(currentTenant?.country || '');
+  const dialCode = tenantCountry?.dialCode || '+91';
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [, setLoading] = useState(true);
   const [search, setSearch] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [editingCustomer, setEditingCustomer] = useState<Customer | null>(null);
-  const [form, setForm] = useState({ name: '', phone: '', email: '', country_code: '+91' });
+  const [form, setForm] = useState({ name: '', phone: '', email: '', country_code: dialCode });
 
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
   const [ledgerData, setLedgerData] = useState<{ balance: number; next_expiry: string | null; transactions: { id: number; type: string; amount: number; description: string; created_at: string; expires_at?: string }[] } | null>(null);
@@ -62,13 +66,13 @@ export default function CustomersPage() {
 
   const openAdd = () => {
     setEditingCustomer(null);
-    setForm({ name: '', phone: '', email: '', country_code: '+91' });
+    setForm({ name: '', phone: '', email: '', country_code: dialCode });
     setShowForm(true);
   };
 
   const openEdit = (c: Customer) => {
     setEditingCustomer(c);
-    setForm({ name: c.name, phone: c.phone || '', email: c.email || '', country_code: c.country_code || '+91' });
+    setForm({ name: c.name, phone: c.phone || '', email: c.email || '', country_code: c.country_code || dialCode });
     setShowForm(true);
   };
 
@@ -93,15 +97,15 @@ export default function CustomersPage() {
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Customers</h1>
-        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Add Customer</Button>
+        <h1 className="text-2xl font-bold text-gray-900">{t('nav.customers')}</h1>
+        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> {t('customer.add')}</Button>
       </div>
 
       <div className="relative mb-4">
         <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
         <input
           type="text" value={search} onChange={(e) => setSearch(e.target.value)}
-          placeholder="Search by name, phone, or email..."
+          placeholder={t('customer.search')}
           className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand outline-none"
         />
       </div>
@@ -111,10 +115,10 @@ export default function CustomersPage() {
           <thead className="bg-gray-50">
             <tr>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Customer</th>
-              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">Phone</th>
-              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Visits</th>
-              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Total Spent</th>
-              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">Loyalty</th>
+              <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.phone')}</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.visits')}</th>
+              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.totalSpent')}</th>
+              <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('customer.loyalty')}</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Actions</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Ledger</th>
             </tr>
@@ -238,17 +242,17 @@ export default function CustomersPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">{editingCustomer ? 'Edit Customer' : 'Add Customer'}</h2>
+              <h2 className="text-lg font-bold">{editingCustomer ? t('customer.edit') : t('customer.add')}</h2>
               <button onClick={() => setShowForm(false)}><X size={20} className="text-gray-400" /></button>
             </div>
             <form onSubmit={handleSave} className="space-y-4">
-              <input type="text" placeholder="Name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+              <input type="text" placeholder={t('customer.name')} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand" required />
-              <input type="tel" placeholder="Phone" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
+              <input type="tel" placeholder={t('customer.phone')} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand" required />
-              <input type="email" placeholder="Email (optional)" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
+              <input type="email" placeholder={`${t('customer.email')} (${t('common.optional')})`} value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand" />
-              <Button type="submit" className="w-full">{editingCustomer ? 'Update' : 'Add'} Customer</Button>
+              <Button type="submit" className="w-full">{editingCustomer ? t('customer.update') : t('customer.add')}</Button>
             </form>
           </div>
         </div>

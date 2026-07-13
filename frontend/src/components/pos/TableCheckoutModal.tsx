@@ -5,6 +5,7 @@ import { X, ShoppingCart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import api from '@/lib/api';
+import { useI18n } from '@/hooks/useI18n';
 import toast from 'react-hot-toast';
 import type { Table, Order, Bill, OrderItem } from '@/lib/types';
 
@@ -18,15 +19,16 @@ interface Props {
   onAddCartToOrder?: (table: Table, order: Order) => void;
 }
 
-export default function TableCheckoutModal({ 
-  table, 
-  currency, 
+export default function TableCheckoutModal({
+  table,
+  currency,
   cartItemCount,
-  onClose, 
-  onAddItems, 
-  onPayment, 
-  onAddCartToOrder 
+  onClose,
+  onAddItems,
+  onPayment,
+  onAddCartToOrder
 }: Props) {
+  const { t } = useI18n();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -42,7 +44,7 @@ export default function TableCheckoutModal({
           setOrder(orderRes.data.order);
         }
       } catch {
-        toast.error('Failed to load order');
+        toast.error(t('pos.loadOrderFailed'));
       } finally {
         setLoading(false);
       }
@@ -62,7 +64,7 @@ export default function TableCheckoutModal({
       onPayment(data.bill);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to generate bill');
+      toast.error(error.response?.data?.message || t('pos.generateBillFailed'));
     } finally {
       setGenerating(false);
     }

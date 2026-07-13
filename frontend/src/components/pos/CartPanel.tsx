@@ -9,6 +9,7 @@ import { useCartStore } from '@/store/cart';
 import { useHeldOrdersStore } from '@/store/held-orders';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
+import { useI18n } from '@/hooks/useI18n';
 import toast from 'react-hot-toast';
 import type { Table, Order, OrderItem } from '@/lib/types';
 
@@ -33,26 +34,27 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
   const heldOrders = useHeldOrdersStore();
   const { currentTenant } = useAuthStore();
   const billingType = usePosSettingsStore((s) => s.billingType);
+  const { t } = useI18n();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const canHold = isRestaurant && cart.orderType === 'dine_in' && cart.tableId && cart.items.length > 0 && billingType === 'postpaid';
 
   const handleHold = async () => {
     if (!cart.tableId) {
-      toast.error('Select a table first');
+      toast.error(t('pos.selectTableFirst'));
       return;
     }
     if (cart.items.length === 0) {
-      toast.error('Cart is empty');
+      toast.error(t('pos.cartEmpty'));
       return;
     }
     const tableName = tables.find((t) => t.id === cart.tableId)?.name || cart.tableId;
     try {
       await heldOrders.holdOrder(cart.tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
       cart.clearCart();
-      toast.success(`Order held for ${tableName}`);
+      toast.success(t('pos.orderHeldFor', { table: tableName }));
     } catch (err: unknown) {
       const e = err as Error;
-      toast.error(e.message || 'Failed to hold order');
+      toast.error(e.message || t('pos.holdOrderFailed'));
     }
   };
 
@@ -71,6 +73,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
             .filter((type) => isRestaurant || type !== 'dine_in')
             .map((type) => {
               const Icon = orderTypeIcons[type];
+              const label = type === 'dine_in' ? t('pos.orderTypeDineIn') : type === 'takeaway' ? t('pos.orderTypeTakeaway') : t('pos.orderTypeDelivery');
               return (
                 <button
                   key={type}
@@ -82,7 +85,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
                   }`}
                 >
                   <Icon size={14} />
-                  {type.replace('_', ' ')}
+                  {label}
                 </button>
               );
             })}
@@ -96,7 +99,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
               type="text"
               value={cart.deliveryAddress}
               onChange={(e) => cart.setDeliveryAddress(e.target.value)}
-              placeholder="Delivery address"
+              placeholder={t('pos.deliveryAddress')}
               className="flex-1 px-3 py-1.5 text-sm border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
             />
           </div>
@@ -108,7 +111,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
         {/* Previously ordered items (add-items mode) */}
         {existingOrder && existingOrder.items && existingOrder.items.filter((i: OrderItem) => i.status !== 'cancelled').length > 0 && (
           <div className="mb-3 pb-3 border-b border-dashed border-gray-200">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">Already ordered</p>
+            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">{t('pos.alreadyOrdered')}</p>
             <div className="space-y-1.5">
               {existingOrder.items.filter((i: OrderItem) => i.status !== 'cancelled').map((item: OrderItem) => (
                 <div key={item.id} className="flex justify-between items-center">
@@ -123,7 +126,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
         {cart.items.length === 0 ? (
           <div className={`flex flex-col items-center justify-center text-gray-400 ${existingOrder ? 'py-4' : isDrawer ? 'py-8' : 'h-full'}`}>
             <ShoppingCart size={existingOrder ? 24 : 40} />
-            <p className="mt-2 text-sm">{existingOrder ? 'Add new items above' : 'Cart is empty'}</p>
+            <p className="mt-2 text-sm">{existingOrder ? t('pos.addNewItemsAbove') : t('pos.cartEmpty')}</p>
           </div>
         ) : (
           <div className="space-y-3">
@@ -184,7 +187,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
             <textarea
               value={cart.orderNotes}
               onChange={(e) => cart.setOrderNotes(e.target.value.slice(0, 200))}
-              placeholder="Order notes (optional)"
+              placeholder={t('pos.orderNotesPlaceholder')}
               rows={2}
               maxLength={200}
               className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg resize-none focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
@@ -193,11 +196,11 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
           </div>
         )}
         <div className="flex justify-between mb-1 text-sm">
-          <span className="text-gray-500">Items</span>
+          <span className="text-gray-500">{t('pos.items')}</span>
           <span className="font-medium">{cart.itemCount()}</span>
         </div>
         <div className="flex justify-between mb-4 text-lg">
-          <span className="font-semibold text-gray-900">Subtotal</span>
+          <span className="font-semibold text-gray-900">{t('pos.subtotal')}</span>
           <span className="font-bold text-brand">
             {currency}{cart.subtotal().toLocaleString()}
           </span>
@@ -205,7 +208,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
         <div className="flex gap-2">
           {canHold && (
             <Button variant="outline" onClick={handleHold} className="flex-1">
-              <Pause size={14} className="mr-1" /> Hold
+              <Pause size={14} className="mr-1" /> {t('pos.holdButton')}
             </Button>
           )}
           <Button
@@ -214,7 +217,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
             className="flex-1"
             size="lg"
           >
-            {submitting ? 'Placing...' : 'Place Order'}
+            {submitting ? t('pos.placing') : t('pos.placeOrderButton')}
           </Button>
         </div>
       </div>

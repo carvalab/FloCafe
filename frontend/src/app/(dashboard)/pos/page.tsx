@@ -24,10 +24,12 @@ import PaymentModal from '@/components/pos/PaymentModal';
 import PrepaidCheckoutModal, { type PrepaidPayment, type PrepaidDiscount } from '@/components/pos/PrepaidCheckoutModal';
 import PosTopbar from '@/components/pos/PosTopbar';
 import { usePrinterStore } from '@/hooks/usePrinter';
+import { useI18n } from '@/hooks/useI18n';
 import { getCurrencySymbol } from '@/lib/countries';
 
 export default function POSPage() {
   const { currentTenant } = useAuthStore();
+  const { t } = useI18n();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
@@ -64,7 +66,7 @@ export default function POSPage() {
     } catch (err) {
       console.error('[POS] KOT print failed:', err);
       const msg = err instanceof Error ? err.message : 'check printer connection';
-      toast.error(`KOT print failed: ${msg}`);
+      toast.error(`${t('pos.kotPrintFailed')}: ${msg}`);
     }
   };
 
@@ -81,10 +83,13 @@ export default function POSPage() {
       await printBill(bill, {
         business_name: currentTenant.business_name,
         currency,
+        country: currentTenant.country,
+        locale: currentTenant.locale,
+        tax_id_label: currentTenant.tax_id_label,
       });
     } catch {
       // Non-fatal: print failure should not block the checkout flow.
-      toast.error('Receipt print failed — check printer connection');
+      toast.error(t('pos.receiptPrintFailed'));
     }
   };
 
@@ -131,7 +136,7 @@ export default function POSPage() {
           await heldOrders.fetchHeldOrders();
         }
       } catch {
-        toast.error('Failed to load menu data');
+        toast.error(t('pos.menuLoadFailed'));
       }
     };
     fetchData();
@@ -149,7 +154,7 @@ export default function POSPage() {
 
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) {
-      toast.error('Cart is empty');
+      toast.error(t('pos.cartEmpty'));
       return;
     }
     if (customerMandatory && !cart.customerId) {
@@ -183,7 +188,7 @@ export default function POSPage() {
           special_instructions: item.special_instructions || null,
         }));
         const { data } = await api.post(`/orders/${pendingOrder.id}/items`, { items: newItems, special_instructions: cart.orderNotes || undefined });
-        toast.success(`Items added to order #${pendingOrder.order_number}`);
+        toast.success(t('pos.itemsAddedToOrder', { number: pendingOrder.order_number }));
         orderForKot = data.order as Order;
         setPendingOrder(null);
       } else {
@@ -202,7 +207,7 @@ export default function POSPage() {
             special_instructions: item.special_instructions || null,
           })),
         });
-        toast.success(`Order #${data.order.order_number} placed!`);
+        toast.success(t('pos.orderPlaced', { number: data.order.order_number }));
         orderForKot = data.order as Order;
       }
 
@@ -214,7 +219,7 @@ export default function POSPage() {
       await printKotIfEnabled(orderForKot);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; error?: string } } };
-      toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to place order');
+      toast.error(error.response?.data?.message || error.response?.data?.error || t('pos.placeOrderFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -275,8 +280,8 @@ export default function POSPage() {
       }
 
       const successMsg = pointsEarned > 0
-        ? `Order #${orderData.order.order_number} paid! ${pointsEarned} loyalty points credited.`
-        : `Order #${orderData.order.order_number} paid!`;
+        ? t('pos.orderPaidWithPoints', { number: orderData.order.order_number, points: pointsEarned })
+        : t('pos.orderPaid', { number: orderData.order.order_number });
       toast.success(successMsg);
       if (cart.tableId) heldOrders.removeHeldOrder(cart.tableId);
       cart.clearCart();
@@ -288,7 +293,7 @@ export default function POSPage() {
       await printBillForTenant(paidBill, isPrepaidCheckout);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string; error?: string } } };
-      toast.error(error.response?.data?.message || error.response?.data?.error || 'Failed to process order');
+      toast.error(error.response?.data?.message || error.response?.data?.error || t('pos.processOrderFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -320,7 +325,7 @@ export default function POSPage() {
 
   const handleHoldTable = async (tableId: string) => {
     if (cart.items.length === 0) {
-      toast.error('Cart is empty');
+      toast.error(t('pos.cartEmpty'));
       return;
     }
     const tableName = tables.find((t) => t.id === tableId)?.name || tableId;
@@ -328,11 +333,11 @@ export default function POSPage() {
       await heldOrders.holdOrder(tableId, cart.items, cart.customerId, cart.guestCount, cart.orderNotes);
       cart.clearCart();
       setShowTablePicker(false);
-      toast.success(`Order held for ${tableName}`);
+      toast.success(t('pos.orderHeldFor', { table: tableName }));
       await refreshTables();
     } catch (err: unknown) {
       const e = err as Error;
-      toast.error(e.message || 'Failed to hold order');
+      toast.error(e.message || t('pos.holdOrderFailed'));
     }
   };
 
@@ -342,13 +347,13 @@ export default function POSPage() {
     cart.setOrderType('dine_in');
     cart.setOrderNotes(order.special_instructions || '');
     setPendingOrder(order);
-    toast(`Adding items to order #${order.order_number}. Place order when ready.`, { icon: 'ℹ️' });
+    toast(`${t('pos.addingItemsToOrder', { number: order.order_number })}. ${t('pos.placeOrderReady')}`, { icon: 'ℹ️' });
   };
 
   // Add cart items directly to existing order
   const handleAddCartToOrder = async (table: Table, order: Order) => {
     if (cart.items.length === 0) {
-      toast.error('Cart is empty');
+      toast.error(t('pos.cartEmpty'));
       return;
     }
     setSubmitting(true);
@@ -364,13 +369,13 @@ export default function POSPage() {
         })),
         special_instructions: order.special_instructions || undefined,
       });
-      toast.success(`Items added to order #${order.order_number}`);
+      toast.success(t('pos.itemsAddedToOrder', { number: order.order_number }));
       cart.clearCart();
       setCheckoutTable(null);
       refreshTables();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to add items');
+      toast.error(error.response?.data?.message || t('pos.addItemsFailed'));
     } finally {
       setSubmitting(false);
     }
@@ -497,12 +502,12 @@ export default function POSPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-2xl p-5 w-full max-w-sm">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-lg font-bold">Select Customer</h3>
+              <h3 className="text-lg font-bold">{t('pos.selectCustomer')}</h3>
               <button onClick={() => setShowCustomerPrompt(false)} className="text-gray-400 hover:text-gray-600">
                 <X size={20} />
               </button>
             </div>
-            <p className="text-sm text-gray-500 mb-4">A customer is required before placing an order.</p>
+            <p className="text-sm text-gray-500 mb-4">{t('pos.customerRequiredBeforeOrder')}</p>
             <CustomerSearch onSelected={() => setShowCustomerPrompt(false)} />
           </div>
         </div>

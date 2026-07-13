@@ -1,6 +1,13 @@
 import { create } from 'zustand';
 import api from '@/lib/api';
 import type { User, Tenant } from '@/lib/types';
+import { usePosSettingsStore } from '@/store/pos-settings';
+
+function syncLanguage(tenant: Tenant | null) {
+  if (!tenant?.language) return;
+  const lang = tenant.language === 'es' ? 'es' : 'en';
+  usePosSettingsStore.getState().setLanguage(lang);
+}
 
 interface AuthState {
   user: User | null;
@@ -58,6 +65,7 @@ export const useAuthStore = create<AuthState>((set) => ({
     const { data } = await api.post('/auth/tenants/select', { tenant_id: tenantId });
     localStorage.setItem('token', data.access_token);
     localStorage.setItem('tenant', JSON.stringify(data.tenant));
+    syncLanguage(data.tenant);
     set({
       token: data.access_token,
       currentTenant: data.tenant,
@@ -76,6 +84,7 @@ export const useAuthStore = create<AuthState>((set) => ({
       if (!state.currentTenant) return state;
       const updated = { ...state.currentTenant, ...updates };
       localStorage.setItem('tenant', JSON.stringify(updated));
+      syncLanguage(updated);
       return { currentTenant: updated };
     });
   },
@@ -88,16 +97,20 @@ export const useAuthStore = create<AuthState>((set) => ({
     const token = localStorage.getItem('token');
     const tenantStr = localStorage.getItem('tenant');
     const currentTenant = tenantStr ? JSON.parse(tenantStr) : null;
+    syncLanguage(currentTenant);
 
     if (token) {
       // Fetch user data
       api.get('/auth/me')
         .then(({ data }) => {
+          // Pick the freshly-selected tenant if any, else fall back to local.
+          const tenant = data.tenant || currentTenant;
+          syncLanguage(tenant);
           set({
             user: data.user,
             token,
             tenants: data.tenants,
-            currentTenant,
+            currentTenant: tenant,
             loading: false,
           });
         })

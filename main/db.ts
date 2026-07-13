@@ -786,6 +786,22 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 21,
+    name: 'add_country_profile_settings',
+    up: () => {
+      // Country/locale profile settings — backend now stores language, locale,
+      // tax label/handle, document title, and business tax identity. Frontend
+      // reads these for localization and receipt formatting.
+      insertSettingIfMissing('language', 'en');
+      insertSettingIfMissing('locale', 'en-US');
+      insertSettingIfMissing('tax_id_label', '');
+      insertSettingIfMissing('tax_name', '');
+      insertSettingIfMissing('document_title', 'Receipt');
+      insertSettingIfMissing('business_tax_id', '');
+      insertSettingIfMissing('business_tax_condition', '');
+    },
+  },
 ];
 
 function runMigrations(): void {
@@ -1128,6 +1144,13 @@ function seedCloudSyncDefaults(): void {
   insertSettingIfMissing('cloud_command_polling_enabled', '1');
   insertSettingIfMissing('cloud_connected', 'false');
   insertSettingIfMissing('cloud_registration_status', 'unregistered');
+  insertSettingIfMissing('language', 'en');
+  insertSettingIfMissing('locale', 'en-US');
+  insertSettingIfMissing('tax_id_label', '');
+  insertSettingIfMissing('tax_name', '');
+  insertSettingIfMissing('document_title', 'Receipt');
+  insertSettingIfMissing('business_tax_id', '');
+  insertSettingIfMissing('business_tax_condition', '');
 
   ensureCloudIdentity();
 }
