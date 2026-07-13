@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
 import { IndianRupee, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight } from 'lucide-react';
 import { getCurrencySymbol } from '@/lib/countries';
+import { useI18n } from '@/hooks/useI18n';
 
 interface DailyStats {
   sales: number;
@@ -42,8 +43,13 @@ const orderStatusColor: Record<string, string> = {
   cancelled: 'text-red-500',
 };
 
+function localizeTemplate(template: string, vars: Record<string, string | number>): string {
+  return template.replace(/\{(\w+)\}/g, (_m, k) => String(vars[k] ?? `{${k}}`));
+}
+
 export default function DashboardPage() {
   const { currentTenant } = useAuthStore();
+  const { t } = useI18n();
   const router = useRouter();
   const [stats, setStats] = useState<DailyStats | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
@@ -79,7 +85,7 @@ export default function DashboardPage() {
 
   const tiles = [
     {
-      label: "Today's Sales",
+      label: t('dashboard.todaySales'),
       value: stats?.sales ?? 0,
       icon: IndianRupee,
       color: 'bg-green-50 border-green-200',
@@ -88,7 +94,7 @@ export default function DashboardPage() {
       href: '/orders',
     },
     {
-      label: 'Running Orders',
+      label: t('dashboard.runningOrders'),
       value: stats?.runningOrders ?? 0,
       icon: ChefHat,
       color: 'bg-blue-50 border-blue-200',
@@ -96,7 +102,7 @@ export default function DashboardPage() {
       href: '/orders',
     },
     {
-      label: 'Pending Orders',
+      label: t('dashboard.pendingOrders'),
       value: stats?.pendingOrders ?? 0,
       icon: Clock,
       color: 'bg-yellow-50 border-yellow-200',
@@ -104,7 +110,7 @@ export default function DashboardPage() {
       href: '/orders',
     },
     {
-      label: 'Tables Occupied',
+      label: t('dashboard.tablesOccupied'),
       value: stats?.tablesOccupied ?? 0,
       icon: LayoutGrid,
       color: 'bg-purple-50 border-purple-200',
@@ -116,7 +122,7 @@ export default function DashboardPage() {
   return (
     <div className="p-6">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Dashboard</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
       </div>
 
       {loading ? (
@@ -149,14 +155,14 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">
                   <ClipboardList size={16} className="text-gray-400" />
-                  Recent Orders
+                  {t('dashboard.recentOrders')}
                 </h2>
                 <Link href="/orders" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
-                  View all <ArrowRight size={12} />
+                  {t('dashboard.viewAll')} <ArrowRight size={12} />
                 </Link>
               </div>
               {recentOrders.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">No orders yet</p>
+                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noOrdersYet')}</p>
               ) : (
                 <div className="divide-y divide-gray-50">
                   {recentOrders.map((order) => (
@@ -168,12 +174,12 @@ export default function DashboardPage() {
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium text-gray-900">#{order.order_number}</span>
-                          <span className={`text-xs font-medium capitalize ${orderStatusColor[order.status] || 'text-gray-500'}`}>
-                            {order.status}
+                          <span className={`text-xs font-medium ${orderStatusColor[order.status] || 'text-gray-500'}`}>
+                            {t((`orders.status.${order.status}` as 'orders.status.pending' | 'orders.status.preparing' | 'orders.status.ready' | 'orders.status.served' | 'orders.status.completed' | 'orders.status.cancelled'))}
                           </span>
                         </div>
                         <p className="text-xs text-gray-400 truncate">
-                          {order.customer_name || order.table_name || 'Walk-in'}
+                          {order.customer_name || order.table_name || t('dashboard.walkIn')}
                         </p>
                       </div>
                       <span className="text-sm font-semibold text-gray-900 shrink-0">
@@ -190,21 +196,21 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">
                   <TrendingUp size={16} className="text-gray-400" />
-                  Top Products Today
+                  {t('dashboard.topProductsToday')}
                 </h2>
                 <Link href="/products" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
-                  View all <ArrowRight size={12} />
+                  {t('dashboard.viewAll')} <ArrowRight size={12} />
                 </Link>
               </div>
               {topProducts.length === 0 ? (
-                <p className="px-4 py-6 text-sm text-gray-400 text-center">No sales yet today</p>
+                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
               ) : (
                 <div className="divide-y divide-gray-50">
                   {topProducts.map((product) => (
                     <div key={product.product_id} className="flex items-center justify-between px-4 py-2.5">
                       <div className="min-w-0">
                         <span className="text-sm font-medium text-gray-900">{product.product_name}</span>
-                        <p className="text-xs text-gray-400">{product.total_quantity} sold · {product.order_count} orders</p>
+                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.productSoldOrders'), { quantity: product.total_quantity, orders: product.order_count })}</p>
                       </div>
                       <span className="text-sm font-semibold text-gray-900 shrink-0">
                         {currency}{Number(product.total_revenue).toLocaleString()}

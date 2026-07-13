@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
 import { useTaxPreview } from '@/hooks/use-tax-preview';
+import { useI18n } from '@/hooks/useI18n';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import toast from 'react-hot-toast';
 
@@ -50,6 +51,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const cart = useCartStore();
   const { tax, loading: taxLoading } = useTaxPreview(cart.items, cart.customerId);
   const customer = cart.customer;
+  const { t } = useI18n();
 
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -182,19 +184,19 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const handleConfirm = () => {
     if (!preview) return;
     if (totalPayment < remaining - 0.01) {
-      toast.error('Payment amount is less than balance');
+      toast.error(t('pos.paymentBelowBalance'));
       return;
     }
     if (walletAmt > 0 && walletBalance !== null) {
       const walletPointsRequired = walletAmt * LOYALTY_REDEMPTION_RATE;
       if (walletPointsRequired > walletBalance) {
         const maxCurrency = Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE);
-        toast.error(`Wallet amount exceeds available balance. Max: ${currency}${fmt(maxCurrency)}`);
+        toast.error(t('pos.walletMaxAmount', { max: `${currency}${fmt(maxCurrency)}` }));
         return;
       }
     }
     if (showDiscount && preview.discountAmount > 0 && discountRequiresApproval && !discountPin) {
-      toast.error('Manager PIN required for discounts');
+      toast.error(t('pos.managerPinRequired'));
       return;
     }
 

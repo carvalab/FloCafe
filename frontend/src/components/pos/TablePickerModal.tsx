@@ -1,6 +1,7 @@
 'use client';
 
 import { X } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 import type { Table } from '@/lib/types';
 import { useHeldOrdersStore } from '@/store/held-orders';
 
@@ -15,17 +16,32 @@ interface Props {
   onClose: () => void;
 }
 
-const statusStyles: Record<string, { border: string; badge: string; badgeText: string }> = {
-  available: { border: 'border-gray-200 hover:border-brand/40', badge: '', badgeText: '' },
-  occupied: { border: 'border-orange-300 bg-orange-50', badge: 'bg-orange-500', badgeText: 'Occupied' },
-  reserved: { border: 'border-yellow-300 bg-yellow-50', badge: 'bg-yellow-500', badgeText: 'Reserved' },
-  cleaning: { border: 'border-gray-300 bg-gray-100', badge: 'bg-gray-500', badgeText: 'Cleaning' },
-  held: { border: 'border-blue-400 bg-blue-50', badge: 'bg-blue-500', badgeText: 'HELD' },
+const STATUS_BADGE_KEYS: Record<string, string> = {
+  occupied: 'pos.tableOccupied',
+  reserved: 'pos.tableReserved',
+  cleaning: 'pos.tableCleaning',
+  held: 'pos.tableHeld',
+};
+
+const BORDER_STYLES: Record<string, string> = {
+  available: 'border-gray-200 hover:border-brand/40',
+  occupied: 'border-orange-300 bg-orange-50',
+  reserved: 'border-yellow-300 bg-yellow-50',
+  cleaning: 'border-gray-300 bg-gray-100',
+  held: 'border-blue-400 bg-blue-50',
+};
+
+const BADGE_BG: Record<string, string> = {
+  occupied: 'bg-orange-500',
+  reserved: 'bg-yellow-500',
+  cleaning: 'bg-gray-500',
+  held: 'bg-blue-500',
 };
 
 export default function TablePickerModal({
   tables, selectedTableId, onSelectAvailable, onSelectOccupied, onSelectHeld, onPlaceOrder, onHoldTable, onClose,
 }: Props) {
+  const { t } = useI18n();
   const heldOrders = useHeldOrdersStore();
 
   const handleClick = (table: Table) => {
@@ -50,7 +66,7 @@ export default function TablePickerModal({
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
       <div className="bg-white rounded-2xl p-6 w-full max-w-lg max-h-[80vh] overflow-y-auto">
         <div className="flex justify-between items-center mb-4">
-          <h2 className="text-lg font-bold">Select Table</h2>
+          <h2 className="text-lg font-bold">{t('pos.selectTable')}</h2>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
           </button>
@@ -60,7 +76,7 @@ export default function TablePickerModal({
           {tables.map((table) => {
             const isHeld = heldOrders.hasHeldOrder(table.id);
             const isSelected = selectedTableId === table.id;
-            const style = statusStyles[table.status] || statusStyles.available;
+            const borderClass = BORDER_STYLES[table.status] || BORDER_STYLES.available;
             const isDisabled = table.status === 'cleaning';
 
             return (
@@ -73,21 +89,21 @@ export default function TablePickerModal({
                     ? 'border-brand bg-brand-light'
                     : isHeld
                       ? 'border-blue-400 bg-blue-50'
-                      : style.border
+                      : borderClass
                 } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
               >
                 {isHeld && (
                   <span className="absolute -top-2 -right-2 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold">
-                    HELD
+                    {t('pos.tableHeld')}
                   </span>
                 )}
-                {!isHeld && style.badgeText && (
-                  <span className={`absolute -top-2 -right-2 ${style.badge} text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold`}>
-                    {style.badgeText}
+                {!isHeld && STATUS_BADGE_KEYS[table.status] && (
+                  <span className={`absolute -top-2 -right-2 ${BADGE_BG[table.status]} text-white text-[10px] px-1.5 py-0.5 rounded-full font-bold`}>
+                    {t(STATUS_BADGE_KEYS[table.status])}
                   </span>
                 )}
                 <p className="font-bold text-gray-900">{table.name}</p>
-                <p className="text-xs text-gray-500">{table.capacity} seats</p>
+                <p className="text-xs text-gray-500">{t('pos.tableSeats', { count: table.capacity })}</p>
                 {table.status === 'occupied' && table.current_order && (
                   <p className="text-xs text-orange-600 font-medium mt-1">
                     #{table.current_order.order_number}
@@ -99,7 +115,7 @@ export default function TablePickerModal({
         </div>
 
         {tables.length === 0 && (
-          <p className="text-center text-gray-500 py-8">No tables found</p>
+          <p className="text-center text-gray-500 py-8">{t('pos.noTablesFound')}</p>
         )}
 
         {selectedTableId && (
@@ -108,7 +124,7 @@ export default function TablePickerModal({
               onClick={() => onHoldTable(selectedTableId)}
               className="flex-1 px-4 py-3 rounded-xl border-2 border-gray-200 text-gray-700 font-medium hover:bg-gray-50 transition-colors"
             >
-              Hold Table
+              {t('pos.holdTable')}
             </button>
             <button
               onClick={() => {
@@ -117,7 +133,7 @@ export default function TablePickerModal({
               }}
               className="flex-1 px-4 py-3 rounded-xl bg-brand text-white font-medium hover:bg-brand/90 transition-colors"
             >
-              Place Order
+              {t('pos.placeOrderButton')}
             </button>
           </div>
         )}

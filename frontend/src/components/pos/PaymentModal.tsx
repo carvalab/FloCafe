@@ -9,6 +9,7 @@ import type { Bill } from '@/lib/types';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
+import { useI18n } from '@/hooks/useI18n';
 
 interface Props {
   bill: Bill;
@@ -39,6 +40,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const cartCustomer = useCartStore((s) => s.customer);
   const effectiveCustomerId = bill.customer_id || cartCustomerId || null;
   const { confirm, ConfirmDialog } = useConfirm();
+  const { t } = useI18n();
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: remaining.toString() },
   ]);
@@ -149,12 +151,12 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     if (applyingDiscount) return;
     const val = customVal !== undefined ? customVal : parseFloat(discountValue);
     if (customVal === undefined && (isNaN(val) || val < 0)) {
-      toast.error('Please enter a valid discount value');
+      toast.error(t('pos.discountInvalid'));
       return;
     }
     // Check if PIN is required
     if (discountRequiresApproval && val > 0 && !discountPin) {
-      toast.error('Manager PIN required for discounts');
+      toast.error(t('pos.managerPinRequired'));
       return;
     }
     setApplyingDiscount(true);
@@ -165,7 +167,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         discount_reason: val > 0 ? discountReason || undefined : undefined,
         override_pin: discountRequiresApproval && val > 0 ? discountPin : undefined,
       });
-      toast.success(val === 0 ? 'Discount removed' : 'Discount updated');
+      toast.success(val === 0 ? t('pos.discountRemoved') : t('pos.discountUpdated'));
       setDiscountPin('');
       if (val === 0) {
         setShowDiscount(false);
@@ -191,7 +193,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
 
   const handlePay = async () => {
     if (totalPayment < remaining - 0.01) {
-      toast.error('Payment amount is less than balance');
+      toast.error(t('pos.paymentBelowBalance'));
       return;
     }
     // Validate wallet amount against available balance (convert currency to points for comparison)
@@ -200,7 +202,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       const walletPointsRequired = walletAmt * redemptionRate;
       if (walletPointsRequired > walletBalance) {
         const maxCurrency = Math.floor(walletBalance / redemptionRate);
-        toast.error(`Wallet amount exceeds available balance. Max: ${currency}${fmt(maxCurrency)}`);
+        toast.error(t('pos.walletMaxAmount', { max: `${currency}${fmt(maxCurrency)}` }));
         return;
       }
     }
@@ -218,14 +220,14 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         if (res.data?.loyaltyPointsEarned > 0) pointsEarned = res.data.loyaltyPointsEarned;
       }
       if (pointsEarned > 0) {
-        toast.success(`Payment recorded! ${pointsEarned} loyalty points credited.`);
+        toast.success(t('pos.paymentRecordedWithPoints', { points: pointsEarned }));
       } else {
-        toast.success('Payment recorded!');
+        toast.success(t('pos.paymentRecorded'));
       }
       onPaid();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Payment failed');
+      toast.error(axiosErr.response?.data?.error || t('pos.paymentFailed'));
     } finally {
       setProcessing(false);
     }

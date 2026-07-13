@@ -5,12 +5,22 @@ export type PaperSize = 'thermal58' | 'thermal80' | 'a4' | 'a5';
 export type PrinterPrintMode = 'escpos' | 'browser';
 export type BillTemplate = 'classic' | 'compact' | 'detailed';
 
-interface PosSettingsState {
+function detectInitialLanguage(): 'en' | 'es' {
+  if (typeof navigator === 'undefined') return 'en';
+  const tag = navigator.language?.toLowerCase() ?? '';
+  return tag.startsWith('es') ? 'es' : 'en';
+}
+
+export interface PosSettingsState {
   showProductImages: boolean;
   customerMandatory: boolean;
   phoneDigits: number;
   billingType: 'postpaid' | 'prepaid';
   tablesRequired: boolean;
+  // UI language for i18n routing. Synced from tenant on auth load.
+  // Initial value reads the browser locale; persist middleware overrides
+  // on reload, so user choices persist across sessions.
+  language: 'en' | 'es';
   // Printer settings
   printerPaperSize: PaperSize;
   printerEnabled: boolean;
@@ -38,6 +48,7 @@ interface PosSettingsState {
   setShowProductImages: (show: boolean) => void;
   setCustomerMandatory: (mandatory: boolean) => void;
   setPhoneDigits: (digits: number) => void;
+  setLanguage: (lang: 'en' | 'es') => void;
   setPrinterPaperSize: (size: PaperSize) => void;
   setPrinterEnabled: (enabled: boolean) => void;
   setPrinterPrintMode: (mode: PrinterPrintMode) => void;
@@ -67,6 +78,9 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       showProductImages: true,
       customerMandatory: false,
       phoneDigits: 10,
+      billingType: 'postpaid',
+      tablesRequired: true,
+      language: detectInitialLanguage(),
       // Printer defaults
       printerPaperSize: 'thermal58',
       printerEnabled: false,
@@ -88,13 +102,12 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       billShowAddress: true,
       billShowPhone: true,
       billShowGstn: false,
-      billingType: 'postpaid',
-      tablesRequired: true,
       printerUseUnicode: false,
       // Actions
       setShowProductImages: (show) => set({ showProductImages: show }),
       setCustomerMandatory: (mandatory) => set({ customerMandatory: mandatory }),
       setPhoneDigits: (digits) => set({ phoneDigits: digits }),
+      setLanguage: (language) => set({ language }),
       setPrinterPaperSize: (size) => set({ printerPaperSize: size }),
       setPrinterEnabled: (enabled) => set({ printerEnabled: enabled }),
       setPrinterPrintMode: (mode) => set({ printerPrintMode: mode }),

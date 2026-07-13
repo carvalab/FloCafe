@@ -1,0 +1,17 @@
+import { usePosSettingsStore } from '@/store/pos-settings';
+import { t as translate, type Language } from '@/lib/i18n';
+
+/** Returns the active UI language and a `t(key, params?)` shorthand for the same value. */
+export function useI18n(): {
+  language: Language;
+  t: (key: string, params?: Record<string, string | number>) => string;
+  setLanguage: (lang: Language) => void;
+} {
+  const language = usePosSettingsStore((s) => s.language);
+  const setLanguage = usePosSettingsStore((s) => s.setLanguage);
+  return {
+    language,
+    setLanguage,
+    t: (key: string, params?: Record<string, string | number>) => translate(key, language, params),
+  };
+}

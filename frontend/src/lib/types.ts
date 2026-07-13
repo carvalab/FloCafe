@@ -20,6 +20,11 @@ export interface Tenant {
   plan: string;
   status: string;
   role?: string;
+  language?: string;
+  locale?: string;
+  tax_id_label?: string;
+  tax_name?: string;
+  document_title?: string;
 }
 
 export interface Category {

@@ -7,16 +7,8 @@ import { usePosSettingsStore } from '@/store/pos-settings';
 import { useAuthStore } from '@/store/auth';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getCountryByCode } from '@/lib/countries';
 import type { Customer } from '@/lib/types';
-
-const CURRENCY_DIAL_CODE: Record<string, string> = {
-  INR: '+91', USD: '+1', GBP: '+44', AUD: '+61', CAD: '+1',
-  SGD: '+65', THB: '+66', AED: '+971', MYR: '+60', NZD: '+64',
-  EUR: '+33', IDR: '+62', PHP: '+63', VND: '+84', SAR: '+966',
-  ZAR: '+27', KES: '+254', NGN: '+234', BRL: '+55', MXN: '+52',
-  JPY: '+81', CNY: '+86', KRW: '+82', PKR: '+92', BDT: '+880',
-  LKR: '+94', NPR: '+977',
-};
 
 interface Props {
   onSelected?: () => void;
@@ -62,7 +54,8 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   const cart = useCartStore();
   const { phoneDigits } = usePosSettingsStore();
   const { currentTenant } = useAuthStore();
-  const dialCode = CURRENCY_DIAL_CODE[currentTenant?.currency || ''] || '';
+  const tenantCountry = getCountryByCode(currentTenant?.country ?? '');
+  const dialCode = tenantCountry?.dialCode ?? '';
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [matched, setMatched] = useState<Customer | null>(null);

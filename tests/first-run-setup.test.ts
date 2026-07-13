@@ -179,12 +179,128 @@ async function main() {
   }
 }
 
+// ── Argentina setup coverage ─────────────────────────────────────────────────
+// When the new owner reports country = AR, the backend persists the country
+// profile (locale es-AR, IVA/CUIT) and the demo seed swaps to the Argentina
+// demo — including the hamburger menu and Spanish customer names with +54.
+
+async function runArgentinaSetupCoverage() {
+  console.log('\n🧪 Argentina Setup Coverage');
+  console.log('='.repeat(60));
+
+  const argentinaDir = fs.mkdtempSync(path.join(os.tmpdir(), 'flo-ar-'));
+  const previousCwd = process.cwd();
+  const arMockApp = {
+    isPackaged: true,
+    getPath: (name: string) => {
+      if (name === 'userData') return argentinaDir;
+      if (name === 'documents') return argentinaDir;
+      return argentinaDir;
+    },
+    getVersion: () => 'test',
+  };
+  const arModuleLoad = function (request: string, parent: unknown, isMain: boolean) {
+    if (request === 'electron') return { app: arMockApp };
+    return originalLoad.apply(this, arguments as any);
+  };
+  Module._load = arModuleLoad;
+
+  try {
+    initDatabase();
+  } catch (error: any) {
+    if (isNativeAbiMismatch(error)) {
+      console.log('   ⚠ Skipping: better-sqlite3 is not built for this shell Node ABI.');
+      Module._load = originalLoad;
+      fs.rmSync(argentinaDir, { recursive: true, force: true });
+      return;
+    }
+    throw error;
+  }
+
+  const arApp = express();
+  arApp.use(express.json());
+  arApp.use('/api/auth', authRoutes);
+  const arServer = await listen(arApp);
+  const arAddress = arServer.address() as { port: number };
+  const arBaseUrl = `http://127.0.0.1:${arAddress.port}/api/auth`;
+
+  try {
+    const arFirst = await request(arBaseUrl, '/setup/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'AR Owner',
+        email: 'ar@owner.com',
+        password: 'x',
+        business_type: 'restaurant',
+        business_name: 'Burger AR',
+        setup_profile: 'demo',
+        service_model: 'finedine',
+        country: 'AR',
+        currency: 'ARS',
+        timezone: 'America/Argentina/Buenos_Aires',
+        language: 'es',
+        locale: 'es-AR',
+        tax_id_label: 'CUIT',
+        tax_name: 'IVA',
+        document_title: 'Comprobante',
+        terms_accepted: true,
+      }),
+    });
+    assert.equal(arFirst.status, 200);
+    assert.equal(setting('country'), 'AR');
+    assert.equal(setting('currency'), 'ARS');
+    assert.equal(setting('locale'), 'es-AR');
+    assert.equal(setting('tax_id_label'), 'CUIT');
+    assert.equal(setting('tax_name'), 'IVA');
+    assert.equal(setting('document_title'), 'Comprobante');
+
+    // Demo Argentina uses the burger menu and Spanish Argentina customer
+    // names. The legacy India demo rows must not be present.
+    const hamburgerRow = getDatabase().prepare("SELECT id FROM products WHERE id = 'prod-demo-hamburguesa-clasica'").get();
+    assert.ok(hamburgerRow, 'Argentina demo seeds the burger menu');
+    const butterChicken = getDatabase().prepare("SELECT id FROM products WHERE id = 'prod-demo-butter-chicken'").get();
+    assert.equal(butterChicken, undefined, 'Argentina demo does NOT seed the India demo menu');
+    const sofia = getDatabase().prepare("SELECT id, country_code FROM customers WHERE id = 'cust-demo-1'").get() as { id: string; country_code: string } | undefined;
+    assert.equal(sofia?.country_code, '+54', 'Argentina demo customers use +54 country code');
+    console.log('   ✓ Argentina setup persists country profile + Argentina demo');
+
+    const arSecond = await request(arBaseUrl, '/setup/initialize', {
+      method: 'POST',
+      body: JSON.stringify({
+        name: 'Second AR Owner',
+        email: 'ar2@owner.com',
+        password: 'x',
+        business_type: 'restaurant',
+        terms_accepted: true,
+        country: 'AR',
+      }),
+    });
+    assert.equal(arSecond.status, 403, 'AR setup also rejects second owner');
+    console.log('   ✓ AR setup endpoint is disabled after the first user exists');
+  } finally {
+    await new Promise<void>((resolve) => arServer.close(() => resolve()));
+    closeDatabase();
+    Module._load = originalLoad;
+    fs.rmSync(argentinaDir, { recursive: true, force: true });
+    // Restore cwd so other tests don't inherit our temp dir.
+    try { process.chdir(previousCwd); } catch { /* best effort */ }
+  }
+}
+
 main()
-  .then(() => {
+  .then(async () => {
     closeDatabase();
     Module._load = originalLoad;
     fs.rmSync(testDir, { recursive: true, force: true });
     console.log('\n✅ First-run setup tests passed');
+    // Run the Argentina coverage in its own DB after the legacy setup test
+    // finishes and cleanup runs, so they share no state.
+    try {
+      await runArgentinaSetupCoverage();
+    } catch (error) {
+      console.error('Argentina setup coverage failed:', error);
+      process.exit(1);
+    }
   })
   .catch((error) => {
     try { closeDatabase(); } catch { }

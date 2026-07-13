@@ -135,6 +135,9 @@ const fixtureBusiness = {
   address: '42 MG Road, Bengaluru 560001',
   phone: '+91 98765 43210',
   gstin: '29AAAAA0000A1Z5',
+  country: 'IN',
+  tax_id_label: 'GSTIN',
+  document_title: 'TAX INVOICE',
 };
 
 console.log('🧪 FloDesktop Printer Tests');
