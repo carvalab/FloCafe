@@ -9,7 +9,7 @@ import toast from 'react-hot-toast';
 
 export default function RegisterPage() {
   const router = useRouter();
-  const { register, selectTenant, tenants } = useAuthStore();
+  const { register, selectTenant } = useAuthStore();
   const [loading, setLoading] = useState(false);
 
   const [form, setForm] = useState({

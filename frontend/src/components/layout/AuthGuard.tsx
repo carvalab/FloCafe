@@ -5,7 +5,7 @@ import { useRouter, usePathname } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
 
-export function getLandingPage(role?: string, businessType?: string): string {
+export function getLandingPage(): string {
   return '/pos';
 }
 

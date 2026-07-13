@@ -56,7 +56,7 @@ function LoginContent() {
     if (searchParams.get('select_tenant') === 'true' && user) {
       setShowTenantSelect(true);
     }
-  }, [user, tenants, currentTenant, router, searchParams]);
+  }, [user, tenants, currentTenant, router, searchParams, handleTenantSelect]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();

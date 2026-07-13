@@ -23,7 +23,7 @@ export default function StatusBar() {
         const data = await window.electronAPI.getStatus();
         setStatus(data);
         setError(null);
-      } catch (err) {
+      } catch {
         setError('Failed to get status');
       }
     }

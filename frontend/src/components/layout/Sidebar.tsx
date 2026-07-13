@@ -78,7 +78,7 @@ export default function AppSidebar() {
             <SidebarMenuButton size="lg" asChild>
               <Link href={homeHref}>
                 <div className="flex aspect-square size-8 shrink-0 items-center justify-center rounded-md bg-sidebar overflow-hidden">
-                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  { }
                   <img src="/logo.png" alt="Flo Cafe" className="w-6 h-6 object-contain" />
                 </div>
                 <div className="flex flex-col gap-0.5 min-w-0 leading-none">

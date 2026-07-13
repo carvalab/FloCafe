@@ -27,7 +27,7 @@ export default function ImageUploader({ value, onChange, productId }: ImageUploa
   const [aspect] = useState(1); // Always 1:1
   const [urlInput, setUrlInput] = useState('');
   const [fetching, setFetching] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const cropAreaRef = useRef<{ x: number; y: number; width: number; height: number }>({ x: 0, y: 0, width: 0, height: 0 });
 

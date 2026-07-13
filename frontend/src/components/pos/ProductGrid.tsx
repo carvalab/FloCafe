@@ -114,7 +114,7 @@ export default function ProductGrid({
             const inCartQty = cart.items
               .filter((i) => i.product.id === product.id)
               .reduce((sum, i) => sum + i.quantity, 0);
-            const bgColor = firstTagBg(product.tags);
+            
 
             return (
               <div

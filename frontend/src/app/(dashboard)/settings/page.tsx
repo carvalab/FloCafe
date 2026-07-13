@@ -159,7 +159,7 @@ export default function SettingsPage() {
     if (action === 'health-check') runHealthCheck();
     else if (action === 'initialize-db') setInitializeDbOpen(true);
     else if (action === 'master-pin') setPinGate({ mode: 'set' });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, []);
 
   const applySafeFixes = async () => {

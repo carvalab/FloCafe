@@ -55,7 +55,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [discountType, setDiscountType] = useState<'percentage' | 'amount'>('percentage');
   const [discountValue, setDiscountValue] = useState('');
   const [discountReason, setDiscountReason] = useState('');
-  const [discountApplied, setDiscountApplied] = useState(false);
+
   const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
   const [discountPin, setDiscountPin] = useState('');
   const [applyingDiscount, setApplyingDiscount] = useState(false);
@@ -137,7 +137,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const totalPayment = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0) + walletAmt;
 
   const hasCash = payments.some((p) => p.method === 'cash');
-  const totalCashEntered = payments.filter((p) => p.method === 'cash').reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+
   const change = hasCash && totalPayment > remaining + 0.009
     ? parseFloat((totalPayment - remaining).toFixed(2))
     : 0;
@@ -159,7 +159,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     }
     setApplyingDiscount(true);
     try {
-      const res = await api.patch(`/orders/${bill.order_id}/discount`, {
+      await api.patch(`/orders/${bill.order_id}/discount`, {
         discount_type: discountType,
         discount_value: val,
         discount_reason: val > 0 ? discountReason || undefined : undefined,

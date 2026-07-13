@@ -3,9 +3,6 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import toast from 'react-hot-toast';
 import { Plus, X, Edit, RotateCcw } from 'lucide-react';
 import type { Staff } from '@/lib/types';
@@ -30,7 +27,7 @@ const roleColors: Record<string, string> = {
 
 export default function StaffPage() {
   const [staff, setStaff] = useState<Staff[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [showResetPw, setShowResetPw] = useState(false);
