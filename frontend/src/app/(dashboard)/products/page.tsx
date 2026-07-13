@@ -68,7 +68,7 @@ export default function ProductsPage() {
   const [addonForm, setAddonForm] = useState({ name: '', description: '', is_required: false, min_selection: 0, max_selection: 10 });
   const [showAddonModal, setShowAddonModal] = useState(false);
   const [editingAddon, setEditingAddon] = useState<{ id?: number; name: string; price: string } | null>(null);
-  const [addonList, setAddonList] = useState<{ id?: number; name: string; price: number }[]>([]);
+  const [addonList, setAddonList] = useState<{ id?: number; name: string; price: number; is_active?: boolean }[]>([]);
   const [form, setForm] = useState({
     name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '',
     tax_type: 'inclusive', tax_rate: '5', description: '',
@@ -330,7 +330,7 @@ export default function ProductsPage() {
   const openEditAddonGroup = (group: AddonGroup) => {
     setEditingAddonGroup(group);
     setAddonForm({ name: group.name, description: group.description || '', is_required: group.is_required, min_selection: group.min_selection, max_selection: group.max_selection });
-    setAddonList(group.addons?.map((a) => ({ id: a.id, name: a.name, price: a.price })) || []);
+    setAddonList(group.addons?.map((a) => ({ id: a.id, name: a.name, price: a.price, is_active: a.is_active })) || []);
     setShowAddonModal(true);
   };
 
