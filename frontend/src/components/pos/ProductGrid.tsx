@@ -124,6 +124,11 @@ export default function ProductGrid({
                 onClick={() => onProductClick(product)}
                 className="bg-white rounded-xl p-2.5 border border-gray-100 hover:border-brand/40 hover:shadow-md transition-all text-left relative group cursor-pointer overflow-hidden"
               >
+                {product.track_inventory && product.stock_quantity <= (product.low_stock_threshold || 0) && (
+                  <span className="absolute top-2 left-2 bg-red-100 text-red-700 text-[10px] font-bold px-2 py-0.5 rounded-full z-10 shadow-sm border border-red-200 pointer-events-none">
+                    {t('pos.lowStock')}
+                  </span>
+                )}
                 {inCartQty > 0 && (
                   <span className="absolute top-0 right-0 bg-brand text-white text-xs w-6 h-6 rounded-bl-lg flex items-center justify-center font-bold z-10">
                     {inCartQty}

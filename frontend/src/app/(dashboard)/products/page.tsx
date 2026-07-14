@@ -685,6 +685,13 @@ export default function ProductsPage() {
                   <span className="text-sm text-gray-700">{t('products.fieldActive')}</span>
                 </label>
               </div>
+              {form.track_inventory && (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldStock')}</label>
+                  <input type="number" min="0" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
+                </div>
+              )}
               <Button type="submit" className="w-full">
                 {editingProduct ? t('products.updateProduct') : t('products.createProduct')}
               </Button>
