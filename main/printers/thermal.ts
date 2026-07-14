@@ -919,7 +919,8 @@ const CURRENCY_ASCII_MAP: Record<string, string> = {
   '₹': 'Rs', '₨': 'Rs', '€': 'Eu', '£': 'Pd', '¥': 'Yn',
   '₩': 'Kw', '₺': 'Tl', '₫': 'Vd', '₪': 'Ns', '₽': 'Rb',
   '฿': 'Bh', '₱': 'Ph', '₴': 'Uh', '₦': 'Ng', '₵': 'Gh',
-  '₡': 'Cr', '₲': 'Pg',
+  '₡': 'Cr', '₲': 'Pg', 'د.إ': 'Dh', '﷼': 'Rl', '৳': 'Tk',
+  'E£': 'Ep',
 };
 
 // Resolves the currency symbol into the exact text that will be printed,

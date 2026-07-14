@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import { IndianRupee, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight } from 'lucide-react';
+import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight } from 'lucide-react';
 import { getCurrencySymbol } from '@/lib/countries';
 import { useI18n } from '@/hooks/useI18n';
 
@@ -87,7 +87,7 @@ export default function DashboardPage() {
     {
       label: t('dashboard.todaySales'),
       value: stats?.sales ?? 0,
-      icon: IndianRupee,
+      icon: Banknote,
       color: 'bg-green-50 border-green-200',
       iconColor: 'text-green-600',
       prefix: currency,
