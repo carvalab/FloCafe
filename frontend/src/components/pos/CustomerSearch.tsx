@@ -7,16 +7,9 @@ import { usePosSettingsStore } from '@/store/pos-settings';
 import { useAuthStore } from '@/store/auth';
 import { X } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { getCountryByCode } from '@/lib/countries';
 import type { Customer } from '@/lib/types';
-
-const CURRENCY_DIAL_CODE: Record<string, string> = {
-  INR: '+91', USD: '+1', GBP: '+44', AUD: '+61', CAD: '+1',
-  SGD: '+65', THB: '+66', AED: '+971', MYR: '+60', NZD: '+64',
-  EUR: '+33', IDR: '+62', PHP: '+63', VND: '+84', SAR: '+966',
-  ZAR: '+27', KES: '+254', NGN: '+234', BRL: '+55', MXN: '+52',
-  JPY: '+81', CNY: '+86', KRW: '+82', PKR: '+92', BDT: '+880',
-  LKR: '+94', NPR: '+977',
-};
+import { useI18n } from '@/hooks/useI18n';
 
 interface Props {
   onSelected?: () => void;
@@ -62,7 +55,9 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
   const cart = useCartStore();
   const { phoneDigits } = usePosSettingsStore();
   const { currentTenant } = useAuthStore();
-  const dialCode = CURRENCY_DIAL_CODE[currentTenant?.currency || ''] || '';
+  const tenantCountry = getCountryByCode(currentTenant?.country ?? '');
+  const dialCode = tenantCountry?.dialCode ?? '';
+  const { t } = useI18n();
   const [phone, setPhone] = useState('');
   const [name, setName] = useState('');
   const [matched, setMatched] = useState<Customer | null>(null);
@@ -163,11 +158,11 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
       const { data } = await api.post('/customers', { name: name.trim(), phone });
       cart.setCustomer(data.customer);
       setPhone(''); setName(''); setMatched(null); setSearched(false);
-      toast.success('Customer created');
+      toast.success(t('pos.customerCreated'));
       onSelected?.();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to create customer');
+      toast.error(error.response?.data?.message || t('pos.createCustomerFailed'));
     } finally {
       setCreating(false);
     }
@@ -224,7 +219,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             onChange={handlePhoneChange}
             onFocus={handlePhoneFocus}
             onKeyDown={handlePhoneKeyDown}
-            placeholder="Phone"
+            placeholder={t('pos.phone')}
             className="h-10 w-44 shrink-0 px-3 text-sm border border-amber-400 bg-amber-50 placeholder:text-amber-600/70 rounded-lg focus:ring-2 focus:ring-amber-200 focus:border-amber-500 outline-none"
           />
           <input
@@ -238,7 +233,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
               else handleCreate();
             }}
             readOnly={!!matched}
-            placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
+            placeholder={searched ? (matched ? '' : t('pos.enterName')) : t('pos.nameAutoFills')}
             className={`h-10 w-48 shrink-0 px-3 text-sm border rounded-lg focus:ring-2 outline-none transition-colors duration-150 ${
               matched
                 ? 'border-gray-200 bg-gray-50 cursor-pointer focus:ring-brand/20 focus:border-brand'
@@ -268,9 +263,9 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
         {searched && (
           <div className="absolute left-0 top-full mt-1 z-20 rounded-md border border-gray-100 bg-white px-2 py-1 shadow-sm">
             {matched ? (
-              <span className="text-xs text-green-600 font-medium">Customer found</span>
+              <span className="text-xs text-green-600 font-medium">{t('pos.customerFound')}</span>
             ) : (
-              <span className="text-xs text-red-500 font-medium">New customer — enter name</span>
+              <span className="text-xs text-red-500 font-medium">{t('pos.newCustomerEnterName')}</span>
             )}
           </div>
         )}
@@ -288,7 +283,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
           value={phone}
           onChange={handlePhoneChange}
           onKeyDown={handlePhoneKeyDown}
-          placeholder="Phone"
+          placeholder={t('pos.phone')}
           className={`${baseInput} w-full py-2`}
         />
         <input
@@ -302,7 +297,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             else handleCreate();
           }}
           readOnly={!!matched}
-          placeholder={searched ? (matched ? '' : 'Enter name') : 'Name auto-fills'}
+          placeholder={searched ? (matched ? '' : t('pos.enterName')) : t('pos.nameAutoFills')}
           className={`${baseInput} w-full py-2 ${matched ? 'bg-gray-50 cursor-pointer' : ''}`}
           onClick={matched ? handleSelectMatched : undefined}
         />
@@ -312,7 +307,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
         <div className="space-y-1.5">
           {matched ? (
             <>
-              <p className="text-xs text-green-600 font-medium">Customer found — click name to select</p>
+              <p className="text-xs text-green-600 font-medium">{t('pos.customerFoundClick')}</p>
               {matched.tag_counts && <TagBadges counts={matched.tag_counts} />}
               <button
                 onClick={handleSelectMatched}
@@ -323,7 +318,7 @@ export default function CustomerSearch({ onSelected, variant = 'default' }: Prop
             </>
           ) : (
             <>
-              <p className="text-xs text-red-500 font-medium">New customer — enter name to add</p>
+              <p className="text-xs text-red-500 font-medium">{t('pos.newCustomerEnterName')}</p>
               {name.trim() && (
                 <button
                   onClick={handleCreate}

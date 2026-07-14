@@ -17,6 +17,7 @@ import { useHeldOrdersStore } from '@/store/held-orders';
 import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
+import { useI18n } from '@/hooks/useI18n';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; label: string }> = {
   pending: { dot: 'bg-yellow-400', color: 'text-yellow-700', label: 'Waiting' },
@@ -26,22 +27,29 @@ const itemStatusConfig: Record<string, { dot: string; color: string; label: stri
   cancelled: { dot: 'bg-red-400', color: 'text-red-500', label: 'Cancelled' },
 };
 
-const orderStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending' },
-  preparing: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Preparing' },
-  ready: { bg: 'bg-green-100', text: 'text-green-700', label: 'Ready' },
-  served: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Served' },
-  completed: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Completed' },
-  cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' },
+const orderStatusBadge: Record<string, { bg: string; text: string; labelKey: string }> = {
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', labelKey: 'orders.pending' },
+  preparing: { bg: 'bg-blue-100', text: 'text-blue-700', labelKey: 'orders.preparing' },
+  ready: { bg: 'bg-green-100', text: 'text-green-700', labelKey: 'orders.ready' },
+  served: { bg: 'bg-purple-100', text: 'text-purple-700', labelKey: 'orders.served' },
+  completed: { bg: 'bg-gray-100', text: 'text-gray-600', labelKey: 'orders.completed' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', labelKey: 'orders.cancelled' },
 };
 
-const paymentStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
-  paid: { bg: 'bg-green-100', text: 'text-green-700', label: 'Paid' },
-  partial: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Partially Paid' },
-  unpaid: { bg: 'bg-red-100', text: 'text-red-700', label: 'Unpaid' },
+const paymentStatusBadge: Record<string, { bg: string; text: string; labelKey: string }> = {
+  paid: { bg: 'bg-green-100', text: 'text-green-700', labelKey: 'orders.paid' },
+  partial: { bg: 'bg-amber-100', text: 'text-amber-700', labelKey: 'orders.partiallyPaid' },
+  unpaid: { bg: 'bg-red-100', text: 'text-red-700', labelKey: 'orders.unpaidBadge' },
 };
 
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
+
+const tabLabelKey: Record<FilterType, string> = {
+  all: 'orders.all',
+  active: 'orders.active',
+  unpaid: 'orders.unpaidBadge',
+  held: 'orders.held',
+};
 
 // Consolidated state types
 interface Filters {
@@ -72,6 +80,7 @@ export default function OrdersPage() {
   const router = useRouter();
   const cartStore = useCartStore();
   const { setTablesRequired, autoPrintBill } = usePosSettingsStore();
+  const { t } = useI18n();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -132,7 +141,7 @@ export default function OrdersPage() {
         }
       });
     } catch {
-      toast.error('Failed to load orders');
+      toast.error(t('orders.loadOrdersFailed'));
     } finally {
       setLoading(false);
     }
@@ -261,7 +270,7 @@ export default function OrdersPage() {
 
     cartStore.clearCart();
     cartStore.setCustomer(order.customer);
-    
+
     const posOrderType = (order.type === 'dine_in' || order.type === 'takeaway' || order.type === 'delivery')
       ? order.type
       : 'takeaway';
@@ -299,14 +308,14 @@ export default function OrdersPage() {
     setLinkingCustomer(true);
     try {
       await api.patch(`/orders/${orderId}/customer`, { customer_id: customerId });
-      toast.success('Customer linked');
+      toast.success(t('orders.customerLinked'));
       setLinkCustomerOrderId(null);
       setLinkCustomerSearch('');
       setLinkCustomerResults([]);
       fetchOrders();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error.response?.data?.error || 'Failed to link customer');
+      toast.error(error.response?.data?.error || t('orders.linkCustomerFailed'));
     } finally {
       setLinkingCustomer(false);
     }
@@ -349,7 +358,7 @@ export default function OrdersPage() {
       setPaymentBill(data.bill);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { message?: string } } };
-      toast.error(error.response?.data?.message || 'Failed to generate bill');
+      toast.error(error.response?.data?.message || t('orders.generateBillFailed'));
     } finally {
       setGeneratingBill(null);
     }
@@ -382,7 +391,7 @@ export default function OrdersPage() {
   const handlePrint = async (billId: number) => {
     const order = orders.find((o) => o.bill?.id === billId);
     if (!order?.bill) {
-      toast.error('Bill not found');
+      toast.error(t('orders.billNotFound'));
       return;
     }
     const isReprint = (printHistory[billId]?.length ?? 0) > 0;
@@ -396,11 +405,11 @@ export default function OrdersPage() {
         { isReprint }
       );
       await api.post(`/bills/${billId}/print`, { print_type: isReprint ? 'reprint' : 'receipt' });
-      toast.success(isReprint ? 'Receipt reprinted successfully' : 'Receipt printed successfully');
+      toast.success(isReprint ? t('orders.printReceiptReprint') : t('orders.printReceipt'));
       fetchPrintHistory(billId);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : 'check printer connection';
-      toast.error(`Failed to print receipt: ${msg}`);
+      toast.error(`${t('orders.printReceiptFailed')}: ${msg}`);
     } finally {
       setPrintingBillId(null);
       setConfirmPrintBillId(null);
@@ -409,17 +418,17 @@ export default function OrdersPage() {
 
   const deleteItem = async (orderId: number, itemId: number) => {
     if (!isOwnerOrManager) {
-      toast.error('Only owners and managers can remove items');
+      toast.error(t('orders.onlyOwnersRemove'));
       return;
     }
-    if (!await confirm('Remove this item?', { destructive: true, confirmLabel: 'Remove' })) return;
+    if (!await confirm(t('orders.removeItemConfirm'), { destructive: true, confirmLabel: 'Remove' })) return;
     try {
       await api.patch(`/orders/${orderId}/items/${itemId}/cancel`, { reason: 'Removed by manager' });
-      toast.success('Item removed');
+      toast.success(t('orders.itemRemoved'));
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to remove item');
+      toast.error(axiosErr.response?.data?.error || t('orders.removeItemFailed'));
     }
   };
 
@@ -427,21 +436,21 @@ export default function OrdersPage() {
     if (!isOwnerOrManager) return;
     try {
       await api.patch(`/orders/${orderId}/items/${itemId}/restore`);
-      toast.success('Item restored');
+      toast.success(t('orders.itemRestored'));
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to restore item');
+      toast.error(axiosErr.response?.data?.error || t('orders.restoreItemFailed'));
     }
   };
 
   const handleWhatsAppShare = (order: Order) => {
     if (!order.bill) {
-      toast.error('Bill not found');
+      toast.error(t('orders.billNotFound'));
       return;
     }
     if (!order.customer?.phone) {
-      toast.error('Customer phone number not available');
+      toast.error(t('orders.customerPhoneMissing'));
       return;
     }
 
@@ -452,7 +461,7 @@ export default function OrdersPage() {
         { business_name: currentTenant?.business_name || 'Store', currency: currentTenant?.currency || 'INR' }
       );
     } catch {
-      toast.error('Failed to open WhatsApp');
+      toast.error(t('orders.whatsappFailed'));
     }
   };
 
@@ -472,11 +481,11 @@ export default function OrdersPage() {
         discount_reason: discountModal.reason || undefined,
         override_pin: discountRequiresApproval && discountModal.value > 0 ? discountPin : undefined,
       });
-      toast.success('Discount applied successfully');
+      toast.success(t('orders.discountApplied'));
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to apply discount');
+      toast.error(axiosErr.response?.data?.error || t('orders.discountFailed'));
     } finally {
       setDiscountModal(null);
     }
@@ -488,15 +497,15 @@ export default function OrdersPage() {
 
   const handleConvertToTakeaway = async (order: Order) => {
     const tableNote = order.table ? ` and free table ${order.table.name}` : '';
-    if (!await confirm(`Convert order #${order.order_number} to takeaway${tableNote}?`)) return;
+    if (!await confirm(t('orders.convertToTakeawayConfirm', { number: order.order_number, tableNote }))) return;
     setConvertingOrderId(order.id);
     try {
       await api.patch(`/orders/${order.id}/convert-to-takeaway`);
-      toast.success('Order converted to takeaway');
+      toast.success(t('orders.orderConvertedTakeaway'));
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to convert order');
+      toast.error(axiosErr.response?.data?.error || t('orders.convertOrderFailed'));
     } finally {
       setConvertingOrderId(null);
     }
@@ -510,12 +519,13 @@ export default function OrdersPage() {
         const { data } = await api.get('/products', { params: { per_page: 200 } });
         setProducts(data.products || []);
       } catch {
-        toast.error('Failed to load menu items');
+        toast.error(t('orders.menuLoadFailed'));
       }
     };
     fetchProducts();
     setSelectedItems([]);
     setProductSearch('');
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [addItemsOrder]);
 
   const handleAddItemToSelection = (product: Product) => {
@@ -552,12 +562,12 @@ export default function OrdersPage() {
           special_instructions: i.special_instructions || undefined,
         })),
       });
-      toast.success(`Added ${selectedItems.length} item(s) to order`);
+      toast.success(t('orders.itemsAdded', { count: selectedItems.length }));
       setAddItemsOrder(null);
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to add items');
+      toast.error(axiosErr.response?.data?.error || t('orders.addItemsFailed'));
     } finally {
       setAddingItems(false);
     }
@@ -574,11 +584,11 @@ export default function OrdersPage() {
         free_table: cancelModal.freeTable,
         override_pin: cancelModal.overridePin || undefined,
       });
-      toast.success('Order cancelled successfully');
+      toast.success(t('orders.orderCancelled'));
       fetchOrders();
     } catch (err: unknown) {
       const axiosErr = err as { response?: { data?: { error?: string } } };
-      toast.error(axiosErr.response?.data?.error || 'Failed to cancel order');
+      toast.error(axiosErr.response?.data?.error || t('orders.cancelOrderFailed'));
     } finally {
       setCancellingOrderId(null);
       setCancelModal(null);
@@ -603,19 +613,19 @@ export default function OrdersPage() {
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('nav.orders')}</h1>
         <div className="flex gap-2">
           {(['all', 'active', 'unpaid', 'held'] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setTabFilter(f)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium ${
                 tabFilter === f
                   ? 'bg-brand text-white'
                   : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
               }`}
             >
-              {f}
+              {t(tabLabelKey[f])}
             </button>
           ))}
         </div>
@@ -628,7 +638,7 @@ export default function OrdersPage() {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
           <input
             type="text"
-            placeholder="Search by order number..."
+            placeholder={t('orders.search')}
             value={filters.search}
             onChange={(e) => setFilters(prev => ({ ...prev, search: e.target.value }))}
             className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand bg-white"
@@ -641,7 +651,7 @@ export default function OrdersPage() {
           onChange={(e) => setFilters(prev => ({ ...prev, table: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
-          <option value="">All Tables</option>
+          <option value="">{t('orders.allTables')}</option>
           {tables.map((table: Table) => (
             <option key={table.id} value={String(table.id)}>
               {table.name}
@@ -655,11 +665,11 @@ export default function OrdersPage() {
           onChange={(e) => setFilters(prev => ({ ...prev, type: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
-          <option value="">All Types</option>
-          <option value="dine_in">Dine In</option>
-          <option value="takeaway">Takeaway</option>
-          <option value="delivery">Delivery</option>
-          <option value="online">Online</option>
+          <option value="">{t('orders.allTypes')}</option>
+          <option value="dine_in">{t('orders.dineIn')}</option>
+          <option value="takeaway">{t('orders.takeaway')}</option>
+          <option value="delivery">{t('orders.delivery')}</option>
+          <option value="online">{t('orders.online')}</option>
         </select>
 
         {/* Status filter */}
@@ -668,10 +678,10 @@ export default function OrdersPage() {
           onChange={(e) => setFilters(prev => ({ ...prev, status: e.target.value }))}
           className="px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand"
         >
-          <option value="">All Statuses</option>
-          <option value="active">Active</option>
-          <option value="completed">Completed</option>
-          <option value="cancelled">Cancelled</option>
+          <option value="">{t('orders.allStatuses')}</option>
+          <option value="active">{t('orders.active')}</option>
+          <option value="completed">{t('orders.completed')}</option>
+          <option value="cancelled">{t('orders.cancelled')}</option>
         </select>
       </div>
 
@@ -683,7 +693,7 @@ export default function OrdersPage() {
           </div>
         ) : Object.keys(heldOrdersStore.orders).length === 0 ? (
           <div className="flex items-center justify-center flex-1 text-gray-400">
-            <p>No held orders found</p>
+            <p>{t('orders.heldEmpty')}</p>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start items-start auto-rows-max">
@@ -694,7 +704,7 @@ export default function OrdersPage() {
                      <p className="font-bold text-gray-900">{tables.find(t => t.id === heldOrder.tableId)?.name || 'Table'}</p>
                      <p className="text-xs text-gray-500">{new Date(heldOrder.heldAt).toLocaleTimeString()}</p>
                    </div>
-                   <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">HELD</span>
+                   <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">{t('orders.held')}</span>
                  </div>
                  <div className="p-4 flex-1">
                    {heldOrder.items.map((item, idx) => (
@@ -716,19 +726,19 @@ export default function OrdersPage() {
                         cartStore.setOrderType('dine_in');
                         router.push('/pos');
                       } else {
-                        toast.error('Could not resume order');
+                        toast.error(t('orders.resumeFailed'));
                       }
-                    }} variant="default" className="flex-1 bg-brand hover:bg-brand/90 text-white">Resume in POS</Button>
+                    }} variant="default" className="flex-1 bg-brand hover:bg-brand/90 text-white">{t('orders.resumeInPos')}</Button>
                     <Button onClick={async () => {
-                      if (await confirm('Are you sure you want to delete this held order?', { destructive: true })) {
+                      if (await confirm(t('orders.deleteHeldConfirm'), { destructive: true })) {
                         try {
                           await heldOrdersStore.removeHeldOrder(heldOrder.tableId);
-                          toast.success('Held order removed');
+                          toast.success(t('orders.heldOrderRemoved'));
                         } catch {
-                          toast.error('Failed to remove held order');
+                          toast.error(t('orders.removeHeldOrderFailed'));
                         }
                       }
-                    }} variant="outline" className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50">Delete</Button>
+                    }} variant="outline" className="flex-1 text-red-600 hover:text-red-700 hover:bg-red-50">{t('orders.delete')}</Button>
                  </div>
               </div>
             ))}
@@ -740,7 +750,7 @@ export default function OrdersPage() {
         </div>
       ) : filteredOrders.length === 0 ? (
         <div className="flex items-center justify-center flex-1 text-gray-400">
-          <p>No orders found</p>
+          <p>{t('orders.empty')}</p>
         </div>
       ) : (
         <div className="flex-1 overflow-y-auto grid grid-cols-1 lg:grid-cols-2 2xl:grid-cols-3 gap-4 content-start items-start auto-rows-max">
@@ -768,9 +778,9 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
                     <span className="font-bold text-gray-900">#{order.order_number}</span>
                     {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{t(badge.labelKey)}</span>
                     ) : null; })()}
-                    <span className="text-sm text-gray-500 capitalize">{order.type.replace('_', ' ')}</span>
+                    <span className="text-sm text-gray-500 capitalize">{t(`orders.${order.type}`)}</span>
                     {order.table && (
                       <span className="text-sm text-orange-600 font-medium">{order.table.name}</span>
                     )}
@@ -782,7 +792,7 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {payBadge && (
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}>
-                        {payBadge.label}
+                        {t(payBadge.labelKey)}
                       </span>
                     )}
                     {paid && order.customer?.phone && (
@@ -845,7 +855,7 @@ export default function OrdersPage() {
                             setLinkCustomerSearch(e.target.value);
                             searchCustomersForLink(e.target.value);
                           }}
-                          placeholder="Search by phone or name..."
+                          placeholder={t('orders.searchCustomer')}
                           className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none"
                           autoFocus
                         />
@@ -961,8 +971,8 @@ export default function OrdersPage() {
                     </div>
                     {bill && payStatus === 'partial' && (
                       <div className="flex justify-between text-xs text-gray-500 pt-0.5">
-                        <span>Paid {currency}{Number(bill.paid_amount).toLocaleString()}</span>
-                        <span>Balance {currency}{Number(bill.balance).toLocaleString()}</span>
+                        <span>{t('orders.paid')} {currency}{Number(bill.paid_amount).toLocaleString()}</span>
+                        <span>{t('orders.balance')} {currency}{Number(bill.balance).toLocaleString()}</span>
                       </div>
                     )}
                   </div>
@@ -1071,7 +1081,7 @@ export default function OrdersPage() {
                         ) : (
                           <Lock size={14} className="mr-1.5" />
                         )}
-                        {cancellingOrderId === order.id ? 'Cancelling...' : 'Cancel'}
+                        {cancellingOrderId === order.id ? 'Cancelling...' : t('common.cancel')}
                       </Button>
                     )}
                   </div>
@@ -1110,7 +1120,7 @@ export default function OrdersPage() {
                 size="sm"
                 onClick={() => setConfirmPrintBillId(null)}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -1133,7 +1143,7 @@ export default function OrdersPage() {
       {cancelModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-sm mx-4">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Cancel Order #{cancelModal.order.order_number}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{t('orders.cancel')} #{cancelModal.order.order_number}</h2>
 
             <div className="space-y-4">
               <div>
@@ -1145,7 +1155,7 @@ export default function OrdersPage() {
                   type="text"
                   value={cancelModal.reason}
                   onChange={(e) => updateCancelModal({ reason: e.target.value })}
-                  placeholder="Enter reason for cancellation"
+                  placeholder={t('orders.cancelReason')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                 />
               </div>
@@ -1175,7 +1185,7 @@ export default function OrdersPage() {
                     type="password"
                     value={cancelModal.overridePin}
                     onChange={(e) => updateCancelModal({ overridePin: e.target.value })}
-                    placeholder="Enter manager PIN"
+placeholder={t('orders.managerPin')}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent"
                   />
                 </div>
@@ -1188,7 +1198,7 @@ export default function OrdersPage() {
                 size="sm"
                 onClick={() => setCancelModal(null)}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -1267,7 +1277,7 @@ export default function OrdersPage() {
                   type="text"
                   value={discountModal.reason}
                   onChange={(e) => updateDiscountModal({ reason: e.target.value })}
-                  placeholder="Enter reason for discount"
+                  placeholder={t('orders.discountReason')}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
@@ -1317,8 +1327,8 @@ export default function OrdersPage() {
                   type="password"
                   value={discountPin}
                   onChange={(e) => setDiscountPin(e.target.value)}
-                  placeholder="Enter manager PIN"
-                  maxLength={6}
+placeholder={t('orders.managerPin')}
+                maxLength={6}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
                 />
               </div>
@@ -1330,7 +1340,7 @@ export default function OrdersPage() {
                 size="sm"
                 onClick={() => setDiscountModal(null)}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"
@@ -1350,14 +1360,14 @@ export default function OrdersPage() {
       {addItemsOrder && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
           <div className="bg-white rounded-xl shadow-xl p-6 w-full max-w-lg mx-4 max-h-[80vh] flex flex-col">
-            <h2 className="text-lg font-bold text-gray-900 mb-4">Add Items to Order #{addItemsOrder.order_number}</h2>
+            <h2 className="text-lg font-bold text-gray-900 mb-4">{t('orders.addItems')} #{addItemsOrder.order_number}</h2>
 
             {/* Search */}
             <div className="relative mb-3">
               <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
               <input
                 type="text"
-                placeholder="Search menu items..."
+                placeholder={t('orders.searchMenu')}
                 value={productSearch}
                 onChange={(e) => setProductSearch(e.target.value)}
                 className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-green-500 focus:border-transparent"
@@ -1399,7 +1409,7 @@ export default function OrdersPage() {
                       <span className="text-sm font-medium text-gray-900 truncate block">{item.product_name}</span>
                       <input
                         type="text"
-                        placeholder="Notes (optional)"
+                        placeholder={t('orders.notesOptional')}
                         value={item.special_instructions}
                         maxLength={100}
                         onChange={(e) => handleUpdateSelectionNotes(item.product_id, e.target.value.slice(0, 100))}
@@ -1435,7 +1445,7 @@ export default function OrdersPage() {
                 size="sm"
                 onClick={() => setAddItemsOrder(null)}
               >
-                Cancel
+                {t('common.cancel')}
               </Button>
               <Button
                 size="sm"

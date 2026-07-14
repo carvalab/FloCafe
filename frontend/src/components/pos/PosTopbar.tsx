@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { LayoutGrid } from 'lucide-react';
 import type { Table } from '@/lib/types';
+import { useI18n } from '@/hooks/useI18n';
 
 interface Props {
   tables: Table[];
@@ -17,6 +18,7 @@ export default function PosTopbar({ tables, onShowTablePicker }: Props) {
   const cart = useCartStore();
   const { currentTenant } = useAuthStore();
   const tablesRequired = usePosSettingsStore((s) => s.tablesRequired);
+  const { t } = useI18n();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const showTableBtn = isRestaurant && cart.orderType === 'dine_in' && tablesRequired;
 
@@ -38,8 +40,8 @@ export default function PosTopbar({ tables, onShowTablePicker }: Props) {
         >
           <LayoutGrid size={14} />
           {cart.tableId
-            ? `Table: ${tables.find(t => t.id === cart.tableId)?.name || cart.tableId}`
-            : 'Select Table'}
+            ? t('pos.tableLabel', { name: tables.find(t => t.id === cart.tableId)?.name || cart.tableId })
+            : t('pos.selectTable')}
         </button>
       )}
 

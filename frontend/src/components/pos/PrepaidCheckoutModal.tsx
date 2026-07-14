@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
 import { useCartStore } from '@/store/cart';
 import { useTaxPreview } from '@/hooks/use-tax-preview';
+import { useI18n } from '@/hooks/useI18n';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import toast from 'react-hot-toast';
 
@@ -50,6 +51,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const cart = useCartStore();
   const { tax, loading: taxLoading } = useTaxPreview(cart.items, cart.customerId);
   const customer = cart.customer;
+  const { t } = useI18n();
 
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
@@ -182,19 +184,19 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const handleConfirm = () => {
     if (!preview) return;
     if (totalPayment < remaining - 0.01) {
-      toast.error('Payment amount is less than balance');
+      toast.error(t('pos.paymentBelowBalance'));
       return;
     }
     if (walletAmt > 0 && walletBalance !== null) {
       const walletPointsRequired = walletAmt * LOYALTY_REDEMPTION_RATE;
       if (walletPointsRequired > walletBalance) {
         const maxCurrency = Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE);
-        toast.error(`Wallet amount exceeds available balance. Max: ${currency}${fmt(maxCurrency)}`);
+        toast.error(t('pos.walletMaxAmount', { max: `${currency}${fmt(maxCurrency)}` }));
         return;
       }
     }
     if (showDiscount && preview.discountAmount > 0 && discountRequiresApproval && !discountPin) {
-      toast.error('Manager PIN required for discounts');
+      toast.error(t('pos.managerPinRequired'));
       return;
     }
 
@@ -222,7 +224,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
         {/* Header */}
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div>
-            <h2 className="text-lg font-bold text-gray-900">Checkout</h2>
+            <h2 className="text-lg font-bold text-gray-900">{t('pos.checkout')}</h2>
             <p className="text-xs text-gray-400 mt-0.5 capitalize">
               {cart.orderType.replace('_', '-')} order
             </p>
@@ -242,7 +244,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             <div className="flex items-start justify-between">
               <div className="flex-1">
                 <p className="text-xs font-medium text-slate-400 uppercase tracking-widest">
-                  {taxLoading ? 'Subtotal' : 'Total Due'}
+                  {taxLoading ? t('pos.subtotal') : t('pos.totalDue')}
                 </p>
                 {taxLoading || !preview ? (
                   <div className="h-10 w-32 bg-white/10 rounded animate-pulse mt-1" />
@@ -252,17 +254,17 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   </p>
                 )}
                 <p className="text-xs text-slate-400 mt-1.5">
-                  {cart.itemCount()} item{cart.itemCount() !== 1 ? 's' : ''}
+                  {t('pos.itemCount', { count: cart.itemCount() })}
                 </p>
                 {!taxLoading && preview && (
                   <div className="mt-2 space-y-1">
                     <div className="flex justify-between text-xs text-slate-300">
-                      <span>Subtotal</span>
+                      <span>{t('pos.subtotal')}</span>
                       <span>{currency}{fmt(preview.subtotal)}</span>
                     </div>
                     {preview.discountAmount > 0 && (
                       <div className="flex justify-between text-xs text-emerald-400 font-medium">
-                        <span>Discount</span>
+                        <span>{t('pos.discount')}</span>
                         <span>− {currency}{fmt(preview.discountAmount)}</span>
                       </div>
                     )}
@@ -273,13 +275,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     />
                     {preview.packagingCharge > 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
-                        <span>Packaging</span>
+                        <span>{t('pos.packaging')}</span>
                         <span>{currency}{fmt(preview.packagingCharge)}</span>
                       </div>
                     )}
                     {preview.roundOff !== 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
-                        <span>Round off</span>
+                        <span>{t('pos.roundOff')}</span>
                         <span>{preview.roundOff > 0 ? '+' : ''}{currency}{fmt(preview.roundOff)}</span>
                       </div>
                     )}
@@ -302,14 +304,14 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             <div className="flex items-center gap-2 px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl">
               <Sparkles size={13} className="text-gray-400 shrink-0" />
               <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-xs">
-                <span className="text-gray-700 font-medium">Loyalty</span>
+                <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE))})`
+                    ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
                     : '…'}
                 </span>
                 {nextExpiry && (
-                  <span className="text-orange-500">Expires {fmtExpiry(nextExpiry)}</span>
+                  <span className="text-orange-500">{t('pos.expiresDate', { date: fmtExpiry(nextExpiry) })}</span>
                 )}
               </div>
             </div>
@@ -331,7 +333,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 }}
                 className="w-4 h-4 text-purple-600 border-gray-300 rounded focus:ring-purple-500"
               />
-              <span className="text-sm font-medium text-gray-700">Apply Discount</span>
+              <span className="text-sm font-medium text-gray-700">{t('pos.applyDiscount')}</span>
             </label>
 
             {showDiscount && (
@@ -342,13 +344,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'percentage' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
                     <Percent size={14} />
-                    Percentage
+                    {t('pos.percentage')}
                   </button>
                   <button
                     onClick={() => setDiscountType('amount')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'amount' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
-                    Flat Amount
+                    {t('pos.flatAmount')}
                   </button>
                 </div>
                 <div className="relative">
@@ -370,7 +372,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   type="text"
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="Reason (optional)"
+                  placeholder={t('pos.discountReasonPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                 />
                 {discountRequiresApproval && parseFloat(discountValue) > 0 && (
@@ -378,7 +380,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     type="password"
                     value={discountPin}
                     onChange={(e) => setDiscountPin(e.target.value)}
-                    placeholder="Manager PIN"
+                    placeholder={t('pos.managerPin')}
                     maxLength={6}
                     className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                   />
@@ -430,7 +432,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             onClick={addSplit}
             className="w-full py-2 text-sm border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-1"
           >
-            <Plus size={14} /> Split Payment
+            <Plus size={14} /> {t('pos.splitPayment')}
           </button>
 
           {/* Change Returned */}
@@ -452,7 +454,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 <span className={`text-sm font-semibold ${
                   change > 0 ? 'text-emerald-800' : 'text-gray-400'
                 }`}>
-                  Change Returned
+                  {t('pos.changeReturned')}
                 </span>
               </div>
               <span className={`text-xl font-bold tabular-nums ${
@@ -469,12 +471,12 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Wallet size={16} className={walletBalance > 0 ? 'text-purple-600' : 'text-gray-400'} />
-                  <span className={`text-sm font-medium ${walletBalance > 0 ? 'text-purple-900' : 'text-gray-500'}`}>Loyalty Wallet</span>
+                  <span className={`text-sm font-medium ${walletBalance > 0 ? 'text-purple-900' : 'text-gray-500'}`}>{t('pos.loyaltyWallet')}</span>
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE))})`
-                    : 'No balance'}
+                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
+                    : t('pos.noBalance')}
                 </span>
               </div>
               {walletBalance > 0 && (

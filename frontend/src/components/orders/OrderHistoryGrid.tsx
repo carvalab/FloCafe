@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency } from '@/lib/countries';
 import type { Order, OrderItem, Bill } from '@/lib/types';
+import { useI18n } from '@/hooks/useI18n';
 
 // --- Mock data ---------------------------------------------------------
 // Shaped like the real `Order` / `Bill` types (src/lib/types.ts) so this
@@ -101,16 +102,16 @@ const STATUS_BADGE: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700 border-red-200',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  completed: 'Settled',
-  cancelled: 'Voided',
+const STATUS_LABEL_KEY: Record<string, string> = {
+  completed: 'orders.settled',
+  cancelled: 'orders.voided',
 };
 
-const ORDER_TYPE_LABEL: Record<Order['type'], string> = {
-  dine_in: 'Dine-In',
-  takeaway: 'Takeaway',
-  delivery: 'Delivery',
-  online: 'Online',
+const ORDER_TYPE_LABEL_KEY: Record<Order['type'], string> = {
+  dine_in: 'orders.dineIn',
+  takeaway: 'orders.takeaway',
+  delivery: 'orders.delivery',
+  online: 'orders.online',
 };
 
 function formatTimestamp(iso: string): string {
@@ -120,6 +121,7 @@ function formatTimestamp(iso: string): string {
 }
 
 function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: string }) {
+  const { t } = useI18n();
   const items: OrderItem[] = order.items ?? [];
   const bill = order.bill;
   const fmt = (n: number) => formatCurrency(n, currency);
@@ -133,13 +135,13 @@ function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: 
             <CardDescription>{formatTimestamp(order.created_at)}</CardDescription>
           </div>
           <Badge className={STATUS_BADGE[order.status] ?? ''} variant="outline">
-            {STATUS_LABEL[order.status] ?? order.status}
+            {STATUS_LABEL_KEY[order.status] ? t(STATUS_LABEL_KEY[order.status]) : order.status}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          {ORDER_TYPE_LABEL[order.type]}
-          {order.table && ` · Table ${order.table.name}`}
-          {order.guest_count ? ` · ${order.guest_count} guests` : ''}
+          {t(ORDER_TYPE_LABEL_KEY[order.type])}
+          {order.table && ` · ${t('orders.tableAt', { name: order.table.name })}`}
+          {order.guest_count ? ` · ${t('orders.guestCount', { count: order.guest_count })}` : ''}
         </p>
       </CardHeader>
 
@@ -184,7 +186,7 @@ function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: 
           )}
           {order.delivery_charge > 0 && (
             <div className="flex justify-between text-muted-foreground">
-              <span>Delivery</span>
+              <span>{t('orders.delivery')}</span>
               <span className="tabular-nums">{fmt(order.delivery_charge)}</span>
             </div>
           )}

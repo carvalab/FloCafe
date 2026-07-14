@@ -9,11 +9,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
 import toast from 'react-hot-toast';
+import { useI18n } from '@/hooks/useI18n';
 
 function LoginContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { login, selectTenant, user, tenants, currentTenant, loadFromStorage } = useAuthStore();
+  const { t } = useI18n();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -34,11 +36,11 @@ function LoginContent() {
       .then(r => r.json())
       .then(data => {
         if (data.status !== 'ok') {
-          setDbError(data.db || 'Database error — the app may not function correctly.');
+          setDbError(data.db || t('auth.dbErrorPrefix'));
         }
       })
       .catch(() => {});
-  }, [router]);
+  }, [router, t]);
 
   useEffect(() => {
     loadFromStorage();
@@ -50,11 +52,11 @@ function LoginContent() {
       await selectTenant(tenantId);
       // useEffect on currentTenant will handle the redirect
     } catch {
-      toast.error('Failed to select business');
+      toast.error(t('auth.selectBusinessFailed'));
     } finally {
       setLoading(false);
     }
-  }, [selectTenant]);
+  }, [selectTenant, t]);
 
   useEffect(() => {
     if (user && currentTenant) {
@@ -78,13 +80,13 @@ function LoginContent() {
     setLoginError(null);
     try {
       await login(email, password);
-      toast.success('Login successful!');
+      toast.success(t('auth.signInSuccess'));
     } catch (err: unknown) {
       const error = err as { response?: { status?: number; data?: { error?: string } } };
       if (error.response?.status === 401) {
-        setLoginError('Invalid email or password');
+        setLoginError(t('auth.invalidCredentials'));
       } else {
-        const msg = error.response?.data?.error || 'Login failed — the database may have an error.';
+        const msg = error.response?.data?.error || t('auth.loginFailed');
         setDbError(msg);
       }
     } finally {
@@ -93,15 +95,14 @@ function LoginContent() {
   };
 
 
-
   if (showTenantSelect) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-background px-4">
         <div className="w-full max-w-md">
           <Card>
             <CardContent className="pt-6">
-              <h2 className="text-2xl font-bold mb-2">Select Business</h2>
-              <p className="text-muted-foreground text-sm mb-6">Choose which business to manage</p>
+              <h2 className="text-2xl font-bold mb-2">{t('auth.selectBusiness')}</h2>
+              <p className="text-muted-foreground text-sm mb-6">{t('auth.selectBusinessHint')}</p>
               <div className="space-y-3">
                 {tenants.map((tenant) => (
                   <button
@@ -127,29 +128,29 @@ function LoginContent() {
       <div className="w-full max-w-md">
         <div className="text-center mb-8">
           <img src="/logo.png" alt="Flo" width={120} height={77} className="mx-auto mb-3" />
-          <p className="text-muted-foreground mt-2">Sign in to manage your business</p>
+          <p className="text-muted-foreground mt-2">{t('auth.signInTitle')}</p>
         </div>
         {dbError && (
           <div className="mb-4 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-            <strong>Database error:</strong> {dbError}
+            <strong>{t('auth.dbErrorPrefix')}</strong> {dbError}
           </div>
         )}
         <Card>
           <CardContent className="pt-6">
             <form onSubmit={handleLogin} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@business.com" required />
+                <Label htmlFor="email">{t('auth.email')}</Label>
+                <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('auth.emailPlaceholder')} required />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="password">Password</Label>
-                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="Enter your password" required />
+                <Label htmlFor="password">{t('auth.password')}</Label>
+                <Input id="password" type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={t('auth.passwordPlaceholder')} required />
               </div>
               {loginError && (
                 <p className="text-sm text-destructive text-center">{loginError}</p>
               )}
               <Button type="submit" disabled={loading} className="w-full" size="lg">
-                {loading ? 'Signing in...' : 'Sign In'}
+                {loading ? t('auth.signingIn') : t('auth.signIn')}
               </Button>
             </form>
           </CardContent>

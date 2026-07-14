@@ -5,6 +5,7 @@ import api from '@/lib/api';
 import toast from 'react-hot-toast';
 import { Clock, ChefHat, X, ChevronRight, ChevronLeft, LogOut, Wifi, WifiOff } from 'lucide-react';
 import type { Order, OrderItem } from '@/lib/types';
+import { useI18n } from '@/hooks/useI18n';
 
 const STATUS_CONFIG = {
   pending: { label: 'Waiting', color: 'bg-yellow-500', border: 'border-yellow-300', text: 'text-yellow-700', bg: 'bg-yellow-50', btnBg: 'bg-yellow-500 hover:bg-yellow-600' },
@@ -60,6 +61,7 @@ interface LoggedInUser {
 type ConnectionMode = 'websocket' | 'rest' | null;
 
 export default function KdsPage() {
+  const { t } = useI18n();
   const [user, setUser] = useState<LoggedInUser | null>(null);
   const [orders, setOrders] = useState<Order[]>([]);
   const [counts, setCounts] = useState<Record<string, number>>({});
@@ -145,7 +147,7 @@ export default function KdsPage() {
       tryWebSocket(loggedInUser.token);
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      setLoginError(error.response?.data?.error || 'Login failed');
+      setLoginError(error.response?.data?.error || t('auth.loginFailed'));
       setLoading(false);
     }
   };
@@ -298,7 +300,7 @@ export default function KdsPage() {
             )}
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.email')}</label>
               <input
                 type="email"
                 value={loginEmail}
@@ -310,7 +312,7 @@ export default function KdsPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+              <label className="block text-sm font-medium text-gray-700 mb-1">{t('auth.password')}</label>
               <input
                 type="password"
                 value={loginPassword}
@@ -326,7 +328,7 @@ export default function KdsPage() {
               disabled={loginLoading}
               className="w-full py-3 bg-brand text-white font-semibold rounded-lg hover:bg-brand/90 disabled:opacity-50"
             >
-              {loginLoading ? 'Signing in...' : 'Sign In'}
+              {loginLoading ? t('auth.signingIn') : t('auth.signIn')}
             </button>
           </form>
 

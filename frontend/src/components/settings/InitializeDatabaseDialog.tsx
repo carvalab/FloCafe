@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { MasterPinPrompt } from './MasterPinPrompt';
 import { AlertTriangle } from 'lucide-react';
+import { useI18n } from '@/hooks/useI18n';
 
 const CONFIRM_PHRASE = 'INITIALIZE';
 
@@ -25,6 +26,7 @@ interface InitializeDatabaseDialogProps {
 }
 
 export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSuccess }: InitializeDatabaseDialogProps) {
+  const { t } = useI18n();
   const [phrase, setPhrase] = useState('');
   const [showPinPrompt, setShowPinPrompt] = useState(false);
 
@@ -55,22 +57,21 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-red-600">
               <AlertTriangle size={18} />
-              Initialize Database
+              {t('settings.initializeDatabase')}
             </DialogTitle>
             <DialogDescription className="space-y-2 pt-2 text-left">
               <span className="block">
-                This permanently deletes every product, order, customer, and setting, and resets the database to a blank install.
-                You&apos;ll go through first-run setup again afterward.
+                {t('settings.initializeDialogBody')}
               </span>
               <span className="block font-medium text-gray-700">
-                A backup is created automatically before anything is deleted.
+                {t('settings.initializeDialogBackup')}
               </span>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <Label htmlFor="initialize-confirm">
-              Type <span className="font-mono font-semibold">{CONFIRM_PHRASE}</span> to continue
+              {t('settings.initializeTypeConfirm', { phrase: CONFIRM_PHRASE })}
             </Label>
             <Input
               id="initialize-confirm"
@@ -82,13 +83,13 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={close}>Cancel</Button>
+            <Button variant="outline" onClick={close}>{t('common.cancel')}</Button>
             <Button
               variant="destructive"
               disabled={phrase !== CONFIRM_PHRASE}
               onClick={() => setShowPinPrompt(true)}
             >
-              Continue
+              {t('common.continue')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -97,8 +98,8 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
       <MasterPinPrompt
         open={open && showPinPrompt}
         mode="verify"
-        title="Confirm Master PIN"
-        description="Enter your device Master PIN to permanently initialize the database."
+        title={t('settings.masterPin')}
+        description={t('settings.initializeMasterPinPrompt')}
         onCancel={() => setShowPinPrompt(false)}
         onSubmit={handlePinSubmit}
       />
