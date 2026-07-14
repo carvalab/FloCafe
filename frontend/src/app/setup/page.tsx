@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
+import { usePosSettingsStore } from '@/store/pos-settings';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -80,6 +81,7 @@ export default function SetupPage() {
   const t = (key: string) => translate(key, language);
 
   const completeSetup = () => {
+    usePosSettingsStore.getState().setLanguage(language);
     logout();
     toast.success(t('setup.completeSetupSuccess'));
     window.location.replace('/auth/login');

@@ -97,7 +97,7 @@ export default function SettingsPage() {
   const posSettings = usePosSettingsStore();
   const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
   usePrinterStatusSync();
-  const { t, language } = useI18n();
+  const { t, language, setLanguage } = useI18n();
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -1092,8 +1092,15 @@ export default function SettingsPage() {
                   </span>
                 </div>
                 <div>
-                  <p className="text-sm text-gray-500">{t('settings.languages')}</p>
-                  <p className="font-medium text-gray-900 uppercase">{language}</p>
+                  <p className="text-sm text-gray-500 mb-1">{t('settings.languages')}</p>
+                  <select
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value as 'en' | 'es')}
+                    className="block w-full rounded-md border-gray-300 shadow-sm focus:border-brand focus:ring-brand sm:text-sm px-3 py-2 border"
+                  >
+                    <option value="en">English (EN)</option>
+                    <option value="es">Español (ES)</option>
+                  </select>
                 </div>
               </div>
             </div>
