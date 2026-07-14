@@ -7,6 +7,23 @@ All notable changes to Flo Cafe are documented here. Dates are release dates, no
 ### Fixed
 - Windows: Fix `better_sqlite3.node is not a valid Win32 application` error by ensuring native dependencies are correctly built for the Electron target runtime using `electron-builder install-app-deps`.
 
+## [1.9.0] - 2026-07-14
+
+### Added
+- Full Spanish/English internationalization: 727 translation keys with verified EN/ES parity, migrated from a 2014-line inline i18n file to a JSON-backed loader with ICU plural support.
+- Language-first setup wizard with country-driven business profiles; Argentina profile wires local IVA tax handling end-to-end, including a matching bilingual demo restaurant seed.
+- Master PIN protection for sensitive actions (database reset, critical settings changes), with its own backend service, middleware, and Settings UI.
+- Database health check and repair tooling, exposed via a new Database Tools API and the Settings → Data tab.
+- Cloud sync, reports, and command polling now enabled by default, with reworked Cloud Sync settings copy, a register confirmation step, and zero-touch device registration against FloAdmin (register → pending → claim).
+
+### Changed
+- README rewritten to be version-agnostic, with donationware/RevFlo messaging.
+
+### Fixed
+- Addon groups: editing a group no longer clobbers each addon's active/inactive state (#86).
+- Various lint and TypeScript build errors resolved (login page, Sidebar, and other preexisting warnings).
+- Settings: unescaped single quote in JSX corrected.
+
 ## [1.8.7] - 2026-07-12
 
 ### Added
