@@ -146,19 +146,21 @@ export default function StaffPage() {
                 {roleColorKey[s.role] ? t(roleColorKey[s.role]) : s.role}
               </span>
             </div>
-            <div className="flex gap-2 mt-3">
+            <div className="flex flex-wrap gap-2 mt-3">
               <Button variant="outline" size="sm" onClick={() => openEdit(s)}>
                 <Edit size={14} className="mr-1" /> {t('common.edit')}
               </Button>
               <Button variant="outline" size="sm" onClick={() => openResetPw(s)}>
                 <RotateCcw size={14} className="mr-1" /> {t('staff.resetPwButton')}
               </Button>
-              <button
+              <Button
+                variant="ghost"
+                size="sm"
                 onClick={() => toggleActive(s)}
-                className={`text-xs font-medium px-2 py-1 ${s.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}`}
+                className={s.is_active ? 'text-red-500 hover:text-red-700 hover:bg-red-50' : 'text-green-500 hover:text-green-700 hover:bg-green-50'}
               >
                 {s.is_active ? t('staff.deactivate') : t('staff.reactivate')}
-              </button>
+              </Button>
             </div>
           </div>
         ))}

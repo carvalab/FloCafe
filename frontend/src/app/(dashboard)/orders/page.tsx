@@ -44,6 +44,13 @@ const paymentStatusBadge: Record<string, { bg: string; text: string; labelKey: s
 
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
 
+const tabLabelKey: Record<FilterType, string> = {
+  all: 'orders.all',
+  active: 'orders.active',
+  unpaid: 'orders.unpaidBadge',
+  held: 'orders.held',
+};
+
 // Consolidated state types
 interface Filters {
   search: string;
@@ -606,19 +613,19 @@ export default function OrdersPage() {
     <div className="flex flex-col h-[calc(100vh-4rem)]">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold text-gray-900">Orders</h1>
+        <h1 className="text-2xl font-bold text-gray-900">{t('nav.orders')}</h1>
         <div className="flex gap-2">
           {(['all', 'active', 'unpaid', 'held'] as FilterType[]).map((f) => (
             <button
               key={f}
               onClick={() => setTabFilter(f)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium capitalize ${
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium ${
                 tabFilter === f
                   ? 'bg-brand text-white'
                   : 'bg-white text-gray-600 border border-gray-200 hover:border-gray-400'
               }`}
             >
-              {f}
+              {t(tabLabelKey[f])}
             </button>
           ))}
         </div>
@@ -697,7 +704,7 @@ export default function OrdersPage() {
                      <p className="font-bold text-gray-900">{tables.find(t => t.id === heldOrder.tableId)?.name || 'Table'}</p>
                      <p className="text-xs text-gray-500">{new Date(heldOrder.heldAt).toLocaleTimeString()}</p>
                    </div>
-                   <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">HELD</span>
+                   <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">{t('orders.held')}</span>
                  </div>
                  <div className="p-4 flex-1">
                    {heldOrder.items.map((item, idx) => (
@@ -964,8 +971,8 @@ export default function OrdersPage() {
                     </div>
                     {bill && payStatus === 'partial' && (
                       <div className="flex justify-between text-xs text-gray-500 pt-0.5">
-                        <span>Paid {currency}{Number(bill.paid_amount).toLocaleString()}</span>
-                        <span>Balance {currency}{Number(bill.balance).toLocaleString()}</span>
+                        <span>{t('orders.paid')} {currency}{Number(bill.paid_amount).toLocaleString()}</span>
+                        <span>{t('orders.balance')} {currency}{Number(bill.balance).toLocaleString()}</span>
                       </div>
                     )}
                   </div>

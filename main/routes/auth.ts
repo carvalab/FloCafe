@@ -8,6 +8,21 @@ import { isMasterPinAvailable, setMasterPin } from '../services/master-pin';
 
 const router = Router();
 const JWT_EXPIRES_IN = '24h';
+
+const COUNTRY_DIAL_CODES: Record<string, string> = {
+  IN: '+91', AR: '+54', US: '+1', CA: '+1', GB: '+44', EU: '+33', TH: '+66',
+  SG: '+65', MY: '+60', ID: '+62', PH: '+63', VN: '+84', AU: '+61', NZ: '+64',
+  AE: '+971', SA: '+966', ZA: '+27', KE: '+254', NG: '+234', BR: '+55', MX: '+52',
+  CL: '+56', UY: '+598', PY: '+595', JP: '+81', KR: '+82', CN: '+86', HK: '+852',
+  TW: '+886', PK: '+92', BD: '+880', LK: '+94', NP: '+977', EG: '+20', IL: '+972',
+  TR: '+90',
+};
+const DEFAULT_DIAL_CODE = '+1';
+
+function dialCodeFor(country: string | undefined): string {
+  if (!country) return DEFAULT_DIAL_CODE;
+  return COUNTRY_DIAL_CODES[country.toUpperCase()] || DEFAULT_DIAL_CODE;
+}
 const INITIAL_ADMIN_ROLE = 'owner';
 const VALID_BUSINESS_TYPES = new Set(['restaurant']);
 const VALID_SETUP_PROFILES = new Set(['empty', 'express', 'demo']);
@@ -134,11 +149,11 @@ function insertTable(db: ReturnType<typeof getDatabase>, id: string, number: str
   `).run(id, number, capacity, now(), now());
 }
 
-function insertCustomer(db: ReturnType<typeof getDatabase>, id: string, name: string, phone: string): void {
+function insertCustomer(db: ReturnType<typeof getDatabase>, id: string, name: string, phone: string, countryCode: string): void {
   db.prepare(`
     INSERT OR IGNORE INTO customers (id, name, phone, country_code, is_active, created_at, updated_at)
-    VALUES (?, ?, ?, '+91', 1, ?, ?)
-  `).run(id, name, phone, now(), now());
+    VALUES (?, ?, ?, ?, 1, ?, ?)
+  `).run(id, name, phone, countryCode, now(), now());
 }
 
 function insertStaffUser(db: ReturnType<typeof getDatabase>, id: string, name: string, email: string, role: string, password: string): void {
@@ -164,8 +179,9 @@ function seedExpressRestaurant(db: ReturnType<typeof getDatabase>, serviceModel:
   }
 }
 
-function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string, language?: string): void {
+function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string, language?: string, country?: string): void {
   const isEs = language === 'es';
+  const dialCode = dialCodeFor(country);
 
   const cats = isEs
     ? [
@@ -214,13 +230,13 @@ function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: st
   }
 
   if (isEs) {
-    insertCustomer(db, 'cust-demo-1', 'Juan Pérez', '1145678901');
-    insertCustomer(db, 'cust-demo-2', 'María González', '1145678902');
-    insertCustomer(db, 'cust-demo-3', 'Carlos Rodríguez', '1145678903');
+    insertCustomer(db, 'cust-demo-1', 'Juan Pérez', '1145678901', dialCode);
+    insertCustomer(db, 'cust-demo-2', 'María González', '1145678902', dialCode);
+    insertCustomer(db, 'cust-demo-3', 'Carlos Rodríguez', '1145678903', dialCode);
   } else {
-    insertCustomer(db, 'cust-demo-1', 'Aarav Sharma', '9876543210');
-    insertCustomer(db, 'cust-demo-2', 'Maya Iyer', '9876543211');
-    insertCustomer(db, 'cust-demo-3', 'Kabir Khan', '9876543212');
+    insertCustomer(db, 'cust-demo-1', 'Aarav Sharma', '9876543210', dialCode);
+    insertCustomer(db, 'cust-demo-2', 'Maya Iyer', '9876543211', dialCode);
+    insertCustomer(db, 'cust-demo-3', 'Kabir Khan', '9876543212', dialCode);
   }
 
   const managerName = isEs ? 'Gerente Demo' : 'Demo Manager';
@@ -231,11 +247,11 @@ function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: st
   insertStaffUser(db, 'user-demo-chef', chefName, 'chef@flo.local', 'chef', 'demo12345');
 }
 
-function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string, language?: string): void {
+function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string, language?: string, country?: string): void {
   if (profile === 'express') {
     seedExpressRestaurant(db, serviceModel);
   } else if (profile === 'demo') {
-    seedDemoRestaurant(db, serviceModel, language);
+    seedDemoRestaurant(db, serviceModel, language, country);
   }
 }
 
@@ -611,7 +627,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         onboarding_completed: 'true',
       });
 
-      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, language);
+      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, language, country);
     })();
 
     // Written to userData/, outside flo.db and outside this transaction — the
