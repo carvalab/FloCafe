@@ -74,7 +74,7 @@ export default function ProductsPage() {
   const [form, setForm] = useState({
     name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '',
     tax_type: 'inclusive', tax_rate: '5', description: '',
-    track_inventory: false, stock_quantity: '0', is_active: true,
+    track_inventory: false, stock_quantity: '0', low_stock_threshold: '5', is_active: true,
     tags: [] as string[],
     customTag: '',
     addon_group_ids: [] as number[],
@@ -157,7 +157,7 @@ export default function ProductsPage() {
     setForm({
       name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '',
       tax_type: 'inclusive', tax_rate: '5', description: '',
-      track_inventory: false, stock_quantity: '0', is_active: true,
+      track_inventory: false, stock_quantity: '0', low_stock_threshold: '5', is_active: true,
       tags: [], customTag: '', addon_group_ids: [], image_url: null,
     });
     setImageTouched(false);
@@ -179,6 +179,7 @@ export default function ProductsPage() {
       description: product.description || '',
       track_inventory: product.track_inventory,
       stock_quantity: String(product.stock_quantity || '0'),
+      low_stock_threshold: String(product.low_stock_threshold ?? '5'),
       is_active: product.is_active,
       tags: product.tags || [],
       customTag: '',
@@ -203,6 +204,7 @@ export default function ProductsPage() {
         description: form.description || null,
         track_inventory: form.track_inventory,
         stock_quantity: Number(form.stock_quantity),
+        low_stock_threshold: Number(form.low_stock_threshold),
         is_active: form.is_active,
         tags: form.tags.length > 0 ? form.tags : null,
         addon_group_ids: form.addon_group_ids,
@@ -466,7 +468,7 @@ export default function ProductsPage() {
                 <td className="p-4 text-center">
                   {product.track_inventory ? (
                     <span className={`text-sm font-medium ${product.stock_quantity <= (product.low_stock_threshold || 0) ? 'text-red-600' : 'text-gray-900'}`}>
-                      {product.stock_quantity}
+                      {product.stock_quantity <= 0 ? t('pos.outOfStock') : product.stock_quantity}
                     </span>
                   ) : (
                     <span className="text-gray-400 text-sm">—</span>
@@ -514,7 +516,7 @@ export default function ProductsPage() {
             <div className="p-6 overflow-y-auto flex-1">
               <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
+                <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}<span className="text-red-500 ml-1">*</span></label>
                 <input type="text" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
               </div>
@@ -531,7 +533,7 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldCategory')}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldCategory')}<span className="text-red-500 ml-1">*</span></label>
                   <select value={form.category_id} onChange={(e) => setForm({ ...form, category_id: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required>
                     <option value="">{t('products.selectPlaceholder')}</option>
@@ -546,7 +548,7 @@ export default function ProductsPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.priceLabel', { currency })}</label>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.priceLabel', { currency })}<span className="text-red-500 ml-1">*</span></label>
                   <input type="number" step="0.01" value={form.price} onChange={(e) => setForm({ ...form, price: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                 </div>
@@ -685,11 +687,18 @@ export default function ProductsPage() {
                   <span className="text-sm text-gray-700">{t('products.fieldActive')}</span>
                 </label>
               </div>
-              {form.track_inventory && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldStock')}</label>
-                  <input type="number" min="0" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
+              {!!form.track_inventory && (
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldStock')}<span className="text-red-500 ml-1">*</span></label>
+                    <input type="number" min="0" value={form.stock_quantity} onChange={(e) => setForm({ ...form, stock_quantity: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldLowStockThreshold')}</label>
+                    <input type="number" min="0" value={form.low_stock_threshold} onChange={(e) => setForm({ ...form, low_stock_threshold: e.target.value })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
+                  </div>
                 </div>
               )}
               <Button type="submit" className="w-full">
@@ -766,7 +775,7 @@ export default function ProductsPage() {
                 </div>
                 <form onSubmit={handleCategorySubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}<span className="text-red-500 ml-1">*</span></label>
                     <input type="text" value={categoryForm.name} onChange={(e) => setCategoryForm({ ...categoryForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                   </div>
                   <div>
@@ -850,7 +859,7 @@ export default function ProductsPage() {
                 <div className="p-6 overflow-y-auto flex-1">
                   <form onSubmit={handleAddonGroupSubmit} className="space-y-4">
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">{t('products.fieldName')}<span className="text-red-500 ml-1">*</span></label>
                     <input type="text" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })} className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" required />
                   </div>
                   <div>
