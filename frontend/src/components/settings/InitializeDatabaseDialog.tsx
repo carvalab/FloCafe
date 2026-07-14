@@ -61,18 +61,17 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
             </DialogTitle>
             <DialogDescription className="space-y-2 pt-2 text-left">
               <span className="block">
-                This permanently deletes every product, order, customer, and setting, and resets the database to a blank install.
-                You&apos;ll go through first-run setup again afterward.
+                {t('settings.initializeDialogBody')}
               </span>
               <span className="block font-medium text-gray-700">
-                A backup is created automatically before anything is deleted.
+                {t('settings.initializeDialogBackup')}
               </span>
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-2">
             <Label htmlFor="initialize-confirm">
-              Type <span className="font-mono font-semibold">{CONFIRM_PHRASE}</span> to continue
+              {t('settings.initializeTypeConfirm', { phrase: CONFIRM_PHRASE })}
             </Label>
             <Input
               id="initialize-confirm"
@@ -90,7 +89,7 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
               disabled={phrase !== CONFIRM_PHRASE}
               onClick={() => setShowPinPrompt(true)}
             >
-              Continue
+              {t('common.continue')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -100,7 +99,7 @@ export function InitializeDatabaseDialog({ open, onOpenChange, onConfirm, onSucc
         open={open && showPinPrompt}
         mode="verify"
         title={t('settings.masterPin')}
-        description="Enter your device Master PIN to permanently initialize the database."
+        description={t('settings.initializeMasterPinPrompt')}
         onCancel={() => setShowPinPrompt(false)}
         onSubmit={handlePinSubmit}
       />

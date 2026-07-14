@@ -10,12 +10,12 @@ import { useI18n } from '@/hooks/useI18n';
 
 const VALID_ROLES = ['owner', 'manager', 'cashier', 'waiter', 'chef'];
 
-const roleLabels: Record<string, string> = {
-  owner: 'Owner',
-  manager: 'Manager',
-  cashier: 'Cashier',
-  waiter: 'Waiter',
-  chef: 'Chef (KDS)',
+const roleColorKey: Record<string, string> = {
+  owner: 'staff.roleOwner',
+  manager: 'staff.roleManager',
+  cashier: 'staff.roleCashier',
+  waiter: 'staff.roleWaiter',
+  chef: 'staff.roleChef',
 };
 
 const roleColors: Record<string, string> = {
@@ -48,7 +48,7 @@ export default function StaffPage() {
       const { data } = await api.get('/staff');
       setStaff(data.staff || []);
     } catch {
-      toast.error('Failed to load staff');
+      toast.error(t('staff.failedToLoad'));
     } finally {
       setLoading(false);
     }
@@ -85,7 +85,7 @@ export default function StaffPage() {
           ...(form.password ? { password: form.password } : {}),
           ...(form.pin ? { pin: form.pin } : {}),
         });
-        toast.success('Staff updated');
+        toast.success(t('staff.updatedToast'));
       } else {
         await api.post('/staff', {
           name: form.name,
@@ -94,13 +94,13 @@ export default function StaffPage() {
           role: form.role,
           ...(form.pin ? { pin: form.pin } : {}),
         });
-        toast.success('Staff added');
+        toast.success(t('staff.addedToast'));
       }
       setShowForm(false);
       fetchStaff();
     } catch (err: unknown) {
       const error = err as { response?: { data?: { error?: string } } };
-      toast.error(error.response?.data?.error || 'Failed to save');
+      toast.error(error.response?.data?.error || t('staff.failedToSave'));
     }
   };
 
@@ -108,10 +108,10 @@ export default function StaffPage() {
     if (!resetPwStaff || !newPassword) return;
     try {
       await api.put(`/staff/${resetPwStaff.id}`, { password: newPassword });
-      toast.success('Password reset successfully');
+      toast.success(t('staff.resetPasswordToast'));
       setShowResetPw(false);
     } catch {
-      toast.error('Failed to reset password');
+      toast.error(t('staff.failedToReset'));
     }
   };
 
@@ -120,15 +120,15 @@ export default function StaffPage() {
       await api.post(`/staff/${s.id}/${s.is_active ? 'deactivate' : 'reactivate'}`);
       fetchStaff();
     } catch {
-      toast.error('Failed to update');
+      toast.error(t('staff.failedToUpdate'));
     }
   };
 
   return (
     <div>
       <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-900">Staff</h1>
-        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> Add Staff</Button>
+        <h1 className="text-2xl font-bold text-gray-900">{t('staff.title')}</h1>
+        <Button onClick={openAdd}><Plus size={16} className="mr-1" /> {t('staff.addButton')}</Button>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -139,11 +139,11 @@ export default function StaffPage() {
                 <p className="font-bold text-gray-900">{s.name}</p>
                 <p className="text-xs text-gray-500">{s.email || '—'}</p>
                 {s.pin_hash && (
-                  <p className="text-xs text-green-600 mt-1">✓ PIN set</p>
+                  <p className="text-xs text-green-600 mt-1">{t('staff.pinSet')}</p>
                 )}
               </div>
               <span className={`inline-block px-2.5 py-0.5 rounded-full text-xs font-medium capitalize ${roleColors[s.role] || 'bg-gray-100 text-gray-800'}`}>
-                {roleLabels[s.role] || s.role}
+                {roleColorKey[s.role] ? t(roleColorKey[s.role]) : s.role}
               </span>
             </div>
             <div className="flex gap-2 mt-3">
@@ -151,31 +151,31 @@ export default function StaffPage() {
                 <Edit size={14} className="mr-1" /> {t('common.edit')}
               </Button>
               <Button variant="outline" size="sm" onClick={() => openResetPw(s)}>
-                <RotateCcw size={14} className="mr-1" /> Reset PW
+                <RotateCcw size={14} className="mr-1" /> {t('staff.resetPwButton')}
               </Button>
               <button
                 onClick={() => toggleActive(s)}
                 className={`text-xs font-medium px-2 py-1 ${s.is_active ? 'text-red-500 hover:text-red-700' : 'text-green-500 hover:text-green-700'}`}
               >
-                {s.is_active ? 'Deactivate' : 'Reactivate'}
+                {s.is_active ? t('staff.deactivate') : t('staff.reactivate')}
               </button>
             </div>
           </div>
         ))}
       </div>
 
-      {staff.length === 0 && <p className="text-center text-gray-500 py-12">No staff members yet</p>}
+      {staff.length === 0 && <p className="text-center text-gray-500 py-12">{t('staff.empty')}</p>}
 
       {showForm && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">{editingStaff ? 'Edit Staff' : 'Add Staff'}</h2>
+              <h2 className="text-lg font-bold">{editingStaff ? t('staff.modalTitleEdit') : t('staff.modalTitleAdd')}</h2>
               <button onClick={() => setShowForm(false)}><X size={20} className="text-gray-400" /></button>
             </div>
             <form onSubmit={handleSave} className="space-y-4">
               <input
-                type="text" placeholder="Name" value={form.name}
+                type="text" placeholder={t('staff.namePlaceholder')} value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand" required
               />
@@ -185,7 +185,7 @@ export default function StaffPage() {
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
               />
               <input
-                type="password" placeholder={editingStaff ? 'New Password (leave empty to keep)' : 'Password'}
+                type="password" placeholder={editingStaff ? t('staff.newPasswordPlaceholder') : t('staff.passwordPlaceholder')}
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
@@ -193,7 +193,7 @@ export default function StaffPage() {
               />
               <div>
                 <input
-                  type="text" placeholder={editingStaff ? 'New PIN (leave empty to keep)' : 'PIN (4-6 digits)'}
+                  type="text" placeholder={editingStaff ? t('staff.pinPlaceholderEdit') : t('staff.pinPlaceholderAdd')}
                   value={form.pin}
                   onChange={(e) => setForm({ ...form, pin: e.target.value.replace(/\D/g, '').slice(0, 6) })}
                   className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
@@ -201,17 +201,17 @@ export default function StaffPage() {
                   pattern="[0-9]*"
                   inputMode="numeric"
                 />
-                <p className="text-xs text-gray-500 mt-1">Used for manager approvals (cancelling orders, etc.)</p>
+                <p className="text-xs text-gray-500 mt-1">{t('staff.pinHint')}</p>
               </div>
               <select
                 value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
               >
                 {VALID_ROLES.map((r) => (
-                  <option key={r} value={r}>{roleLabels[r]}</option>
+                  <option key={r} value={r}>{roleColorKey[r] ? t(roleColorKey[r]) : r}</option>
                 ))}
               </select>
-              <Button type="submit" className="w-full">{editingStaff ? 'Update' : 'Add'} Staff</Button>
+              <Button type="submit" className="w-full">{editingStaff ? t('staff.updateButton') : t('staff.addButton')}</Button>
             </form>
           </div>
         </div>
@@ -221,17 +221,17 @@ export default function StaffPage() {
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-white rounded-2xl p-6 w-full max-w-sm">
             <div className="flex justify-between items-center mb-4">
-              <h2 className="text-lg font-bold">Reset Password</h2>
+              <h2 className="text-lg font-bold">{t('staff.resetPasswordTitle')}</h2>
               <button onClick={() => setShowResetPw(false)}><X size={20} className="text-gray-400" /></button>
             </div>
-            <p className="text-sm text-gray-600 mb-4">Reset password for <strong>{resetPwStaff.name}</strong></p>
+            <p className="text-sm text-gray-600 mb-4">{t('staff.resetPasswordBody', { name: resetPwStaff.name })}</p>
             <div className="space-y-4">
               <input
-                type="password" placeholder="New Password" value={newPassword}
+                type="password" placeholder={t('staff.newPasswordPlaceholder')} value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
                 className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand"
               />
-              <Button onClick={handleResetPassword} className="w-full">Reset Password</Button>
+              <Button onClick={handleResetPassword} className="w-full">{t('staff.resetPasswordTitle')}</Button>
             </div>
           </div>
         </div>

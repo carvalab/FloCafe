@@ -27,19 +27,19 @@ const itemStatusConfig: Record<string, { dot: string; color: string; label: stri
   cancelled: { dot: 'bg-red-400', color: 'text-red-500', label: 'Cancelled' },
 };
 
-const orderStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
-  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', label: 'Pending' },
-  preparing: { bg: 'bg-blue-100', text: 'text-blue-700', label: 'Preparing' },
-  ready: { bg: 'bg-green-100', text: 'text-green-700', label: 'Ready' },
-  served: { bg: 'bg-purple-100', text: 'text-purple-700', label: 'Served' },
-  completed: { bg: 'bg-gray-100', text: 'text-gray-600', label: 'Completed' },
-  cancelled: { bg: 'bg-red-100', text: 'text-red-700', label: 'Cancelled' },
+const orderStatusBadge: Record<string, { bg: string; text: string; labelKey: string }> = {
+  pending: { bg: 'bg-yellow-100', text: 'text-yellow-700', labelKey: 'orders.pending' },
+  preparing: { bg: 'bg-blue-100', text: 'text-blue-700', labelKey: 'orders.preparing' },
+  ready: { bg: 'bg-green-100', text: 'text-green-700', labelKey: 'orders.ready' },
+  served: { bg: 'bg-purple-100', text: 'text-purple-700', labelKey: 'orders.served' },
+  completed: { bg: 'bg-gray-100', text: 'text-gray-600', labelKey: 'orders.completed' },
+  cancelled: { bg: 'bg-red-100', text: 'text-red-700', labelKey: 'orders.cancelled' },
 };
 
-const paymentStatusBadge: Record<string, { bg: string; text: string; label: string }> = {
-  paid: { bg: 'bg-green-100', text: 'text-green-700', label: 'Paid' },
-  partial: { bg: 'bg-amber-100', text: 'text-amber-700', label: 'Partially Paid' },
-  unpaid: { bg: 'bg-red-100', text: 'text-red-700', label: 'Unpaid' },
+const paymentStatusBadge: Record<string, { bg: string; text: string; labelKey: string }> = {
+  paid: { bg: 'bg-green-100', text: 'text-green-700', labelKey: 'orders.paid' },
+  partial: { bg: 'bg-amber-100', text: 'text-amber-700', labelKey: 'orders.partiallyPaid' },
+  unpaid: { bg: 'bg-red-100', text: 'text-red-700', labelKey: 'orders.unpaidBadge' },
 };
 
 type FilterType = 'all' | 'active' | 'unpaid' | 'held';
@@ -771,9 +771,9 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 flex-wrap min-w-0">
                     <span className="font-bold text-gray-900">#{order.order_number}</span>
                     {(() => { const badge = orderStatusBadge[order.status]; return badge ? (
-                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{badge.label}</span>
+                      <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${badge.bg} ${badge.text}`}>{t(badge.labelKey)}</span>
                     ) : null; })()}
-                    <span className="text-sm text-gray-500 capitalize">{order.type.replace('_', ' ')}</span>
+                    <span className="text-sm text-gray-500 capitalize">{t(`orders.${order.type}`)}</span>
                     {order.table && (
                       <span className="text-sm text-orange-600 font-medium">{order.table.name}</span>
                     )}
@@ -785,7 +785,7 @@ export default function OrdersPage() {
                   <div className="flex items-center gap-2 shrink-0">
                     {payBadge && (
                       <span className={`px-2.5 py-0.5 rounded-full text-xs font-medium ${payBadge.bg} ${payBadge.text}`}>
-                        {payBadge.label}
+                        {t(payBadge.labelKey)}
                       </span>
                     )}
                     {paid && order.customer?.phone && (

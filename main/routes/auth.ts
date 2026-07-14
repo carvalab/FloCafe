@@ -164,48 +164,78 @@ function seedExpressRestaurant(db: ReturnType<typeof getDatabase>, serviceModel:
   }
 }
 
-function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string): void {
-  const cats = [
-    ['cat-demo-starters', 'Starters', '#FF6B6B', '🍔', 1],
-    ['cat-demo-main', 'Main Course', '#4ECDC4', '🍛', 2],
-    ['cat-demo-beverages', 'Beverages', '#45B7D1', '🥤', 3],
-    ['cat-demo-desserts', 'Desserts', '#96CEB4', '🍰', 4],
-  ] as const;
+function seedDemoRestaurant(db: ReturnType<typeof getDatabase>, serviceModel: string, language?: string): void {
+  const isEs = language === 'es';
+
+  const cats = isEs
+    ? [
+        ['cat-demo-starters', 'Entradas', '#FF6B6B', '🍟', 1],
+        ['cat-demo-main', 'Hamburguesas', '#4ECDC4', '🍔', 2],
+        ['cat-demo-beverages', 'Bebidas', '#45B7D1', '🥤', 3],
+        ['cat-demo-desserts', 'Postres', '#96CEB4', '🍰', 4],
+      ] as const
+    : [
+        ['cat-demo-starters', 'Starters', '#FF6B6B', '🍔', 1],
+        ['cat-demo-main', 'Main Course', '#4ECDC4', '🍛', 2],
+        ['cat-demo-beverages', 'Beverages', '#45B7D1', '🥤', 3],
+        ['cat-demo-desserts', 'Desserts', '#96CEB4', '🍰', 4],
+      ] as const;
   for (const [id, name, color, icon, sort] of cats) insertCategory(db, id, name, color, icon, sort);
 
-  const products = [
-    ['prod-demo-paneer-tikka', 'cat-demo-starters', 'Paneer Tikka', 250, 1],
-    ['prod-demo-chicken-wings', 'cat-demo-starters', 'Chicken Wings', 280, 2],
-    ['prod-demo-butter-chicken', 'cat-demo-main', 'Butter Chicken', 320, 1],
-    ['prod-demo-dal-makhani', 'cat-demo-main', 'Dal Makhani', 220, 2],
-    ['prod-demo-jeera-rice', 'cat-demo-main', 'Jeera Rice', 150, 3],
-    ['prod-demo-cola', 'cat-demo-beverages', 'Cola', 60, 1],
-    ['prod-demo-lemon-soda', 'cat-demo-beverages', 'Lemon Soda', 70, 2],
-    ['prod-demo-gulab-jamun', 'cat-demo-desserts', 'Gulab Jamun', 80, 1],
-  ] as const;
+  const products = isEs
+    ? [
+        ['prod-demo-empanadas', 'cat-demo-starters', 'Empanadas de Carne', 280, 1],
+        ['prod-demo-papas', 'cat-demo-starters', 'Papas Fritas', 250, 2],
+        ['prod-demo-clasica', 'cat-demo-main', 'Hamburguesa Clásica', 800, 1],
+        ['prod-demo-doble', 'cat-demo-main', 'Hamburguesa Doble', 1100, 2],
+        ['prod-demo-bbq', 'cat-demo-main', 'Hamburguesa BBQ', 1200, 3],
+        ['prod-demo-gaseosa', 'cat-demo-beverages', 'Gaseosa Cola', 350, 1],
+        ['prod-demo-agua', 'cat-demo-beverages', 'Agua Mineral', 200, 2],
+        ['prod-demo-flan', 'cat-demo-desserts', 'Flan Casero', 400, 1],
+      ] as const
+    : [
+        ['prod-demo-paneer-tikka', 'cat-demo-starters', 'Paneer Tikka', 250, 1],
+        ['prod-demo-chicken-wings', 'cat-demo-starters', 'Chicken Wings', 280, 2],
+        ['prod-demo-butter-chicken', 'cat-demo-main', 'Butter Chicken', 320, 1],
+        ['prod-demo-dal-makhani', 'cat-demo-main', 'Dal Makhani', 220, 2],
+        ['prod-demo-jeera-rice', 'cat-demo-main', 'Jeera Rice', 150, 3],
+        ['prod-demo-cola', 'cat-demo-beverages', 'Cola', 60, 1],
+        ['prod-demo-lemon-soda', 'cat-demo-beverages', 'Lemon Soda', 70, 2],
+        ['prod-demo-gulab-jamun', 'cat-demo-desserts', 'Gulab Jamun', 80, 1],
+      ] as const;
   for (const [id, categoryId, name, price, sort] of products) insertProduct(db, id, categoryId, name, price, sort);
 
   if (serviceModel === 'finedine') {
-    insertTable(db, 'tbl-demo-1', 'T1', 4);
-    insertTable(db, 'tbl-demo-2', 'T2', 4);
-    insertTable(db, 'tbl-demo-3', 'T3', 6);
-    insertTable(db, 'tbl-demo-4', 'T4', 2);
+    const tableLabel = isEs ? 'M' : 'T';
+    insertTable(db, 'tbl-demo-1', `${tableLabel}1`, 4);
+    insertTable(db, 'tbl-demo-2', `${tableLabel}2`, 4);
+    insertTable(db, 'tbl-demo-3', `${tableLabel}3`, 6);
+    insertTable(db, 'tbl-demo-4', `${tableLabel}4`, 2);
   }
 
-  insertCustomer(db, 'cust-demo-1', 'Aarav Sharma', '9876543210');
-  insertCustomer(db, 'cust-demo-2', 'Maya Iyer', '9876543211');
-  insertCustomer(db, 'cust-demo-3', 'Kabir Khan', '9876543212');
+  if (isEs) {
+    insertCustomer(db, 'cust-demo-1', 'Juan Pérez', '1145678901');
+    insertCustomer(db, 'cust-demo-2', 'María González', '1145678902');
+    insertCustomer(db, 'cust-demo-3', 'Carlos Rodríguez', '1145678903');
+  } else {
+    insertCustomer(db, 'cust-demo-1', 'Aarav Sharma', '9876543210');
+    insertCustomer(db, 'cust-demo-2', 'Maya Iyer', '9876543211');
+    insertCustomer(db, 'cust-demo-3', 'Kabir Khan', '9876543212');
+  }
 
-  insertStaffUser(db, 'user-demo-manager', 'Demo Manager', 'manager@flo.local', 'manager', 'demo12345');
-  insertStaffUser(db, 'user-demo-cashier', 'Demo Cashier', 'cashier@flo.local', 'cashier', 'demo12345');
-  insertStaffUser(db, 'user-demo-chef', 'Demo Chef', 'chef@flo.local', 'chef', 'demo12345');
+  const managerName = isEs ? 'Gerente Demo' : 'Demo Manager';
+  const cashierName = isEs ? 'Cajero Demo' : 'Demo Cashier';
+  const chefName = isEs ? 'Cocinero Demo' : 'Demo Chef';
+  insertStaffUser(db, 'user-demo-manager', managerName, 'manager@flo.local', 'manager', 'demo12345');
+  insertStaffUser(db, 'user-demo-cashier', cashierName, 'cashier@flo.local', 'cashier', 'demo12345');
+  insertStaffUser(db, 'user-demo-chef', chefName, 'chef@flo.local', 'chef', 'demo12345');
 }
 
-function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string): void {
+function seedSetupProfile(db: ReturnType<typeof getDatabase>, profile: string, serviceModel: string, language?: string): void {
   if (profile === 'express') {
     seedExpressRestaurant(db, serviceModel);
   } else if (profile === 'demo') {
-    seedDemoRestaurant(db, serviceModel);
+    seedDemoRestaurant(db, serviceModel, language);
   }
 }
 
@@ -475,6 +505,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       business_type = 'restaurant',
       setup_profile = 'express',
       service_model = 'qsr',
+      language,
       business_name,
       store_name,
       country = 'IN',
@@ -580,7 +611,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         onboarding_completed: 'true',
       });
 
-      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel);
+      seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, language);
     })();
 
     // Written to userData/, outside flo.db and outside this transaction — the

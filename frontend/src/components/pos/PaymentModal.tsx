@@ -181,7 +181,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       }
     } catch (err: unknown) {
       const axiosErr = err as { response?: { status?: number; data?: { error?: string; message?: string } } };
-      const msg = axiosErr.response?.data?.error || axiosErr.response?.data?.message || 'Failed to update discount';
+      const msg = axiosErr.response?.data?.error || axiosErr.response?.data?.message || t('pos.failedToUpdateDiscount');
       toast.error(msg);
       // Clear the PIN on any failure (wrong PIN or rate-limited) so a stale/rejected
       // PIN doesn't sit in the field looking like it might still work on retry.
@@ -246,7 +246,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
         <div className="flex items-center justify-between px-5 pt-5 pb-4 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-bold text-gray-900">{t('pos.payment')}</h2>
-            <p className="text-xs text-gray-400 mt-0.5">Bill #{bill.bill_number}</p>
+            <p className="text-xs text-gray-400 mt-0.5">{t('pos.billNumber', { number: bill.bill_number })}</p>
           </div>
           <button
             onClick={onClose}
@@ -325,11 +325,11 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE)))})`
+                    ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
                     : '…'}
                 </span>
                 {nextExpiry && (
-                  <span className="text-orange-500">Expires {fmtExpiry(nextExpiry)}</span>
+                  <span className="text-orange-500">{t('pos.expiresDate', { date: fmtExpiry(nextExpiry) })}</span>
                 )}
               </div>
             </div>
@@ -344,7 +344,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 onChange={async (e) => {
                   const checked = e.target.checked;
                   if (!checked && Number(bill.discount_amount) > 0) {
-                    if (await confirm('Are you sure you want to remove this discount?', { destructive: true, confirmLabel: t('pos.remove') })) {
+                    if (await confirm(t('pos.removeDiscountConfirm'), { destructive: true, confirmLabel: t('pos.remove') })) {
                       handleApplyDiscount(0);
                     }
                   } else {
@@ -355,7 +355,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
               />
               <span className="text-sm font-medium text-gray-700">
                 {Number(bill.discount_amount) > 0
-                  ? `Discount: -${currency}${fmt(Number(bill.discount_amount))}`
+                  ? `${t('pos.discount')}: -${currency}${fmt(Number(bill.discount_amount))}`
                   : t('pos.applyDiscount')}
               </span>
             </label>
@@ -368,13 +368,13 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'percentage' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
                     <Percent size={14} />
-                    Percentage
+                    {t('pos.percentage')}
                   </button>
                   <button
                     onClick={() => { setDiscountType('amount'); }}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'amount' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
-                    Flat Amount
+                    {t('pos.flatAmount')}
                   </button>
                 </div>
                 <div className="relative">
@@ -396,7 +396,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   type="text"
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="Reason (optional)"
+                  placeholder={t('pos.discountReasonPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                 />
                 {discountRequiresApproval && parseFloat(discountValue) > 0 && (
@@ -404,7 +404,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                     type="password"
                     value={discountPin}
                     onChange={(e) => setDiscountPin(e.target.value)}
-                    placeholder="Manager PIN"
+                    placeholder={t('pos.managerPin')}
                     maxLength={6}
                     className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                   />
@@ -416,8 +416,8 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                   className="w-full bg-purple-600 hover:bg-purple-700 text-white"
                 >
                   {applyingDiscount
-                    ? 'Applying...'
-                    : Number(bill.discount_amount) > 0 ? 'Update Discount' : t('pos.applyDiscount')}
+                    ? t('pos.applyingDiscount')
+                    : Number(bill.discount_amount) > 0 ? t('pos.updateDiscount') : t('pos.applyDiscount')}
                 </Button>
               </div>
             )}
@@ -507,8 +507,8 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE)))})`
-                    : 'No balance'}
+                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), currency, value: fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
+                    : t('pos.noBalance')}
                 </span>
               </div>
               {walletBalance > 0 && (

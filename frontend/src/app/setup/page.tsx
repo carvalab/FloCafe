@@ -112,7 +112,7 @@ export default function SetupPage() {
       return;
     }
     if (masterPinAvailable && !masterPinValid) {
-      toast.error('Set a 4-digit Master PIN to continue');
+      toast.error(t('setup.masterPinRequired'));
       setStep(2);
       return;
     }
@@ -273,21 +273,20 @@ export default function SetupPage() {
                   <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center mx-auto mb-3">
                     <KeyRound className="w-5 h-5 text-primary" />
                   </div>
-                  <h2 className="text-xl font-semibold mb-2">Set Master PIN</h2>
+                  <h2 className="text-xl font-semibold mb-2">{t('setup.setMasterPinTitle')}</h2>
                   <p className="text-muted-foreground text-sm">
-                    A 4-digit PIN known only to you, required to back up, restore, or initialize this database — separate from your login password.
-                    If you forget it, you can reset it later from Settings while logged in as owner.
+                    {t('setup.setMasterPinDescription')}
                   </p>
                 </div>
 
                 {masterPinAvailable === false ? (
                   <p className="text-sm text-center text-muted-foreground bg-muted rounded-lg p-4">
-                    Master PIN protection isn&apos;t available on this device. You can continue without it.
+                    {t('setup.masterPinNotAvailable')}
                   </p>
                 ) : (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="master-pin">PIN</Label>
+                      <Label htmlFor="master-pin">{t('setup.pinLabel')}</Label>
                       <Input
                         id="master-pin"
                         type="password"
@@ -301,7 +300,7 @@ export default function SetupPage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="master-pin-confirm">Confirm PIN</Label>
+                      <Label htmlFor="master-pin-confirm">{t('setup.confirmPinLabel')}</Label>
                       <Input
                         id="master-pin-confirm"
                         type="password"

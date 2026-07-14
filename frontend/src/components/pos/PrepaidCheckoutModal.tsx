@@ -254,7 +254,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   </p>
                 )}
                 <p className="text-xs text-slate-400 mt-1.5">
-                  {cart.itemCount()} item{cart.itemCount() !== 1 ? 's' : ''}
+                  {t('pos.itemCount', { count: cart.itemCount() })}
                 </p>
                 {!taxLoading && preview && (
                   <div className="mt-2 space-y-1">
@@ -307,11 +307,11 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? `${walletBalance} pts (≈ ${currency}${fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE))})`
+                    ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
                     : '…'}
                 </span>
                 {nextExpiry && (
-                  <span className="text-orange-500">Expires {fmtExpiry(nextExpiry)}</span>
+                  <span className="text-orange-500">{t('pos.expiresDate', { date: fmtExpiry(nextExpiry) })}</span>
                 )}
               </div>
             </div>
@@ -344,13 +344,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'percentage' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
                     <Percent size={14} />
-                    Percentage
+                    {t('pos.percentage')}
                   </button>
                   <button
                     onClick={() => setDiscountType('amount')}
                     className={`flex-1 flex items-center justify-center gap-1.5 py-2 text-sm font-medium transition-colors ${discountType === 'amount' ? 'bg-purple-600 text-white' : 'bg-white text-gray-600 hover:bg-gray-50'}`}
                   >
-                    Flat Amount
+                    {t('pos.flatAmount')}
                   </button>
                 </div>
                 <div className="relative">
@@ -372,7 +372,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   type="text"
                   value={discountReason}
                   onChange={(e) => setDiscountReason(e.target.value)}
-                  placeholder="Reason (optional)"
+                  placeholder={t('pos.discountReasonPlaceholder')}
                   className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                 />
                 {discountRequiresApproval && parseFloat(discountValue) > 0 && (
@@ -380,7 +380,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     type="password"
                     value={discountPin}
                     onChange={(e) => setDiscountPin(e.target.value)}
-                    placeholder="Manager PIN"
+                    placeholder={t('pos.managerPin')}
                     maxLength={6}
                     className="w-full px-3 py-2 text-sm border border-purple-200 rounded-lg outline-none focus:ring-2 focus:ring-purple-400 bg-white"
                   />
@@ -432,7 +432,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             onClick={addSplit}
             className="w-full py-2 text-sm border border-dashed border-gray-300 rounded-lg text-gray-500 hover:border-brand hover:text-brand transition-colors flex items-center justify-center gap-1"
           >
-            <Plus size={14} /> Split Payment
+            <Plus size={14} /> {t('pos.splitPayment')}
           </button>
 
           {/* Change Returned */}
@@ -454,7 +454,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 <span className={`text-sm font-semibold ${
                   change > 0 ? 'text-emerald-800' : 'text-gray-400'
                 }`}>
-                  Change Returned
+                  {t('pos.changeReturned')}
                 </span>
               </div>
               <span className={`text-xl font-bold tabular-nums ${
@@ -475,8 +475,8 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? `${walletBalance.toLocaleString()} pts (≈ ${currency}${fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE))})`
-                    : 'No balance'}
+                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
+                    : t('pos.noBalance')}
                 </span>
               </div>
               {walletBalance > 0 && (

@@ -102,16 +102,16 @@ const STATUS_BADGE: Record<string, string> = {
   cancelled: 'bg-red-100 text-red-700 border-red-200',
 };
 
-const STATUS_LABEL: Record<string, string> = {
-  completed: 'Settled',
-  cancelled: 'Voided',
+const STATUS_LABEL_KEY: Record<string, string> = {
+  completed: 'orders.settled',
+  cancelled: 'orders.voided',
 };
 
-const ORDER_TYPE_LABEL: Record<Order['type'], string> = {
-  dine_in: 'Dine-In',
-  takeaway: 'Takeaway',
-  delivery: 'Delivery',
-  online: 'Online',
+const ORDER_TYPE_LABEL_KEY: Record<Order['type'], string> = {
+  dine_in: 'orders.dineIn',
+  takeaway: 'orders.takeaway',
+  delivery: 'orders.delivery',
+  online: 'orders.online',
 };
 
 function formatTimestamp(iso: string): string {
@@ -135,13 +135,13 @@ function HistoryOrderCard({ order, currency }: { order: HistoryOrder; currency: 
             <CardDescription>{formatTimestamp(order.created_at)}</CardDescription>
           </div>
           <Badge className={STATUS_BADGE[order.status] ?? ''} variant="outline">
-            {STATUS_LABEL[order.status] ?? order.status}
+            {STATUS_LABEL_KEY[order.status] ? t(STATUS_LABEL_KEY[order.status]) : order.status}
           </Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          {ORDER_TYPE_LABEL[order.type]}
-          {order.table && ` · Table ${order.table.name}`}
-          {order.guest_count ? ` · ${order.guest_count} guests` : ''}
+          {t(ORDER_TYPE_LABEL_KEY[order.type])}
+          {order.table && ` · ${t('orders.tableAt', { name: order.table.name })}`}
+          {order.guest_count ? ` · ${t('orders.guestCount', { count: order.guest_count })}` : ''}
         </p>
       </CardHeader>
 

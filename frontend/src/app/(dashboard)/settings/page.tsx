@@ -200,7 +200,7 @@ export default function SettingsPage() {
       try {
         await api.post('/db-tools/master-pin/reset', { pin, confirm_pin: pin });
         await fetchMasterPinStatus();
-        toast.success('Master PIN saved');
+        toast.success(t('settings.masterPinSaved'));
         setPinGate(null);
         return { success: true };
       } catch (err: unknown) {
@@ -229,7 +229,7 @@ export default function SettingsPage() {
 
   const handleCreateBackup = async () => {
     if (masterPinStatus.available && !masterPinStatus.isSet) {
-      toast.error('Set a Master PIN below before creating a backup');
+      toast.error(t('settings.masterPinRequiredForBackup'));
       return;
     }
     if (!masterPinStatus.available) {
@@ -1016,7 +1016,7 @@ export default function SettingsPage() {
                   <label className="block text-sm text-gray-500 mb-1">{t('settings.phone')}</label>
                   {isAdmin ? (
                     <input type="text" value={form.businessPhone} onChange={(e) => setForm((p) => ({ ...p, businessPhone: e.target.value }))}
-                      placeholder={t('settings.phonePlaceholder', { dialCode: '+91' })}
+                      placeholder={t('settings.phonePlaceholder', { dialCode: COUNTRIES.find((c) => c.code === form.countryCode)?.dialCode ?? '+1' })}
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                   ) : (
                     <p className="font-medium text-gray-900">{form.businessPhone || '—'}</p>
@@ -1916,7 +1916,7 @@ export default function SettingsPage() {
 
                       if (overwrite && masterPinStatus.available) {
                         if (!masterPinStatus.isSet) {
-                          toast.error('Set a Master PIN below before replacing all data');
+                          toast.error(t('settings.masterPinRequiredForReplace'));
                           return;
                         }
                         setPinGate({ mode: 'import', payload: { data, overwrite } });
@@ -1972,7 +1972,7 @@ export default function SettingsPage() {
                 <h2 className="font-semibold text-gray-900">{t('settings.databaseHealthCheck')}</h2>
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                Compares this database&apos;s structure against what the app expects, and proposes fixes — showing the risk of data loss for each one before anything changes.
+                {t('settings.databaseHealthCheckDescription')}
               </p>
               <button
                 onClick={runHealthCheck}
@@ -1989,20 +1989,20 @@ export default function SettingsPage() {
                 <h2 className="font-semibold text-gray-900">{t('settings.masterPin')}</h2>
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                A 4-digit PIN, separate from any staff login, required to back up, restore, or initialize this database. Stored encrypted on this device, independent of the database itself — so you can still use it even if the database is corrupted or locked.
+                {t('settings.masterPinDataDescription')}
               </p>
               {!masterPinStatus.available ? (
                 <p className="text-sm text-amber-600">{t('settings.notAvailableOnDevice')}</p>
               ) : (
                 <div className="flex items-center gap-3">
                   <span className={`text-sm font-medium ${masterPinStatus.isSet ? 'text-green-600' : 'text-amber-600'}`}>
-                    {masterPinStatus.isSet ? 'PIN is set' : 'Not set'}
+                    {masterPinStatus.isSet ? t('settings.masterPinStatusSet') : t('settings.masterPinStatusNotSet')}
                   </span>
                   <button
                     onClick={() => setPinGate({ mode: 'set' })}
                     className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium"
                   >
-                    {masterPinStatus.isSet ? 'Change PIN' : 'Set PIN'}
+                    {masterPinStatus.isSet ? t('settings.masterPinChangeButton') : t('settings.masterPinSetButton')}
                   </button>
                 </div>
               )}
@@ -2015,13 +2015,13 @@ export default function SettingsPage() {
                 <h2 className="font-semibold text-red-600">{t('settings.initializeDatabase')}</h2>
               </div>
               <p className="text-sm text-gray-500 mb-4">
-                Permanently wipes every product, order, customer, and setting, and resets to a blank install. A backup is created automatically beforehand.
+                {t('settings.initializeDatabaseDescription')}
               </p>
               <button
                 onClick={() => setInitializeDbOpen(true)}
                 className="px-5 py-2 text-sm bg-red-600 text-white rounded-lg hover:opacity-90 font-medium"
               >
-                Initialize Database…
+                {t('settings.initializeDatabaseButton')}
               </button>
             </div>
           </div>
