@@ -27,7 +27,7 @@ export const DEFAULT_COUNTRY_PROFILE = {
   documentTitle: 'Receipt',
 } as const;
 
-export const COUNTRIES: Country[] = [
+const RAW_COUNTRIES: Country[] = [
   { code: 'IN', name: 'India', currency: 'INR', currencyCode: 'INR ', timezone: 'Asia/Kolkata', dialCode: '+91', locale: 'en-IN', defaultLanguage: 'en', taxIdLabel: 'GSTIN', taxName: 'GST', documentTitle: 'Tax Invoice' },
   { code: 'AR', name: 'Argentina', currency: 'ARS', currencyCode: 'AR$', timezone: 'America/Argentina/Buenos_Aires', dialCode: '+54', locale: 'es-AR', defaultLanguage: 'es', taxIdLabel: 'CUIT', taxName: 'IVA', documentTitle: 'Comprobante' },
   { code: 'US', name: 'United States', currency: 'USD', currencyCode: '$', timezone: 'America/New_York', dialCode: '+1', locale: 'en-US', defaultLanguage: 'en', taxIdLabel: 'EIN', taxName: 'Sales Tax', documentTitle: 'Invoice' },
@@ -65,6 +65,14 @@ export const COUNTRIES: Country[] = [
   { code: 'IL', name: 'Israel', currency: 'ILS', currencyCode: 'ILS ', timezone: 'Asia/Jerusalem', dialCode: '+972', locale: 'he-IL', defaultLanguage: 'en', taxIdLabel: '', taxName: 'VAT' },
   { code: 'TR', name: 'Turkey', currency: 'TRY', currencyCode: 'TRY ', timezone: 'Europe/Istanbul', dialCode: '+90', locale: 'tr-TR', defaultLanguage: 'en', taxIdLabel: 'VKN', taxName: 'KDV' },
 ];
+
+export const COUNTRIES: Country[] = RAW_COUNTRIES.sort((a, b) => {
+  if (a.code === 'IN') return -1;
+  if (b.code === 'IN') return 1;
+  if (a.code === 'AR') return -1;
+  if (b.code === 'AR') return 1;
+  return a.name.localeCompare(b.name);
+});
 
 export function getCountryByCode(code: string): Country | undefined {
   return COUNTRIES.find(c => c.code === code);
