@@ -82,7 +82,10 @@ const TEMPLATE_CARDS: TemplateCard[] = [
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+
+
   return (
+
     <button
       onClick={() => onChange(!value)}
       className={`relative w-11 h-6 rounded-full transition-colors ${value ? 'bg-brand' : 'bg-gray-300'}`}
@@ -102,13 +105,18 @@ export default function SettingsPage() {
   const { confirm, ConfirmDialog } = useConfirm();
 
   const [loyaltyEnabled, setLoyaltyEnabled] = useState(false);
+  const [savedLoyaltyEnabled, setSavedLoyaltyEnabled] = useState(false);
   const [savingLoyalty, setSavingLoyalty] = useState(false);
 
   // Discount settings
   const [discountMaxPct, setDiscountMaxPct] = useState(50);
+  const [savedDiscountMaxPct, setSavedDiscountMaxPct] = useState(50);
   const [discountMaxAmount, setDiscountMaxAmount] = useState(100);
+  const [savedDiscountMaxAmount, setSavedDiscountMaxAmount] = useState(100);
   const [discountMode, setDiscountMode] = useState('both');
+  const [savedDiscountMode, setSavedDiscountMode] = useState('both');
   const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
+  const [savedDiscountRequiresApproval, setSavedDiscountRequiresApproval] = useState(false);
   const [savingDiscount, setSavingDiscount] = useState(false);
 
   // Table info dialog
@@ -116,12 +124,13 @@ export default function SettingsPage() {
   const [tableInfo, setTableInfo] = useState<{ name: string; rows: number }[]>([]);
 
   // ── DB tools: master PIN, health check, initialize ──────────────────────
-  const [activeTab, setActiveTab] = useState('general');
+  const [activeTab, setActiveTab] = useState('store');
   const [masterPinStatus, setMasterPinStatus] = useState<{ available: boolean; isSet: boolean }>({ available: false, isSet: false });
   const [healthCheckOpen, setHealthCheckOpen] = useState(false);
   const [healthReport, setHealthReport] = useState<HealthCheckReport | null>(null);
   const [applyingFixes, setApplyingFixes] = useState(false);
   const [initializeDbOpen, setInitializeDbOpen] = useState(false);
+  const [shakeSaveBar, setShakeSaveBar] = useState(false);
 
   // Unified PIN gate: 'set' opens the set/change-PIN dialog; 'backup'/'import'
   // open a verify prompt and, on success, run the pending action.
@@ -512,7 +521,7 @@ export default function SettingsPage() {
   });
   const [printingForm, setPrintingForm] = useState<PrintingForm>(initPrinting);
   const [savedPrinting, setSavedPrinting] = useState<PrintingForm>(initPrinting);
-  const savePrinting = () => {
+  const savePrinting = (silent: boolean = false) => {
     posSettings.setPrinterEnabled(printingForm.printerEnabled);
     posSettings.setPrinterPaperSize(printingForm.printerPaperSize);
     setPrintMethod(printingForm.printMethod);
@@ -522,7 +531,7 @@ export default function SettingsPage() {
     posSettings.setWhatsappShareEnabled(printingForm.whatsappShareEnabled);
     posSettings.setPrinterUseUnicode(printingForm.printerUseUnicode);
     setSavedPrinting(printingForm);
-    toast.success(t('settings.printingSettingsSaved'));
+    if (!silent) toast.success(t('settings.printingSettingsSaved'));
   };
   const resetPrinting = () => setPrintingForm(savedPrinting);
 
@@ -534,11 +543,11 @@ export default function SettingsPage() {
   });
   const [billForm, setBillForm] = useState<BillTemplateForm>(initBillTemplate);
   const [savedBillForm, setSavedBillForm] = useState<BillTemplateForm>(initBillTemplate);
-  const saveBillTemplate = () => {
+  const saveBillTemplate = (silent: boolean = false) => {
     posSettings.setBillTemplate(billForm.billTemplate);
     posSettings.setBillFooterMessage(billForm.billFooterMessage);
     setSavedBillForm(billForm);
-    toast.success(t('settings.billTemplateSaved'));
+    if (!silent) toast.success(t('settings.billTemplateSaved'));
   };
   const resetBillTemplate = () => setBillForm(savedBillForm);
 
@@ -566,6 +575,7 @@ export default function SettingsPage() {
     cloud_orders_enabled: false,
     cloud_last_sync: null as string | null,
   });
+  const [savedCloudSettings, setSavedCloudSettings] = useState(cloudSettings);
   const [cloudStatus, setCloudStatus] = useState({
     cloud_registration_status: 'unregistered',
     cloud_pending_store_id: null as string | null,
@@ -611,11 +621,12 @@ export default function SettingsPage() {
       setForm(loaded);
 
       setLoyaltyEnabled(!!loyaltyRes.data.loyalty_enabled);
+      setSavedLoyaltyEnabled(!!loyaltyRes.data.loyalty_enabled);
 
-      if (discountRes.data.discount_max_percentage !== undefined) setDiscountMaxPct(Number(discountRes.data.discount_max_percentage));
-      if (discountRes.data.discount_max_amount !== undefined) setDiscountMaxAmount(Number(discountRes.data.discount_max_amount));
-      if (discountRes.data.discount_mode) setDiscountMode(discountRes.data.discount_mode);
-      if (discountRes.data.discount_requires_approval !== undefined) setDiscountRequiresApproval(!!discountRes.data.discount_requires_approval);
+      if (discountRes.data.discount_max_percentage !== undefined) { setDiscountMaxPct(Number(discountRes.data.discount_max_percentage)); setSavedDiscountMaxPct(Number(discountRes.data.discount_max_percentage)); }
+      if (discountRes.data.discount_max_amount !== undefined) { setDiscountMaxAmount(Number(discountRes.data.discount_max_amount)); setSavedDiscountMaxAmount(Number(discountRes.data.discount_max_amount)); }
+      if (discountRes.data.discount_mode) { setDiscountMode(discountRes.data.discount_mode); setSavedDiscountMode(discountRes.data.discount_mode); }
+      if (discountRes.data.discount_requires_approval !== undefined) { setDiscountRequiresApproval(!!discountRes.data.discount_requires_approval); setSavedDiscountRequiresApproval(!!discountRes.data.discount_requires_approval); }
 
       toast.success(t('settings.reloadedFromDb'));
     } catch {
@@ -630,13 +641,14 @@ export default function SettingsPage() {
 
     api.get('/settings/loyalty').then((res) => {
       setLoyaltyEnabled(!!res.data.loyalty_enabled);
+      setSavedLoyaltyEnabled(!!res.data.loyalty_enabled);
     }).catch(() => {});
 
     api.get('/settings/discount').then((res) => {
-      if (res.data.discount_max_percentage !== undefined) setDiscountMaxPct(Number(res.data.discount_max_percentage));
-      if (res.data.discount_max_amount !== undefined) setDiscountMaxAmount(Number(res.data.discount_max_amount));
-      if (res.data.discount_mode) setDiscountMode(res.data.discount_mode);
-      if (res.data.discount_requires_approval !== undefined) setDiscountRequiresApproval(!!res.data.discount_requires_approval);
+      if (res.data.discount_max_percentage !== undefined) { setDiscountMaxPct(Number(res.data.discount_max_percentage)); setSavedDiscountMaxPct(Number(res.data.discount_max_percentage)); }
+      if (res.data.discount_max_amount !== undefined) { setDiscountMaxAmount(Number(res.data.discount_max_amount)); setSavedDiscountMaxAmount(Number(res.data.discount_max_amount)); }
+      if (res.data.discount_mode) { setDiscountMode(res.data.discount_mode); setSavedDiscountMode(res.data.discount_mode); }
+      if (res.data.discount_requires_approval !== undefined) { setDiscountRequiresApproval(!!res.data.discount_requires_approval); setSavedDiscountRequiresApproval(!!res.data.discount_requires_approval); }
     }).catch(() => {});
 
     api.get('/mobile/pairing-code').then((res) => {
@@ -645,13 +657,15 @@ export default function SettingsPage() {
     }).catch(() => {});
 
     api.get('/settings/cloud').then((res) => {
-      setCloudSettings({
+      const settings = {
         cloud_api_key: res.data.cloud_api_key || '',
         cloud_store_id: res.data.cloud_store_id || '',
         cloud_sync_enabled: !!res.data.cloud_sync_enabled,
         cloud_orders_enabled: !!res.data.cloud_orders_enabled,
         cloud_last_sync: res.data.cloud_last_sync || null,
-      });
+      };
+      setCloudSettings(settings);
+      setSavedCloudSettings(settings);
       setCloudStatus({
         cloud_registration_status: res.data.cloud_registration_status || 'unregistered',
         cloud_pending_store_id: res.data.cloud_pending_store_id || null,
@@ -697,17 +711,23 @@ export default function SettingsPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const saveCloud = async () => {
+  const saveCloud = async (silent = false) => {
     setSavingCloud(true);
     try {
       await api.put('/settings/cloud', cloudSettings);
-      toast.success(t('settings.cloudSaved'));
+      setSavedCloudSettings(cloudSettings);
+      if (!silent) toast.success(t('settings.cloudSaved'));
       setCloudTestResult(null);
-    } catch {
-      toast.error(t('settings.cloudSaveFailed'));
+    } catch (err) {
+      if (!silent) toast.error(t('settings.cloudSaveFailed'));
+      throw err;
     } finally {
       setSavingCloud(false);
     }
+  };
+
+  const resetCloud = () => {
+    setCloudSettings(savedCloudSettings);
   };
 
   const testCloudConnection = async () => {
@@ -825,9 +845,18 @@ export default function SettingsPage() {
     }
   };
 
+  const resetAllSettings = async () => {
+    resetPrinting();
+    resetBillTemplate();
+    resetCloud();
+    await resetBusiness();
+  };
+
   const saveAllSettings = async () => {
     try {
-      await Promise.all([saveBusinessInfo(true), saveLoyalty(true), saveDiscount(true)]);
+      await Promise.all([saveBusinessInfo(true), saveLoyalty(true), saveDiscount(true), saveCloud(true)]);
+      savePrinting(true);
+      saveBillTemplate(true);
       toast.success(t('settings.allSaved'));
     } catch {
       toast.error(t('settings.allSaveFailed'));
@@ -863,6 +892,46 @@ export default function SettingsPage() {
     { value: 'a5', label: t('settings.paperSizeA5') },
   ];
 
+  const isDirty = 
+    JSON.stringify(form) !== JSON.stringify(savedBusiness) ||
+    JSON.stringify(printingForm) !== JSON.stringify(savedPrinting) ||
+    JSON.stringify(billForm) !== JSON.stringify(savedBillForm) ||
+    loyaltyEnabled !== savedLoyaltyEnabled ||
+    discountMaxPct !== savedDiscountMaxPct ||
+    discountMaxAmount !== savedDiscountMaxAmount ||
+    discountMode !== savedDiscountMode ||
+    discountRequiresApproval !== savedDiscountRequiresApproval ||
+    JSON.stringify(cloudSettings) !== JSON.stringify(savedCloudSettings) ||
+    showPrinterForm;
+
+  useEffect(() => {
+    if (!isDirty) return;
+
+    // Block browser reload/close
+    const handleBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', handleBeforeUnload);
+
+    // Block Next.js client-side navigation (clicking links)
+    const handleClick = (e: MouseEvent) => {
+      const target = (e.target as HTMLElement).closest('a');
+      if (target && target.href && !target.href.includes(window.location.pathname) && target.target !== '_blank') {
+        e.preventDefault();
+        e.stopPropagation();
+        setShakeSaveBar(true);
+        setTimeout(() => setShakeSaveBar(false), 500);
+      }
+    };
+    document.addEventListener('click', handleClick, { capture: true });
+
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+      document.removeEventListener('click', handleClick, { capture: true });
+    };
+  }, [isDirty]);
+
   return (
     <div>
       <div className="flex items-center gap-3 mb-6">
@@ -870,27 +939,22 @@ export default function SettingsPage() {
         <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="mb-6">
-          <TabsTrigger value="general">{t('settings.tabGeneral')}</TabsTrigger>
-          <TabsTrigger value="printers">{t('settings.tabPrinters')}</TabsTrigger>
-          <TabsTrigger value="kds">{t('settings.tabKds')}</TabsTrigger>
-          <TabsTrigger value="printing">{t('settings.tabPrinting')}</TabsTrigger>
-          <TabsTrigger value="bill-template">{t('settings.tabBillTemplate')}</TabsTrigger>
-          <TabsTrigger value="data">{t('settings.tabData')}</TabsTrigger>
-          <TabsTrigger value="updates">{t('settings.tabUpdates')}</TabsTrigger>
-          <TabsTrigger value="cloud">{t('settings.tabCloud')}</TabsTrigger>
-          <TabsTrigger value="more-apps">{t('settings.tabMoreApps')}</TabsTrigger>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:!flex-row gap-6 items-stretch">
+
+        <TabsList className="flex md:flex-col justify-start h-auto md:!h-auto md:!min-h-full w-full md:w-64 md:min-w-[16rem] bg-transparent p-0 overflow-x-auto border-b md:border-b-0 md:border-r border-gray-200 rounded-none md:space-y-1 pb-2 md:pb-0 shrink-0">
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="store">{t('settings.storeDetails')}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="pos">{t('settings.posWorkflow')}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="receipts">{t('settings.tabReceiptsPrinters', { defaultValue: 'Receipts & Printers' })}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="loyalty">{t('settings.loyaltyAndDiscounts', { defaultValue: 'Loyalty & Discounts' })}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="data">{t('settings.tabDataCloud', { defaultValue: 'Data & Cloud' })}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="account">{t('settings.account')}</TabsTrigger>
+          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="about">{t('settings.tabAbout', { defaultValue: 'About' })}</TabsTrigger>
         </TabsList>
 
-        {/* ================================================================
-            TAB: General
-        ================================================================ */}
-        <TabsContent value="general">
-          <div className="pb-6">
-          <h2 className="text-lg font-semibold text-gray-900 mb-4">{t('settings.general')}</h2>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+<div className="flex-1 min-w-0">
 
+        <TabsContent value="store">
+          <div className="pb-6 max-w-3xl space-y-6">
             {/* Store Details — editable for admin, readonly otherwise */}
             <div className="lg:col-span-2 bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1073,6 +1137,7 @@ export default function SettingsPage() {
               )}
             </div>
 
+            
             {/* Subscription */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1106,6 +1171,12 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            
+          </div>
+        </TabsContent>
+
+        <TabsContent value="pos">
+          <div className="pb-6 max-w-3xl space-y-6">
             {/* POS Display */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1121,6 +1192,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            
             {/* POS Workflow */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1149,6 +1221,119 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            
+            <div className="max-w-2xl space-y-6">
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center gap-2 mb-4">
+                <ChefHat size={20} className="text-gray-500" />
+                <h2 className="font-semibold text-gray-900">{t('settings.kds')}</h2>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">
+                {t('settings.kdsPairingHint')}
+              </p>
+
+              {kdsInfoLoading && (
+                <div className="flex items-center justify-center py-10">
+                  <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
+                </div>
+              )}
+
+              {kdsInfo && !kdsInfoLoading && (
+                <div className="flex flex-col gap-6 w-full">
+                  {/* Local Network / Tailscale IPs */}
+                  {kdsInfo.ips_data && kdsInfo.ips_data.length > 0 ? (
+                    <>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                        {kdsInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
+                          <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
+                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
+                              {ipInfo.ip.startsWith('100.') ? t('settings.vpnMeshNetwork') : t('settings.localNetwork')}
+                            </p>
+                            {ipInfo.qr_data ? (
+                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
+                            ) : (
+                              <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
+                                <QrCode size={40} className="text-gray-400" />
+                              </div>
+                            )}
+                            <a href={ipInfo.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-brand hover:underline break-all text-center">
+                              {ipInfo.url}
+                            </a>
+                          </div>
+                        ))}
+                      </div>
+
+                      {/* mDNS URL */}
+                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                        <div className="flex items-start gap-3">
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">{t('settings.appleDevices')}</p>
+                            <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-blue-600 break-all hover:underline">
+                              {kdsInfo.mdns_url}
+                            </a>
+                            <p className="text-xs text-blue-600 mt-2">
+                              {t('settings.appleDevicesHint')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    // Fallback for older server response
+                    <div className="flex flex-col sm:flex-row gap-6 items-start">
+                      <div className="shrink-0">
+                        {kdsInfo.qr_data_url ? (
+                          <img src={kdsInfo.qr_data_url} alt={t('settings.kdsQrAlt')} className="w-48 h-48 rounded-xl border border-gray-200" />
+                        ) : (
+                          <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
+                            <QrCode size={48} />
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex-1 space-y-4">
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
+                          <a href={kdsInfo.ip_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-brand break-all hover:underline">
+                            {kdsInfo.ip_url}
+                          </a>
+                        </div>
+                        <div>
+                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
+                          <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-gray-700 break-all hover:underline">
+                            {kdsInfo.mdns_url}
+                          </a>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex justify-end border-t border-gray-200 pt-4">
+                    <button onClick={fetchKdsInfo} disabled={kdsInfoLoading}
+                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
+                      <RefreshCw size={14} className={kdsInfoLoading ? 'animate-spin' : ''} />
+                      {t('settings.refreshUrls')}
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {!kdsInfo && !kdsInfoLoading && (
+                <button onClick={fetchKdsInfo}
+                  className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
+                  {t('settings.loadKdsInfo')}
+                </button>
+              )}
+            </div>
+
+            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
+              <strong>{t('settings.howItWorks')}</strong> {t('settings.howItWorksBody')}
+            </div>
+          </div>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="loyalty">
+          <div className="pb-6 max-w-3xl space-y-6">
             {/* Loyalty */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1176,6 +1361,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            
             {/* Discount Limits */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1220,7 +1406,6 @@ export default function SettingsPage() {
                   </select>
                 </div>
 
-                {/* Require approval */}
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="font-medium text-gray-900">{t('settings.requireApproval')}</p>
@@ -1240,9 +1425,11 @@ export default function SettingsPage() {
 
               </div>
             </div>
-
           </div>
+        </TabsContent>
 
+        <TabsContent value="account">
+          <div className="pb-6 max-w-3xl space-y-6">
             {/* Account */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <h2 className="font-semibold text-gray-900 mb-4">{t('settings.account')}</h2>
@@ -1262,6 +1449,7 @@ export default function SettingsPage() {
               </div>
             </div>
 
+            
             {/* Mobile App */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1315,33 +1503,11 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
-
-          {/* Consolidated Save/Cancel buttons */}
-          {isAdmin && (
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={resetBusiness}
-                disabled={savingBusiness || savingLoyalty || savingDiscount}
-                className="px-5 py-2 text-sm border border-gray-200 text-gray-600 rounded-lg hover:bg-gray-50 font-medium disabled:opacity-50 transition-colors"
-              >
-                {t('settings.cancel')}
-              </button>
-              <button
-                onClick={saveAllSettings}
-                disabled={savingBusiness || savingLoyalty || savingDiscount}
-                className="px-6 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium transition-colors"
-              >
-                {(savingBusiness || savingLoyalty || savingDiscount) ? t('settings.saving') : t('settings.saveAll')}
-              </button>
-            </div>
-          )}
         </TabsContent>
 
-        {/* ================================================================
-            TAB: Printers (hardware — IP / USB / WebUSB)
-        ================================================================ */}
-        <TabsContent value="printers">
-          <div className="space-y-6">
+        <TabsContent value="receipts">
+          <div className="pb-6 max-w-3xl space-y-6">
+            <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
@@ -1565,127 +1731,8 @@ export default function SettingsPage() {
               <strong>{t('settings.defaultPrinterTipTitle')}</strong> {t('settings.defaultPrinterTipBody')}
             </div>
           </div>
-        </TabsContent>
-
-        {/* ================================================================
-            TAB: KDS Pairing
-        ================================================================ */}
-        <TabsContent value="kds">
-          <div className="max-w-2xl space-y-6">
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <ChefHat size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.kds')}</h2>
-              </div>
-              <p className="text-sm text-gray-500 mb-5">
-                {t('settings.kdsPairingHint')}
-              </p>
-
-              {kdsInfoLoading && (
-                <div className="flex items-center justify-center py-10">
-                  <div className="w-6 h-6 border-2 border-brand border-t-transparent rounded-full animate-spin" />
-                </div>
-              )}
-
-              {kdsInfo && !kdsInfoLoading && (
-                <div className="flex flex-col gap-6 w-full">
-                  {/* Local Network / Tailscale IPs */}
-                  {kdsInfo.ips_data && kdsInfo.ips_data.length > 0 ? (
-                    <>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                        {kdsInfo.ips_data.map((ipInfo: { ip: string; url: string; qr_data: string | null }, idx: number) => (
-                          <div key={idx} className="flex flex-col items-center p-4 bg-gray-50 border border-gray-200 rounded-lg">
-                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-3">
-                              {ipInfo.ip.startsWith('100.') ? t('settings.vpnMeshNetwork') : t('settings.localNetwork')}
-                            </p>
-                            {ipInfo.qr_data ? (
-                              <img src={ipInfo.qr_data} alt={`QR Code for ${ipInfo.ip}`} className="w-40 h-40 rounded-lg mb-3 bg-white p-2 border border-gray-100" />
-                            ) : (
-                              <div className="w-40 h-40 bg-gray-100 rounded-lg flex items-center justify-center mb-3">
-                                <QrCode size={40} className="text-gray-400" />
-                              </div>
-                            )}
-                            <a href={ipInfo.url} target="_blank" rel="noopener noreferrer" className="text-xs font-mono text-brand hover:underline break-all text-center">
-                              {ipInfo.url}
-                            </a>
-                          </div>
-                        ))}
-                      </div>
-
-                      {/* mDNS URL */}
-                      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                        <div className="flex items-start gap-3">
-                          <div className="flex-1">
-                            <p className="text-xs font-semibold text-blue-700 uppercase tracking-wide mb-1">{t('settings.appleDevices')}</p>
-                            <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-blue-600 break-all hover:underline">
-                              {kdsInfo.mdns_url}
-                            </a>
-                            <p className="text-xs text-blue-600 mt-2">
-                              {t('settings.appleDevicesHint')}
-                            </p>
-                          </div>
-                        </div>
-                      </div>
-                    </>
-                  ) : (
-                    // Fallback for older server response
-                    <div className="flex flex-col sm:flex-row gap-6 items-start">
-                      <div className="shrink-0">
-                        {kdsInfo.qr_data_url ? (
-                          <img src={kdsInfo.qr_data_url} alt={t('settings.kdsQrAlt')} className="w-48 h-48 rounded-xl border border-gray-200" />
-                        ) : (
-                          <div className="w-48 h-48 rounded-xl border border-gray-200 flex items-center justify-center text-gray-400">
-                            <QrCode size={48} />
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.directIp')}</p>
-                          <a href={kdsInfo.ip_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-brand break-all hover:underline">
-                            {kdsInfo.ip_url}
-                          </a>
-                        </div>
-                        <div>
-                          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-1">{t('settings.mdnsAlwaysStable')}</p>
-                          <a href={kdsInfo.mdns_url} target="_blank" rel="noopener noreferrer" className="block font-mono text-sm text-gray-700 break-all hover:underline">
-                            {kdsInfo.mdns_url}
-                          </a>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  <div className="flex justify-end border-t border-gray-200 pt-4">
-                    <button onClick={fetchKdsInfo} disabled={kdsInfoLoading}
-                      className="flex items-center gap-2 text-sm text-gray-500 hover:text-gray-800">
-                      <RefreshCw size={14} className={kdsInfoLoading ? 'animate-spin' : ''} />
-                      {t('settings.refreshUrls')}
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {!kdsInfo && !kdsInfoLoading && (
-                <button onClick={fetchKdsInfo}
-                  className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
-                  {t('settings.loadKdsInfo')}
-                </button>
-              )}
-            </div>
-
-            <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-              <strong>{t('settings.howItWorks')}</strong> {t('settings.howItWorksBody')}
-            </div>
-          </div>
-        </TabsContent>
-
-        {/* ================================================================
-            TAB: Printing
-        ================================================================ */}
-        <TabsContent value="printing">
-          <div className="pb-6">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="pb-6">
+          <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Printer size={20} className="text-gray-500" />
@@ -1772,26 +1819,16 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-          {/* Printing tab - Save buttons moved from sticky bottom */}
-          <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
-            <button onClick={resetPrinting}>{t('settings.cancel')}</button>
-            <button onClick={savePrinting}>{t('settings.save')}</button>
-          </div>
-          </div>
-        </TabsContent>
 
-        {/* ================================================================
-            TAB: Bill Template
-        ================================================================ */}
-        <TabsContent value="bill-template">
-          <div className="pb-6">
+          </div>
+            <div className="pb-6">
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <FileText size={20} className="text-gray-500" />
                 <h2 className="font-semibold text-gray-900">{t('settings.billTemplate')}</h2>
               </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 {TEMPLATE_CARDS.map((card) => {
                   const isSelected = billForm.billTemplate === card.id;
                   return (
@@ -1829,19 +1866,14 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-          {/* Bill Template tab - Save buttons moved from sticky bottom */}
-          <div className="mt-6 pt-6 border-t border-gray-200 flex items-center justify-end gap-3">
-            <button onClick={resetBillTemplate}>{t('settings.cancel')}</button>
-            <button onClick={saveBillTemplate}>{t('settings.save')}</button>
+
           </div>
           </div>
         </TabsContent>
 
-        {/* ================================================================
-            TAB: Data (Import/Export/Backup)
-        ================================================================ */}
         <TabsContent value="data">
-          <div className="space-y-6">
+          <div className="pb-6 max-w-3xl space-y-6">
+            <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">{t('settings.data')}</h2>
             {/* Database Export */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -2033,91 +2065,7 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
-        </TabsContent>
-
-        {/* ================================================================
-            TAB: Updates
-        ================================================================ */}
-        <TabsContent value="updates">
-          <div className="bg-white rounded-xl border border-gray-100 p-6">
-            <div className="flex items-center gap-2 mb-4">
-              <RefreshCw size={20} className="text-gray-500" />
-              <h2 className="font-semibold text-gray-900">{t('settings.updates')}</h2>
-            </div>
-            <p className="text-sm text-gray-500 mb-6">
-              {updateStatus?.status === 'store'
-                ? t('settings.softwareUpdatesHintStore')
-                : t('settings.softwareUpdatesHintDefault')}
-            </p>
-
-            {updateStatus && updateStatus.status !== 'store' && (
-              <div className={`p-4 rounded-lg mb-4 ${
-                updateStatus.status === 'available' || updateStatus.status === 'ready-to-install'
-                  ? 'bg-green-50 border border-green-200'
-                  : updateStatus.status === 'error'
-                  ? 'bg-red-50 border border-red-200'
-                  : updateStatus.status === 'dev-mode'
-                  ? 'bg-yellow-50 border border-yellow-200'
-                  : 'bg-gray-50 border border-gray-200'
-              }`}>
-                <div className="flex items-center gap-2 mb-2">
-                  {updateStatus.status === 'checking' && <RefreshCw size={16} className="animate-spin text-brand" />}
-                  {updateStatus.status === 'available' && <Check size={16} className="text-green-600" />}
-                  {updateStatus.status === 'up-to-date' && <CheckCircle2 size={16} className="text-green-600" />}
-                  {updateStatus.status === 'ready-to-install' && <CheckCircle2 size={16} className="text-green-600" />}
-                  {updateStatus.status === 'downloading' && <RefreshCw size={16} className="animate-spin text-brand" />}
-                  {updateStatus.status === 'error' && <span className="text-red-600">✕</span>}
-                  {updateStatus.status === 'dev-mode' && <span className="text-yellow-600">⚠</span>}
-                  <span className="font-medium capitalize">
-                    {updateStatus.status === 'available' ? t('settings.updateStatusAvailable')
-                     : updateStatus.status === 'up-to-date' ? t('settings.updateStatusUpToDate')
-                     : updateStatus.status === 'ready-to-install' ? t('settings.updateStatusReadyToInstall')
-                     : updateStatus.status.replace(/-/g, ' ')}
-                  </span>
-                </div>
-                {updateStatus.version && (
-                  <p className="text-sm text-gray-600">{t('settings.version')}: {updateStatus.version}</p>
-                )}
-                {updateStatus.percent !== undefined && (
-                  <div className="mt-2">
-                    <div className="w-full bg-gray-200 rounded-full h-2">
-                      <div
-                        className="bg-brand h-2 rounded-full transition-all"
-                        style={{ width: `${updateStatus.percent}%` }}
-                      />
-                    </div>
-                    <p className="text-xs text-gray-500 mt-1">{t('settings.percentDownloaded', { percent: updateStatus.percent.toFixed(1) })}</p>
-                  </div>
-                )}
-                {updateStatus.error && (
-                  <p className="text-sm text-red-600 mt-1">{updateStatus.error}</p>
-                )}
-                {updateStatus.status === 'up-to-date' && (
-                  <p className="text-sm text-gray-600">{t('settings.upToDate')}</p>
-                )}
-                {updateStatus.status === 'dev-mode' && (
-                  <p className="text-sm text-yellow-600">{t('settings.devModeDisabled')}</p>
-                )}
-              </div>
-            )}
-
-            {updateStatus?.status !== 'store' && (
-              <button
-                onClick={handleCheckUpdates}
-                disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'downloading'}
-                className="px-4 py-2 bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
-              >
-                <RefreshCw size={16} className={updateStatus?.status === 'checking' ? 'animate-spin' : ''} />
-                {updateStatus?.status === 'checking' ? t('settings.checking') : t('settings.checkForUpdates')}
-              </button>
-            )}
-          </div>
-        </TabsContent>
-        {/* ================================================================
-            TAB: Cloud Sync
-        ================================================================ */}
-        <TabsContent value="cloud">
-          <div className="space-y-6">
+            <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">{t('settings.cloud')}</h2>
 
             {/* FloAdmin — reporting sync */}
@@ -2257,21 +2205,9 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            <button
-              onClick={saveCloud}
-              disabled={savingCloud}
-              className="px-6 py-2.5 bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium"
-            >
-              {savingCloud ? t('settings.savingCloud') : t('settings.saveCloudSettings')}
-            </button>
-          </div>
-        </TabsContent>
 
-        {/* ================================================================
-            TAB: More Apps
-        ================================================================ */}
-        <TabsContent value="more-apps">
-          <div className="max-w-2xl space-y-6">
+          </div>
+            <div className="max-w-2xl space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Smartphone size={20} className="text-gray-500" />
@@ -2331,9 +2267,105 @@ export default function SettingsPage() {
               )}
             </div>
           </div>
+          </div>
         </TabsContent>
 
-      </Tabs>
+        <TabsContent value="about">
+          <div className="pb-6 max-w-3xl space-y-6">
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <h2 className="font-semibold text-gray-900 mb-4">{t('settings.aboutFloCafe')}</h2>
+              <p className="text-sm text-gray-600 mb-6">
+                {t('settings.aboutDescription')}
+              </p>
+              <div className="space-y-3">
+                <a href="https://github.com/FreeOpenSourcePOS/FloCafe" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand hover:underline">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 22v-4a4.8 4.8 0 0 0-1-3.5c3 0 6-2 6-5.5.08-1.25-.27-2.48-1-3.5.28-1.15.28-2.35 0-3.5 0 0-1 0-3 1.5-2.64-.5-5.36-.5-8 0C6 2 5 2 5 2c-.3 1.15-.3 2.35 0 3.5A5.403 5.403 0 0 0 4 9c0 3.5 3 5.5 6 5.5-.39.49-.68 1.05-.85 1.65-.17.6-.22 1.23-.15 1.85v4"/><path d="M9 18c-4.51 2-5-2-7-2"/></svg>
+                  GitHub Repository
+                </a>
+                <a href="https://flopos.com/" target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-brand hover:underline">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
+                  App Website
+                </a>
+              </div>
+            </div>
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+            <div className="flex items-center gap-2 mb-4">
+              <RefreshCw size={20} className="text-gray-500" />
+              <h2 className="font-semibold text-gray-900">{t('settings.updates')}</h2>
+            </div>
+            <p className="text-sm text-gray-500 mb-6">
+              {updateStatus?.status === 'store'
+                ? t('settings.softwareUpdatesHintStore')
+                : t('settings.softwareUpdatesHintDefault')}
+            </p>
+
+            {updateStatus && updateStatus.status !== 'store' && (
+              <div className={`p-4 rounded-lg mb-4 ${
+                updateStatus.status === 'available' || updateStatus.status === 'ready-to-install'
+                  ? 'bg-green-50 border border-green-200'
+                  : updateStatus.status === 'error'
+                  ? 'bg-red-50 border border-red-200'
+                  : updateStatus.status === 'dev-mode'
+                  ? 'bg-yellow-50 border border-yellow-200'
+                  : 'bg-gray-50 border border-gray-200'
+              }`}>
+                <div className="flex items-center gap-2 mb-2">
+                  {updateStatus.status === 'checking' && <RefreshCw size={16} className="animate-spin text-brand" />}
+                  {updateStatus.status === 'available' && <Check size={16} className="text-green-600" />}
+                  {updateStatus.status === 'up-to-date' && <CheckCircle2 size={16} className="text-green-600" />}
+                  {updateStatus.status === 'ready-to-install' && <CheckCircle2 size={16} className="text-green-600" />}
+                  {updateStatus.status === 'downloading' && <RefreshCw size={16} className="animate-spin text-brand" />}
+                  {updateStatus.status === 'error' && <span className="text-red-600">✕</span>}
+                  {updateStatus.status === 'dev-mode' && <span className="text-yellow-600">⚠</span>}
+                  <span className="font-medium capitalize">
+                    {updateStatus.status === 'available' ? t('settings.updateStatusAvailable')
+                     : updateStatus.status === 'up-to-date' ? t('settings.updateStatusUpToDate')
+                     : updateStatus.status === 'ready-to-install' ? t('settings.updateStatusReadyToInstall')
+                     : updateStatus.status.replace(/-/g, ' ')}
+                  </span>
+                </div>
+                {updateStatus.version && (
+                  <p className="text-sm text-gray-600">{t('settings.version')}: {updateStatus.version}</p>
+                )}
+                {updateStatus.percent !== undefined && (
+                  <div className="mt-2">
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-brand h-2 rounded-full transition-all"
+                        style={{ width: `${updateStatus.percent}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500 mt-1">{t('settings.percentDownloaded', { percent: updateStatus.percent.toFixed(1) })}</p>
+                  </div>
+                )}
+                {updateStatus.error && (
+                  <p className="text-sm text-red-600 mt-1">{updateStatus.error}</p>
+                )}
+                {updateStatus.status === 'up-to-date' && (
+                  <p className="text-sm text-gray-600">{t('settings.upToDate')}</p>
+                )}
+                {updateStatus.status === 'dev-mode' && (
+                  <p className="text-sm text-yellow-600">{t('settings.devModeDisabled')}</p>
+                )}
+              </div>
+            )}
+
+            {updateStatus?.status !== 'store' && (
+              <button
+                onClick={handleCheckUpdates}
+                disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'downloading'}
+                className="px-4 py-2 bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 text-sm font-medium flex items-center gap-2"
+              >
+                <RefreshCw size={16} className={updateStatus?.status === 'checking' ? 'animate-spin' : ''} />
+                {updateStatus?.status === 'checking' ? t('settings.checking') : t('settings.checkForUpdates')}
+              </button>
+            )}
+          </div>
+          </div>
+        </TabsContent>
+
+</div>
+</Tabs>
       {ConfirmDialog}
 
       {/* Table Info Dialog */}
@@ -2413,6 +2445,15 @@ export default function SettingsPage() {
           setTimeout(() => window.location.replace('/setup'), 1200);
         }}
       />
+      {isAdmin && isDirty && (
+        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-5 duration-300 ${shakeSaveBar ? 'animate-shake-centered' : ''}`}>
+          <span className="text-sm font-medium">{t('settings.unsavedChanges', { defaultValue: 'You have unsaved changes' })}</span>
+          <div className="flex items-center gap-2">
+            <button onClick={resetAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50 text-white">{t('settings.discard', { defaultValue: 'Discard' })}</button>
+            <button onClick={saveAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-brand hover:opacity-90 rounded-full font-medium transition-colors disabled:opacity-50 text-white">{(savingBusiness || savingLoyalty || savingDiscount) ? t('settings.saving') : t('settings.saveChanges', { defaultValue: 'Save Changes' })}</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
