@@ -117,6 +117,14 @@ When modifying the SQLite schema:
 3. Never `DROP` columns or tables — mark them deprecated instead
 4. Test with both fresh databases and databases at previous schema versions
 
+## Internationalization (i18n)
+
+We actively welcome community contributions for new language translations! To add or improve a language:
+1. Navigate to `frontend/src/lib/i18n/`.
+2. Duplicate `en.json` and rename it to your target locale code (e.g., `fr.json` for French).
+3. Translate the string values while keeping all the JSON keys intact.
+4. Register your new language file where the i18n store or provider is initialized.
+
 ## Code Style
 
 - TypeScript strict mode

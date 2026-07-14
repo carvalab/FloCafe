@@ -99,6 +99,11 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 - Dashboard insights and owner-restricted analytics
 - Sales reports
 
+### Localization (i18n)
+- Native multi-language support (English and Spanish included)
+- Easily extensible translation system for adding new locales
+- Fully localized user interfaces, printed receipts, and POS interactions
+
 ### Order Management
 - Bill-style order cards for intuitive layout and fast management
 - Cancel orders with status-based rules (pending = free, preparing+ = manager PIN)
@@ -115,6 +120,14 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 - Dynamic IP detection for easy pairing via VPN/Mesh networks (Tailscale, ZeroTier, etc.)
 - "NEW" badge for items added after initial order
 - Table name always visible
+
+## 🗺️ Public Roadmap
+
+FloCafe is actively evolving. Here are some of the major milestones we're working towards:
+- **Modular Plugin Architecture:** Support for custom plugins, third-party integrations, and UI themes without modifying core code.
+- **Advanced Inventory Management:** Low stock alerts, supplier purchase orders, and ingredient-level tracking.
+- **Enhanced Cloud Sync:** Opt-in multi-device synchronization across different branches or franchises.
+- **Expanded Translations (i18n):** Adding more community-contributed languages to our native English and Spanish support.
 
 ## Tech Stack
 
