@@ -26,6 +26,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 const {
   initTestDb, createApp, startServer,
   seedOwnerUser, seedCategory, seedProduct, seedTable,
+  seedCustomer,
   api, assert, assertEqual, assertIncludes,
   closeDatabase, getDatabase, now,
 } = require('./helpers/test-setup');
@@ -109,6 +110,7 @@ async function main() {
 
     seedCategory(db, 'cat-table-move', 'Table Move Menu');
     seedProduct(db, 'prod-table-move', 'cat-table-move', 'Dosa', 120);
+    seedCustomer(db, 'cust-table-move', 'Table Guest', '9876543210');
     seedTable(db, 'tbl-move-source', 91, 4);
     seedTable(db, 'tbl-move-target', 92, 4);
 
@@ -118,6 +120,7 @@ async function main() {
       body: {
         type: 'dine_in',
         table_id: 'tbl-move-source',
+        customer_id: 'cust-table-move',
         items: [{ product_id: 'prod-table-move', quantity: 1 }],
       },
     });
@@ -127,6 +130,8 @@ async function main() {
     const liveTables = await api(baseUrl, '/api/tables', { headers: authHeader });
     const liveSource = liveTables.data.tables.find((t: any) => t.id === 'tbl-move-source');
     assertEqual(liveSource.activeOrder.id, orderId, 'GET /tables includes active order for occupied table');
+    assertEqual(liveSource.current_order.id, orderId, 'GET /tables includes current_order alias for frontend compatibility');
+    assertEqual(liveSource.current_order.customer.name, 'Table Guest', 'current_order includes customer for mismatch warning');
 
     const moveRes = await api(baseUrl, '/api/tables/tbl-move-source/move-order', {
       method: 'POST',
@@ -140,6 +145,7 @@ async function main() {
     assertEqual(moveRes.data.sourceTable.status, 'available', 'source table is freed');
     assertEqual(moveRes.data.targetTable.status, 'occupied', 'target table is occupied');
     assertEqual(moveRes.data.targetTable.activeOrder.id, orderId, 'target table now exposes active order');
+    assertEqual(moveRes.data.targetTable.current_order.id, orderId, 'target table also exposes current_order alias');
 
     const movedOrder = await api(baseUrl, `/api/orders/${orderId}`, { headers: authHeader });
     assertEqual(Number(movedOrder.data.order.table.name), 92, 'order detail resolves the new table immediately');

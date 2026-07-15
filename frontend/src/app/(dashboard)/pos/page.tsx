@@ -10,6 +10,7 @@ import { useSidebar } from '@/components/ui/sidebar';
 import toast from 'react-hot-toast';
 import { ShoppingCart, X } from 'lucide-react';
 import type { Addon, Category, Product, Table, Bill, Order } from '@/lib/types';
+import { useConfirm } from '@/hooks/use-confirm';
 import {
   Drawer, DrawerContent, DrawerTrigger,
 } from '@/components/ui/drawer';
@@ -35,6 +36,7 @@ export default function POSPage() {
   const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, setBillingType, setTablesRequired } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
   const { t } = useI18n();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const [categories, setCategories] = useState<Category[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -305,7 +307,27 @@ export default function POSPage() {
     setShowTablePicker(false);
   };
 
-  const handleSelectOccupiedTable = (table: Table) => {
+  const handleSelectOccupiedTable = async (table: Table) => {
+    const activeOrder = table.current_order || table.activeOrder || null;
+    const activeCustomerId = activeOrder?.customer_id;
+    const activeCustomerName = activeOrder?.customer?.name || t('pos.anotherCustomer');
+
+    if (
+      cart.customerId != null &&
+      activeCustomerId != null &&
+      String(cart.customerId) !== String(activeCustomerId)
+    ) {
+      const shouldProceed = await confirm(
+        t('pos.customerMismatchWarning', { customer: activeCustomerName }),
+        {
+          title: t('pos.customerMismatchTitle'),
+          confirmLabel: t('pos.proceedAnyway'),
+        },
+      );
+
+      if (!shouldProceed) return;
+    }
+
     setShowTablePicker(false);
     setCheckoutTable(table);
   };
@@ -509,6 +531,8 @@ export default function POSPage() {
           </div>
         </div>
       )}
+
+      {ConfirmDialog}
 
       {/* Prepaid Checkout Modal - Payment BEFORE order is placed */}
       {showPrepaidCheckout && (

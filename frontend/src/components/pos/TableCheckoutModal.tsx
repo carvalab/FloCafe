@@ -39,8 +39,9 @@ export default function TableCheckoutModal({
       try {
         const { data } = await api.get(`/tables/${table.id}`);
         const tbl = data.table;
-        if (tbl.activeOrder) {
-          const orderRes = await api.get(`/orders/${tbl.activeOrder.id}`);
+        const activeOrder = tbl.activeOrder || tbl.current_order;
+        if (activeOrder) {
+          const orderRes = await api.get(`/orders/${activeOrder.id}`);
           setOrder(orderRes.data.order);
         }
       } catch {

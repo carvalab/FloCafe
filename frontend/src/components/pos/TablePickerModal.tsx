@@ -90,9 +90,9 @@ export default function TablePickerModal({
                 )}
                 <p className="font-bold text-gray-900">{table.name}</p>
                 <p className="text-xs text-gray-500">{t('pos.tableSeats', { count: table.capacity })}</p>
-                {table.status === 'occupied' && table.current_order && (
+                {table.status === 'occupied' && (table.current_order || table.activeOrder) && (
                   <p className="text-xs text-orange-600 font-medium mt-1">
-                    #{table.current_order.order_number}
+                    #{(table.current_order || table.activeOrder)?.order_number}
                   </p>
                 )}
               </button>

@@ -150,15 +150,24 @@ function runStartupIntegrityCheck(): void {
  *  the sequences table, which reset counters while old numbered rows still existed. */
 function repairSequences(): void {
   try {
+    const collectSequenceMax = (table: 'orders' | 'bills', numberColumn: string, pattern: RegExp) => {
+      const rows = db.prepare(`SELECT ${numberColumn} AS value FROM ${table} WHERE ${numberColumn} IS NOT NULL`).all() as { value: string }[];
+      const maxByDate = new Map<string, number>();
+
+      for (const row of rows) {
+        const match = String(row.value).match(pattern);
+        if (!match) continue;
+        const date = match[1];
+        const sequence = Number.parseInt(match[2], 10);
+        if (!Number.isFinite(sequence)) continue;
+        maxByDate.set(date, Math.max(maxByDate.get(date) || 0, sequence));
+      }
+
+      return Array.from(maxByDate, ([date, max_val]) => ({ date, max_val }));
+    };
+
     // Extract max sequence per date from order_numbers (format: ORD-YYYYMMDD-NNNN)
-    const orderRows = db.prepare(`
-      SELECT
-        substr(order_number, 5, 8) AS date,
-        MAX(CAST(substr(order_number, 14) AS INTEGER)) AS max_val
-      FROM orders
-      WHERE order_number LIKE 'ORD-%'
-      GROUP BY substr(order_number, 5, 8)
-    `).all() as any[];
+    const orderRows = collectSequenceMax('orders', 'order_number', /^ORD-(\d{8})-(\d+)$/);
 
     for (const row of orderRows) {
       if (!row.date || !row.max_val) continue;
@@ -171,14 +180,7 @@ function repairSequences(): void {
     }
 
     // Extract max sequence per date from bill_numbers (format: INV-YYYYMMDD-NNNN)
-    const billRows = db.prepare(`
-      SELECT
-        substr(bill_number, 5, 8) AS date,
-        MAX(CAST(substr(bill_number, 14) AS INTEGER)) AS max_val
-      FROM bills
-      WHERE bill_number LIKE 'INV-%'
-      GROUP BY substr(bill_number, 5, 8)
-    `).all() as any[];
+    const billRows = collectSequenceMax('bills', 'bill_number', /^INV-(\d{8})-(\d+)$/);
 
     for (const row of billRows) {
       if (!row.date || !row.max_val) continue;

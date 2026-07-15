@@ -12,15 +12,25 @@ const ACTIVE_ORDER_STATUS_SQL = "status NOT IN ('completed', 'cancelled')";
 function activeOrderForTable(db: ReturnType<typeof getDatabase>, tableId: string, orderId?: number | string) {
   const whereOrder = orderId ? ' AND id = ?' : '';
   const params = orderId ? [tableId, orderId] : [tableId];
-  return parseRowJson(db.prepare(`
+  const order = parseRowJson(db.prepare(`
     SELECT * FROM orders
     WHERE table_id = ? AND ${ACTIVE_ORDER_STATUS_SQL}${whereOrder}
     ORDER BY created_at DESC LIMIT 1
   `).get(...params) as any);
+  if (!order?.customer_id) return order;
+
+  const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id);
+  return { ...order, customer: customer || null };
 }
 
 function tableShape(table: any, activeOrder?: any) {
-  return { ...table, name: table.number, activeOrder: activeOrder || null };
+  const currentOrder = activeOrder || null;
+  return {
+    ...table,
+    name: table.number,
+    activeOrder: currentOrder,
+    current_order: currentOrder,
+  };
 }
 
 router.get('/', (req: Request, res: Response) => {
