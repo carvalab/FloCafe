@@ -104,9 +104,14 @@ export type MasterPinAuthResult =
 export function authorizeMasterPin(pin: string | undefined, rateLimitKey: string): MasterPinAuthResult {
   if (!isMasterPinAvailable()) {
     // No OS-backed encryption on this machine (e.g. headless Linux without a
-    // keyring) — never fall back to weak/reversible obfuscation. Treat the
-    // gate as inert rather than fake security.
-    return { ok: true };
+    // keyring). Hard-block rather than silently pass — a bypass here would let
+    // any valid owner JWT wipe the database without a PIN on these platforms.
+    return {
+      ok: false,
+      status: 503,
+      error: 'Master PIN is not available on this device (OS encryption unavailable). ' +
+             'Master PIN-gated operations require a desktop environment with keyring support.',
+    };
   }
 
   if (!isMasterPinSet()) {

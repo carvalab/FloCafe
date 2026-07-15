@@ -84,8 +84,9 @@ function main() {
   // ── fallback when encryption is unavailable ──────────────────────────
   encryptionAvailable = false;
   result = authorizeMasterPin('anything-or-nothing', 'test:no-encryption');
-  assert.equal(result.ok, true, 'gate is inert (never blocks) when safeStorage is unavailable on this machine');
-  console.log('   ✓ authorizeMasterPin() never blocks when encryption is unavailable — no fake security fallback');
+  assert.equal(result.ok, false, 'gate hard-blocks (ok: false) when safeStorage is unavailable — vuln-0002');
+  if (!result.ok) assert.equal(result.status, 503, 'unavailable encryption returns 503');
+  console.log('   ✓ authorizeMasterPin() hard-blocks with 503 when encryption is unavailable (vuln-0002 regression)');
   encryptionAvailable = true;
 }
 
