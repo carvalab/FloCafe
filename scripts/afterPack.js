@@ -24,14 +24,14 @@ module.exports = async function afterPack(context) {
   if (arch !== 1 && arch !== 3) return; // only x64 and arm64
 
   const archName = arch === 1 ? 'x64' : 'arm64';
-  const electronVersion = packager.electronVersion;
+  const electronVersion = packager.electronVersion || require('electron/package.json').version;
   const projectDir = packager.projectDir;
 
   console.log(`\n→ afterPack: rebuilding better-sqlite3 for darwin-${archName} (electron ${electronVersion})...`);
 
   const result = spawnSync(
     'npx',
-    ['@electron/rebuild', '-f', '-w', 'better-sqlite3', '--arch', archName, '--target', electronVersion],
+    ['@electron/rebuild', '-f', '-w', 'better-sqlite3', '--arch', archName, '--version', electronVersion],
     { cwd: projectDir, stdio: 'inherit', shell: true }
   );
 
