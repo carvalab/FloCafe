@@ -134,12 +134,14 @@ export default function SettingsPage() {
   const [savingLoyalty, setSavingLoyalty] = useState(false);
 
   // Discount settings
-  const [discountMaxPct, setDiscountMaxPct] = useState(50);
-  const [savedDiscountMaxPct, setSavedDiscountMaxPct] = useState(50);
-  const [discountMaxAmount, setDiscountMaxAmount] = useState(100);
-  const [savedDiscountMaxAmount, setSavedDiscountMaxAmount] = useState(100);
-  const [discountMode, setDiscountMode] = useState('both');
-  const [savedDiscountMode, setSavedDiscountMode] = useState('both');
+  const normalizeDiscountPercentage = (value: unknown) => Math.min(100, Math.max(1, Number(value) || 25));
+  const normalizeDiscountAmount = (value: unknown) => Math.min(999999, Math.max(0, Number(value) || 0));
+  const [discountMaxPct, setDiscountMaxPct] = useState(25);
+  const [savedDiscountMaxPct, setSavedDiscountMaxPct] = useState(25);
+  const [discountMaxAmount, setDiscountMaxAmount] = useState(0);
+  const [savedDiscountMaxAmount, setSavedDiscountMaxAmount] = useState(0);
+  const [discountMode, setDiscountMode] = useState('percentage');
+  const [savedDiscountMode, setSavedDiscountMode] = useState('percentage');
   const [discountRequiresApproval, setDiscountRequiresApproval] = useState(false);
   const [savedDiscountRequiresApproval, setSavedDiscountRequiresApproval] = useState(false);
   const [savingDiscount, setSavingDiscount] = useState(false);
@@ -652,8 +654,16 @@ export default function SettingsPage() {
       setLoyaltyEnabled(!!loyaltyRes.data.loyalty_enabled);
       setSavedLoyaltyEnabled(!!loyaltyRes.data.loyalty_enabled);
 
-      if (discountRes.data.discount_max_percentage !== undefined) { setDiscountMaxPct(Number(discountRes.data.discount_max_percentage)); setSavedDiscountMaxPct(Number(discountRes.data.discount_max_percentage)); }
-      if (discountRes.data.discount_max_amount !== undefined) { setDiscountMaxAmount(Number(discountRes.data.discount_max_amount)); setSavedDiscountMaxAmount(Number(discountRes.data.discount_max_amount)); }
+      if (discountRes.data.discount_max_percentage !== undefined) {
+        const value = normalizeDiscountPercentage(discountRes.data.discount_max_percentage);
+        setDiscountMaxPct(value);
+        setSavedDiscountMaxPct(value);
+      }
+      if (discountRes.data.discount_max_amount !== undefined) {
+        const value = normalizeDiscountAmount(discountRes.data.discount_max_amount);
+        setDiscountMaxAmount(value);
+        setSavedDiscountMaxAmount(value);
+      }
       if (discountRes.data.discount_mode) { setDiscountMode(discountRes.data.discount_mode); setSavedDiscountMode(discountRes.data.discount_mode); }
       if (discountRes.data.discount_requires_approval !== undefined) { setDiscountRequiresApproval(!!discountRes.data.discount_requires_approval); setSavedDiscountRequiresApproval(!!discountRes.data.discount_requires_approval); }
 
@@ -674,8 +684,16 @@ export default function SettingsPage() {
     }).catch(() => {});
 
     api.get('/settings/discount').then((res) => {
-      if (res.data.discount_max_percentage !== undefined) { setDiscountMaxPct(Number(res.data.discount_max_percentage)); setSavedDiscountMaxPct(Number(res.data.discount_max_percentage)); }
-      if (res.data.discount_max_amount !== undefined) { setDiscountMaxAmount(Number(res.data.discount_max_amount)); setSavedDiscountMaxAmount(Number(res.data.discount_max_amount)); }
+      if (res.data.discount_max_percentage !== undefined) {
+        const value = normalizeDiscountPercentage(res.data.discount_max_percentage);
+        setDiscountMaxPct(value);
+        setSavedDiscountMaxPct(value);
+      }
+      if (res.data.discount_max_amount !== undefined) {
+        const value = normalizeDiscountAmount(res.data.discount_max_amount);
+        setDiscountMaxAmount(value);
+        setSavedDiscountMaxAmount(value);
+      }
       if (res.data.discount_mode) { setDiscountMode(res.data.discount_mode); setSavedDiscountMode(res.data.discount_mode); }
       if (res.data.discount_requires_approval !== undefined) { setDiscountRequiresApproval(!!res.data.discount_requires_approval); setSavedDiscountRequiresApproval(!!res.data.discount_requires_approval); }
     }).catch(() => {});
@@ -822,8 +840,8 @@ export default function SettingsPage() {
     setSavingDiscount(true);
     try {
       await api.put('/settings/discount', {
-        discount_max_percentage: discountMaxPct,
-        discount_max_amount: discountMaxAmount,
+        discount_max_percentage: normalizeDiscountPercentage(discountMaxPct),
+        discount_max_amount: normalizeDiscountAmount(discountMaxAmount),
         discount_mode: discountMode,
         discount_requires_approval: discountRequiresApproval,
       });
@@ -1428,30 +1446,6 @@ export default function SettingsPage() {
                 <h2 className="font-semibold text-gray-900">{t('settings.discountLimits')}</h2>
               </div>
               <div className="space-y-5">
-                {/* Max discount percentage */}
-                <div>
-                  <p className="font-medium text-gray-900">{t('settings.maxDiscountPercentage')}</p>
-                  <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountPercentageHint')}</p>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min={0} max={100} value={discountMaxPct}
-                      onChange={(e) => setDiscountMaxPct(parseInt(e.target.value) || 0)}
-                      className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                    <span className="text-sm text-gray-500">{t('settings.percentZeroNoLimit')}</span>
-                  </div>
-                </div>
-
-                {/* Max discount amount */}
-                <div>
-                  <p className="font-medium text-gray-900">{t('settings.maxDiscountAmount')}</p>
-                  <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountAmountHint')}</p>
-                  <div className="flex items-center gap-3">
-                    <input type="number" min={0} max={999999} value={discountMaxAmount}
-                      onChange={(e) => setDiscountMaxAmount(parseInt(e.target.value) || 0)}
-                      className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                    <span className="text-sm text-gray-500">{t('settings.zeroNoLimit')}</span>
-                  </div>
-                </div>
-
                 {/* Discount mode */}
                 <div>
                   <p className="font-medium text-gray-900">{t('settings.discountMode')}</p>
@@ -1464,6 +1458,32 @@ export default function SettingsPage() {
                     <option value="flat">{t('settings.discountFlatOnly')}</option>
                   </select>
                 </div>
+
+                {(discountMode === 'percentage' || discountMode === 'both') && (
+                  <div>
+                    <p className="font-medium text-gray-900">{t('settings.maxDiscountPercentage')}</p>
+                    <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountPercentageHint')}</p>
+                    <div className="flex items-center gap-3">
+                      <input type="number" min={1} max={100} value={discountMaxPct}
+                        onChange={(e) => setDiscountMaxPct(normalizeDiscountPercentage(e.target.value))}
+                        className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      <span className="text-sm text-gray-500">{t('settings.percentMaximum')}</span>
+                    </div>
+                  </div>
+                )}
+
+                {(discountMode === 'flat' || discountMode === 'both') && (
+                  <div>
+                    <p className="font-medium text-gray-900">{t('settings.maxDiscountAmount')}</p>
+                    <p className="text-sm text-gray-500 mb-2">{t('settings.maxDiscountAmountHint')}</p>
+                    <div className="flex items-center gap-3">
+                      <input type="number" min={0} max={999999} value={discountMaxAmount}
+                        onChange={(e) => setDiscountMaxAmount(normalizeDiscountAmount(e.target.value))}
+                        className="w-24 px-3 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      <span className="text-sm text-gray-500">{t('settings.zeroNoLimit')}</span>
+                    </div>
+                  </div>
+                )}
 
                 <div className="flex items-center justify-between">
                   <div>

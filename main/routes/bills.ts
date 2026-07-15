@@ -449,7 +449,7 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
     }
 
     // Check discount mode
-    const discountMode = getSettingValue('discount_mode') || 'both';
+    const discountMode = getSettingValue('discount_mode') || 'percentage';
     if (discountMode === 'flat' && type === 'percentage') {
       return res.status(400).json({ error: 'Percentage discounts are disabled' });
     }
@@ -459,12 +459,12 @@ router.post('/:id/applyDiscount', requireRole('owner', 'manager'), (req: Request
 
     // Check against limits from settings (0 = no limit)
     if (type === 'percentage') {
-      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '25');
       if (maxPercentage > 0 && value > maxPercentage) {
         return res.status(400).json({ error: `discount value exceeds maximum percentage of ${maxPercentage}` });
       }
     } else {
-      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '0');
       if (maxAmount > 0 && value > maxAmount) {
         return res.status(400).json({ error: `discount value exceeds maximum amount of ${maxAmount}` });
       }

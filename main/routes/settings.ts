@@ -167,9 +167,9 @@ router.get('/discount', (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({
-      discount_max_percentage: parseFloat(s.discount_max_percentage || '50'),
-      discount_max_amount: parseFloat(s.discount_max_amount || '100'),
-      discount_mode: s.discount_mode || 'both',
+      discount_max_percentage: parseFloat(s.discount_max_percentage || '25'),
+      discount_max_amount: parseFloat(s.discount_max_amount || '0'),
+      discount_mode: s.discount_mode || 'percentage',
       discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
     });
   } catch (error: any) {
@@ -189,8 +189,8 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
     // Validate inputs
     if (discount_max_percentage !== undefined) {
       const val = parseFloat(discount_max_percentage);
-      if (isNaN(val) || val < 0 || val > 100) {
-        return res.status(400).json({ error: 'discount_max_percentage must be a number between 0 and 100' });
+      if (isNaN(val) || val < 1 || val > 100) {
+        return res.status(400).json({ error: 'discount_max_percentage must be a number between 1 and 100' });
       }
     }
     if (discount_max_amount !== undefined) {
@@ -212,9 +212,9 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
     });
     const s = getAllSettings(db);
     res.json({
-      discount_max_percentage: parseFloat(s.discount_max_percentage || '50'),
-      discount_max_amount: parseFloat(s.discount_max_amount || '100'),
-      discount_mode: s.discount_mode || 'both',
+      discount_max_percentage: parseFloat(s.discount_max_percentage || '25'),
+      discount_max_amount: parseFloat(s.discount_max_amount || '0'),
+      discount_mode: s.discount_mode || 'percentage',
       discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
     });
   } catch (error: any) {

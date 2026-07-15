@@ -499,6 +499,7 @@
   "settings.paperWidth80": "80mm (3.1\")",
   "settings.percentDownloaded": "{percent}% descargado",
   "settings.percentZeroNoLimit": "% (0 = sin límite)",
+  "settings.percentMaximum": "Máximo 100%",
   "settings.phone": "Teléfono",
   "settings.phoneDigits": "Dígitos del número de teléfono",
   "settings.phoneDigitsHint": "Cantidad de dígitos para validar el teléfono (ej. {count} para {country})",

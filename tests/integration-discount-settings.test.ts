@@ -117,9 +117,9 @@ async function request(baseUrl: string, urlPath: string, options: any = {}) {
 async function seedTestData(db: any) {
   // Ensure settings exist
   const settings = [
-    ['discount_max_percentage', '50'],
-    ['discount_max_amount', '100'],
-    ['discount_mode', 'both'],
+    ['discount_max_percentage', '25'],
+    ['discount_max_amount', '0'],
+    ['discount_mode', 'percentage'],
     ['discount_requires_approval', '0'],
   ];
   for (const [key, value] of settings) {
@@ -194,9 +194,9 @@ async function main() {
     {
       const res = await request(baseUrl, '/api/settings/discount');
       assertEqual(res.status, 200, 'returns 200');
-      assertEqual(res.data.discount_max_percentage, 50, 'default max percentage is 50');
-      assertEqual(res.data.discount_max_amount, 100, 'default max amount is 100');
-      assertEqual(res.data.discount_mode, 'both', 'default mode is both');
+      assertEqual(res.data.discount_max_percentage, 25, 'default max percentage is 25');
+      assertEqual(res.data.discount_max_amount, 0, 'default max amount is no limit');
+      assertEqual(res.data.discount_mode, 'percentage', 'default mode is percentage');
       assertEqual(res.data.discount_requires_approval, false, 'default approval is false');
     }
 
@@ -227,7 +227,7 @@ async function main() {
         body: JSON.stringify({ discount_max_percentage: -5 }),
       });
       assertEqual(res1.status, 400, 'rejects negative percentage');
-      assertIncludes(res1.data.error, '0 and 100', 'error mentions range');
+      assertIncludes(res1.data.error, '1 and 100', 'error mentions range');
 
       const res2 = await request(baseUrl, '/api/settings/discount', {
         method: 'PUT',
@@ -255,9 +255,9 @@ async function main() {
     await request(baseUrl, '/api/settings/discount', {
       method: 'PUT',
       body: JSON.stringify({
-        discount_max_percentage: 50,
-        discount_max_amount: 100,
-        discount_mode: 'both',
+        discount_max_percentage: 25,
+        discount_max_amount: 0,
+        discount_mode: 'percentage',
         discount_requires_approval: false,
       }),
     });

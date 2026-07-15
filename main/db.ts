@@ -609,10 +609,10 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     version: 7,
     name: 'add_discount_settings',
     up: () => {
-      insertSettingIfMissing('discount_mode', 'both');
+      insertSettingIfMissing('discount_mode', 'percentage');
       insertSettingIfMissing('discount_requires_approval', '0');
-      insertSettingIfMissing('discount_max_percentage', '50');
-      insertSettingIfMissing('discount_max_amount', '100');
+      insertSettingIfMissing('discount_max_percentage', '25');
+      insertSettingIfMissing('discount_max_amount', '0');
     },
   },
   {

@@ -44,6 +44,7 @@ async function main() {
   const db = initTestDb();
 
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('loyalty_enabled', 'true', ?)").run(now());
+  db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('discount_max_percentage', '50', ?)").run(now());
 
   const { authHeader } = seedOwnerUser(db);
   seedCategory(db, 'cat-global', 'Global Rate Menu');

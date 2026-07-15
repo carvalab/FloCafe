@@ -46,6 +46,14 @@ async function main() {
   seedProduct(db, 'prod-edge-1', 'cat-edge', 'Pizza', 500);
   seedProduct(db, 'prod-edge-2', 'cat-edge', 'Pasta', 500);
   seedProduct(db, 'prod-edge-3', 'cat-edge', 'Burger', 400);
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run('discount_mode', 'both');
+  db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, datetime('now'))
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `).run('discount_max_amount', '100');
 
   const app = createApp({
     '/api/orders': orderRoutes,
@@ -122,7 +130,7 @@ async function main() {
     });
     const orderIdB = orderB.data.order.id;
 
-    // Try to apply 60% discount (max is 50% by default)
+    // Try to apply 60% discount (max is 25% by default)
     const tooHighDiscount = await api(baseUrl, `/api/orders/${orderIdB}/discount`, {
       method: 'PATCH',
       body: { discount_type: 'percentage', discount_value: 60 },
@@ -131,7 +139,7 @@ async function main() {
     assertEqual(tooHighDiscount.status, 400, '60% discount rejected (400)');
     assertIncludes(tooHighDiscount.data.error, 'maximum', 'error mentions maximum');
 
-    // Try amount discount exceeding max (default max is ₹100)
+    // Try amount discount exceeding configured max (₹100)
     const tooHighAmount = await api(baseUrl, `/api/orders/${orderIdB}/discount`, {
       method: 'PATCH',
       body: { discount_type: 'amount', discount_value: 999 },

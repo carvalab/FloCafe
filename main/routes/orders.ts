@@ -696,7 +696,7 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
 
     // Check discount mode
     if (discount_value > 0) {
-      const discountMode = getSettingValue('discount_mode') || 'both';
+      const discountMode = getSettingValue('discount_mode') || 'percentage';
       if (discountMode === 'flat' && discount_type === 'percentage') {
         return res.status(400).json({ error: 'Percentage discounts are disabled' });
       }
@@ -708,12 +708,12 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
     // Check against limits from settings (0 = no limit)
     if (discount_value > 0) {
       if (discount_type === 'percentage') {
-        const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+        const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '25');
         if (maxPercentage > 0 && discount_value > maxPercentage) {
           return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
         }
       } else if (discount_type === 'amount') {
-        const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+        const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '0');
         if (maxAmount > 0 && discount_value > maxAmount) {
           return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
         }
@@ -850,7 +850,7 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     }
 
     // Check discount mode
-    const discountMode = getSettingValue('discount_mode') || 'both';
+    const discountMode = getSettingValue('discount_mode') || 'percentage';
     if (discountMode === 'flat' && discount_type === 'percentage') {
       return res.status(400).json({ error: 'Percentage discounts are disabled' });
     }
@@ -860,12 +860,12 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
 
     // BUG #14 FIX: Check item-level discount against max settings (0 = no limit)
     if (discount_type === 'percentage') {
-      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '50');
+      const maxPercentage = parseFloat(getSettingValue('discount_max_percentage') || '25');
       if (maxPercentage > 0 && discount_value > maxPercentage) {
         return res.status(400).json({ error: `discount_value exceeds maximum percentage of ${maxPercentage}` });
       }
     } else if (discount_type === 'amount') {
-      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '100');
+      const maxAmount = parseFloat(getSettingValue('discount_max_amount') || '0');
       if (maxAmount > 0 && discount_value > maxAmount) {
         return res.status(400).json({ error: `discount_value exceeds maximum amount of ${maxAmount}` });
       }
