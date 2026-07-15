@@ -6,7 +6,7 @@ import { randomBytes } from 'crypto';
 import { getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import { getCurrentSchemaVersion, getDatabase, now } from '../db';
 import { isMasterPinAvailable, setMasterPin } from '../services/master-pin';
-import { authRateLimit } from '../middleware/security';
+import { authRateLimit, validatePassword } from '../middleware/security';
 
 const router = Router();
 
@@ -479,6 +479,9 @@ router.post('/password/change', (req: Request, res: Response) => {
     if (!password) {
       return res.status(400).json({ error: 'Password is required' });
     }
+    if (!validatePassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
+    }
 
     const hashedPassword = bcrypt.hashSync(password, 10);
     db.prepare('UPDATE users SET password = ?, updated_at = ? WHERE id = ?').run(hashedPassword, now(), decoded.userId);
@@ -553,6 +556,9 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
 
     if (!displayName || !email || !password) {
       return res.status(400).json({ error: 'Name, email, and password are required' });
+    }
+    if (!validatePassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
     }
 
     if (!isValidEmail(email)) {

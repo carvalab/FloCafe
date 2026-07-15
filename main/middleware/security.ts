@@ -151,3 +151,15 @@ export const corsOptions = {
     }
   }
 };
+
+/**
+ * Validates password complexity (vuln-0006).
+ * Requires: >= 8 characters, at least 1 uppercase, 1 lowercase, 1 digit.
+ */
+export function validatePassword(password: string): boolean {
+  if (!password || password.length < 8) return false;
+  if (!/[A-Z]/.test(password)) return false;
+  if (!/[a-z]/.test(password)) return false;
+  if (!/[0-9]/.test(password)) return false;
+  return true;
+}

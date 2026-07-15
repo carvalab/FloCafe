@@ -8,7 +8,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase, now } from '../db';
-import { requireRole } from '../middleware/security';
+import { requireRole, validatePassword } from '../middleware/security';
 
 const router = Router();
 
@@ -73,6 +73,9 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
 
     if (!name || !password || !role) {
       return res.status(400).json({ error: 'name, password, and role are required' });
+    }
+    if (!validatePassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
     }
 
     const validRoles = ['owner', 'manager', 'cashier', 'waiter', 'chef'];
@@ -142,6 +145,10 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
       if (existing) {
         return res.status(400).json({ error: 'Email already in use' });
       }
+    }
+
+    if (password && !validatePassword(password)) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.' });
     }
 
     const hashedPassword = password ? bcrypt.hashSync(password, 10) : member.password;
