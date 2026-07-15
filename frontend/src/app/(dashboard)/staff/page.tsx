@@ -111,8 +111,9 @@ export default function StaffPage() {
       await api.put(`/staff/${resetPwStaff.id}`, { password: newPassword });
       toast.success(t('staff.resetPasswordToast'));
       setShowResetPw(false);
-    } catch {
-      toast.error(t('staff.failedToReset'));
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || t('staff.failedToReset'));
     }
   };
 
