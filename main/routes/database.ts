@@ -8,18 +8,61 @@ import * as path from 'path';
 
 const router = Router();
 
+// Settings keys stripped from export — these are secrets; exporting them would
+// allow token forgery or cloud credential theft (vuln-0005).
+const EXPORT_SETTINGS_REDACT = new Set([
+  'jwt_secret',
+  'cloud_api_key',
+  'cloud_device_secret',
+]);
+
+// User columns stripped from export — hashes must never leave the server.
+const USER_REDACT_COLS = new Set(['password', 'pin_hash']);
+
+// Tables excluded entirely — cloud_sync_outbox may contain cloud auth payloads.
+const EXPORT_EXCLUDE_TABLES = new Set(['cloud_sync_outbox']);
+
 router.get('/export', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    
+
     const tables = db.prepare(`
       SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '_flo_meta'
     `).all() as { name: string }[];
 
     const exportData: Record<string, any[]> = {};
+    const redactedFields: string[] = [];
 
     for (const { name: tableName } of tables) {
-      exportData[tableName] = db.prepare(`SELECT * FROM ${tableName}`).all();
+      if (EXPORT_EXCLUDE_TABLES.has(tableName)) {
+        redactedFields.push(`table:${tableName}`);
+        continue;
+      }
+
+      const rows = db.prepare(`SELECT * FROM ${tableName}`).all() as Record<string, any>[];
+
+      if (tableName === 'settings') {
+        exportData[tableName] = rows.map((row) => {
+          if (EXPORT_SETTINGS_REDACT.has(row.key)) {
+            redactedFields.push(`settings.${row.key}`);
+            return { ...row, value: '[REDACTED]' };
+          }
+          return row;
+        });
+      } else if (tableName === 'users') {
+        exportData[tableName] = rows.map((row) => {
+          const sanitized = { ...row };
+          for (const col of USER_REDACT_COLS) {
+            if (col in sanitized) {
+              delete sanitized[col];
+              if (!redactedFields.includes(`users.${col}`)) redactedFields.push(`users.${col}`);
+            }
+          }
+          return sanitized;
+        });
+      } else {
+        exportData[tableName] = rows;
+      }
     }
 
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
@@ -32,6 +75,7 @@ router.get('/export', requireRole('owner'), (req: Request, res: Response) => {
       app: 'FloDesktop',
       exported_at: new Date().toISOString(),
       schema_version: String(getCurrentSchemaVersion()),
+      redacted_fields: redactedFields,
       data: exportData,
     });
   } catch (error: any) {
@@ -155,12 +199,12 @@ router.post('/backup', requireRole('owner'), requireMasterPin, async (req: Reque
   }
 });
 
-router.get('/download', requireRole('owner'), (req: Request, res: Response) => {
+router.get('/download', requireRole('owner'), requireMasterPin, (req: Request, res: Response) => {
   try {
     const dbPath = getDbPath();
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
     const filename = `flo-database-${timestamp}.db`;
-    
+
     res.download(dbPath, filename);
   } catch (error: any) {
     console.error('[DB Download] Error:', error);

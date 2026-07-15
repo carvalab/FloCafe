@@ -123,6 +123,35 @@ async function main() {
   const ownerKitchen = await request(app).get('/api/kitchen/orders').set(ownerAuth);
   assertEqual(ownerKitchen.status, 200, 'owner can access kitchen orders');
 
+  // ── vuln-0005: /api/db/export must redact secrets ─────────────────────────
+  const exportRes = await request(app).get('/api/db/export').set(ownerAuth);
+  assertEqual(exportRes.status, 200, 'owner can call /api/db/export');
+
+  const exportBody = exportRes.body;
+  assert(Array.isArray(exportBody.redacted_fields), 'export response includes redacted_fields list');
+
+  // jwt_secret must be redacted in the settings rows
+  const settingsRows: { key: string; value: string }[] = exportBody.data?.settings ?? [];
+  const jwtRow = settingsRows.find((r: any) => r.key === 'jwt_secret');
+  if (jwtRow) {
+    assert(jwtRow.value === '[REDACTED]', 'jwt_secret value is [REDACTED] in export (vuln-0005)');
+    assert(exportBody.redacted_fields.includes('settings.jwt_secret'), 'jwt_secret listed in redacted_fields');
+  }
+
+  // password and pin_hash must be absent from all user rows
+  const userRows: Record<string, any>[] = exportBody.data?.users ?? [];
+  for (const user of userRows) {
+    assert(!('password' in user), 'users.password absent from export (vuln-0005)');
+    assert(!('pin_hash' in user), 'users.pin_hash absent from export (vuln-0005)');
+  }
+  if (userRows.length > 0) {
+    assert(exportBody.redacted_fields.includes('users.password'), 'users.password listed in redacted_fields');
+  }
+
+  // cloud_sync_outbox table must be excluded entirely
+  assert(!('cloud_sync_outbox' in exportBody.data), 'cloud_sync_outbox excluded from export (vuln-0005)');
+
+
   const results = getResults();
   if (results.failed > 0) {
     throw new Error(`${results.failed} security hardening assertion(s) failed`);
