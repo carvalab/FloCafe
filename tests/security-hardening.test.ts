@@ -37,6 +37,7 @@ const { kdsRoutes } = require('../main/routes/kds');
 const { kitchenRoutes } = require('../main/routes/kitchen');
 const { databaseRoutes } = require('../main/routes/database');
 const { authRoutes, getJWTSecret } = require('../main/routes/auth');
+const { orderRoutes } = require('../main/routes/orders');
 
 function seedUser(db: any, id: string, role: string, email: string, categoryIds?: string[]) {
   db.prepare(`
@@ -79,6 +80,7 @@ async function main() {
     '/api/staff':   staffRoutes,
     '/api/kds':     kdsRoutes,
     '/api/kitchen': kitchenRoutes,
+    '/api/orders':  orderRoutes,
     '/api/db':      databaseRoutes,
   });
 
@@ -187,6 +189,45 @@ async function main() {
     current_password: 'testpass123', password: 'StrongPass3'
   });
   assertEqual(strongChangeRes.status, 200, 'user can change to strong password');
+
+  // ── vuln-0007: IDOR on Order List Endpoints ──────────────────────────────
+  // 1. Chef cannot access orders at all
+  const chefOrdersRes = await request(app).get('/api/orders/').set(chefAuth);
+  assertEqual(chefOrdersRes.status, 403, 'chef cannot access /api/orders/');
+
+  // 2. Owner can access all orders
+  const ownerOrdersRes = await request(app).get('/api/orders/').set(ownerAuth);
+  assertEqual(ownerOrdersRes.status, 200, 'owner can access /api/orders/');
+
+  // Seed two orders: one by waiter, one by manager
+  // But wait, we need to create orders through the API to ensure they are created correctly
+  const prodId = 'test-prod-1';
+  db.prepare("INSERT OR REPLACE INTO products (id, name, price, stock_quantity, tax_type) VALUES (?, 'Test', 100, 10, 'exclusive')").run(prodId);
+
+  const managerOrderRes = await request(app).post('/api/orders/').set(managerAuth).send({
+    type: 'dine_in', user_id: 'security-manager', items: [{ product_id: prodId, quantity: 1 }]
+  });
+  const managerOrderId = managerOrderRes.body.order.id;
+
+  const waiterOrderRes = await request(app).post('/api/orders/').set(waiterAuth).send({
+    type: 'dine_in', user_id: 'security-waiter', items: [{ product_id: prodId, quantity: 1 }]
+  });
+  const waiterOrderId = waiterOrderRes.body.order.id;
+
+  // 3. Waiter fetching /api/orders/ should ONLY see their own order
+  const waiterListRes = await request(app).get('/api/orders/').set(waiterAuth);
+  assertEqual(waiterListRes.status, 200, 'waiter can access /api/orders/');
+  const waiterSeenIds = waiterListRes.body.orders.map((o: any) => o.id);
+  assert(waiterSeenIds.includes(waiterOrderId), 'waiter sees their own order');
+  assert(!waiterSeenIds.includes(managerOrderId), 'waiter does NOT see manager order (vuln-0007 IDOR)');
+
+  // 4. Waiter fetching /api/orders/:id for manager's order should return 403
+  const waiterGetManagerOrder = await request(app).get(`/api/orders/${managerOrderId}`).set(waiterAuth);
+  assertEqual(waiterGetManagerOrder.status, 403, 'waiter gets 403 for other user order (vuln-0007)');
+
+  // 5. Waiter fetching /api/orders/:id for their own order should return 200
+  const waiterGetOwnOrder = await request(app).get(`/api/orders/${waiterOrderId}`).set(waiterAuth);
+  assertEqual(waiterGetOwnOrder.status, 200, 'waiter gets 200 for their own order');
 
 
   const results = getResults();

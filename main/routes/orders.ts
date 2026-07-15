@@ -43,8 +43,9 @@ function syncCustomerTagCounts(db: any, customerId: string, items: { product_id:
     .run(JSON.stringify(counts), now(), customerId);
 }
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
     const db = getDatabase();
     let query = 'SELECT * FROM orders WHERE 1=1';
     const params: any[] = [];
@@ -69,6 +70,11 @@ router.get('/', (req: Request, res: Response) => {
     if (req.query.table_id) {
       query += ' AND table_id = ?';
       params.push(req.query.table_id);
+    }
+
+    if (user.role === 'waiter') {
+      query += ' AND user_id = ?';
+      params.push(user.userId);
     }
 
     query += ' ORDER BY created_at DESC';
@@ -96,12 +102,17 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
+    const user = (req as any).user;
     const db = getDatabase();
     const order = parseRowJson(db.prepare('SELECT * FROM orders WHERE id = ?').get(req.params.id));
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
+    }
+
+    if (user.role === 'waiter' && (order as any).user_id !== user.userId) {
+      return res.status(403).json({ error: 'Waiters can only view their own orders' });
     }
 
     const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(req.params.id).map(parseItemJson);
