@@ -1,7 +1,10 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, parseItemJson } from '../db';
+import { requireRole } from '../middleware/security';
 
 const router = Router();
+
+router.use(requireRole('chef', 'manager', 'owner'));
 
 // GET /api/kitchen/orders — returns active orders with items for KDS display
 router.get('/orders', (req: Request, res: Response) => {
