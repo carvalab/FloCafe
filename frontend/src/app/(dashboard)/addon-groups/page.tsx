@@ -34,6 +34,11 @@ export default function AddonGroupsPage() {
 
   const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
 
+  const extractErrorMessage = (err: unknown, fallback: string) => {
+    const error = err as { response?: { data?: { errors?: Record<string, string[]> } } };
+    return error.response?.data?.errors ? Object.values(error.response.data.errors)[0]?.[0] : fallback;
+  };
+
   const fetchGroups = async () => {
     try {
       const { data } = await api.get('/addon-groups');
@@ -68,11 +73,22 @@ export default function AddonGroupsPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    const minVal = Number(form.min_selection);
+    const maxVal = Number(form.max_selection);
+    if (minVal > maxVal) {
+      toast.error(t('addonGroups.minExceedsMax'));
+      return;
+    }
+    const activeAddonCount = editingGroup ? (editingGroup.addons?.filter((a) => a.is_active).length ?? 0) : 0;
+    if (minVal > activeAddonCount) {
+      toast.error(t('addonGroups.minExceedsAvailable', { count: activeAddonCount }));
+      return;
+    }
     try {
       const payload = {
         ...form,
-        min_selection: Number(form.min_selection),
-        max_selection: Number(form.max_selection),
+        min_selection: minVal,
+        max_selection: maxVal,
       };
       if (editingGroup) {
         await api.put(`/addon-groups/${editingGroup.id}`, payload);
@@ -84,11 +100,7 @@ export default function AddonGroupsPage() {
       resetForm();
       fetchGroups();
     } catch (err: unknown) {
-      const error = err as { response?: { data?: { errors?: Record<string, string[]> } } };
-      const msg = error.response?.data?.errors
-        ? Object.values(error.response.data.errors)[0]?.[0]
-        : t('common.failedToSave');
-      toast.error(msg);
+      toast.error(extractErrorMessage(err, t('common.failedToSave')));
     }
   };
 
@@ -142,8 +154,8 @@ export default function AddonGroupsPage() {
       await api.delete(`/addon-groups/${groupId}/addons/${addonId}`);
       toast.success(t('addonGroups.addonDeleted'));
       fetchGroups();
-    } catch {
-      toast.error(t('addonGroups.failedToDeleteAddon'));
+    } catch (err: unknown) {
+      toast.error(extractErrorMessage(err, t('addonGroups.failedToDeleteAddon')));
     }
   };
 

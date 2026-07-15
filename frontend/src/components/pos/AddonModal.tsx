@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { X, Plus, Minus } from 'lucide-react';
+import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/hooks/useI18n';
 import type { Product, Addon, AddonGroup } from '@/lib/types';
@@ -29,7 +30,10 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
       setSelected({ ...selected, [group.id]: current.filter((a) => a.id !== addon.id) });
     } else {
       const max = group.max_selection || 999;
-      if (current.length >= max) return;
+      if (current.length >= max) {
+        toast.error(t('pos.maxSelectionReached', { count: max }));
+        return;
+      }
       setSelected({ ...selected, [group.id]: [...current, addon] });
     }
   };

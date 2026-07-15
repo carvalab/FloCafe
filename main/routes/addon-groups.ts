@@ -5,6 +5,31 @@ import { requireRole } from '../middleware/security';
 
 const router = Router();
 
+function validateSelectionBounds(minSelection: number, maxSelection: number, activeAddonCount: number): Record<string, string[]> | null {
+  if (minSelection > maxSelection) {
+    return { min_selection: ['Minimum selection cannot exceed maximum selection'] };
+  }
+  if (minSelection > activeAddonCount) {
+    return { min_selection: [`Minimum selection cannot exceed the number of active add-ons (${activeAddonCount})`] };
+  }
+  return null;
+}
+
+// Guards against deactivating/deleting the last addon(s) that a group's min_selection depends on.
+function wouldBreakMinSelection(db: ReturnType<typeof getDatabase>, groupId: string, excludeAddonId: string): Record<string, string[]> | null {
+  const group = db.prepare('SELECT * FROM addon_groups WHERE id = ?').get(groupId) as { min_selection: number } | undefined;
+  if (!group) return null;
+
+  const remaining = (db.prepare(
+    'SELECT COUNT(*) as count FROM addons WHERE addon_group_id = ? AND is_active = 1 AND id != ?'
+  ).get(groupId, excludeAddonId) as { count: number }).count;
+
+  if (remaining < group.min_selection) {
+    return { min_selection: [`Cannot remove this addon — only ${remaining} would remain active, below the group's minimum selection of ${group.min_selection}. Lower the minimum selection first.`] };
+  }
+  return null;
+}
+
 router.get('/', (req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -42,6 +67,14 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
 
     if (!name) {
       return res.status(400).json({ error: 'Name is required' });
+    }
+
+    const min = min_selection ?? 0;
+    const max = max_selection ?? 1;
+    const activeAddonCount = Array.isArray(addons) ? addons.filter((a: any) => a.is_active !== false).length : 0;
+    const boundsError = validateSelectionBounds(min, max, activeAddonCount);
+    if (boundsError) {
+      return res.status(400).json({ errors: boundsError });
     }
 
     const db = getDatabase();
@@ -82,6 +115,16 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     }
 
     const { name, description, is_required, min_selection, max_selection, sort_order, is_active, addons } = req.body;
+
+    const effectiveMin = min_selection ?? (group as any).min_selection;
+    const effectiveMax = max_selection ?? (group as any).max_selection;
+    const activeAddonCount = Array.isArray(addons)
+      ? addons.filter((a: any) => a.is_active !== false).length
+      : (db.prepare('SELECT COUNT(*) as count FROM addons WHERE addon_group_id = ? AND is_active = 1').get(req.params.id) as { count: number }).count;
+    const boundsError = validateSelectionBounds(effectiveMin, effectiveMax, activeAddonCount);
+    if (boundsError) {
+      return res.status(400).json({ errors: boundsError });
+    }
 
     const { updated, updatedAddons } = withTxn(() => {
       db.prepare(`
@@ -161,9 +204,16 @@ router.put('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req: R
     const { name, price, is_active, sort_order } = req.body;
 
     const db = getDatabase();
-    const addon = db.prepare('SELECT * FROM addons WHERE id = ? AND addon_group_id = ?').get(req.params.addonId, req.params.groupId);
+    const addon = db.prepare('SELECT * FROM addons WHERE id = ? AND addon_group_id = ?').get(req.params.addonId, req.params.groupId) as { is_active: number } | undefined;
     if (!addon) {
       return res.status(404).json({ error: 'Addon not found' });
+    }
+
+    if (is_active === false && addon.is_active) {
+      const boundsError = wouldBreakMinSelection(db, req.params.groupId, req.params.addonId);
+      if (boundsError) {
+        return res.status(400).json({ errors: boundsError });
+      }
     }
 
     db.prepare(`
@@ -182,9 +232,16 @@ router.put('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req: R
 router.delete('/:groupId/addons/:addonId', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
-    const addon = db.prepare('SELECT * FROM addons WHERE id = ? AND addon_group_id = ?').get(req.params.addonId, req.params.groupId);
+    const addon = db.prepare('SELECT * FROM addons WHERE id = ? AND addon_group_id = ?').get(req.params.addonId, req.params.groupId) as { is_active: number } | undefined;
     if (!addon) {
       return res.status(404).json({ error: 'Addon not found' });
+    }
+
+    if (addon.is_active) {
+      const boundsError = wouldBreakMinSelection(db, req.params.groupId, req.params.addonId);
+      if (boundsError) {
+        return res.status(400).json({ errors: boundsError });
+      }
     }
 
     db.prepare('UPDATE addons SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.addonId);
