@@ -1,11 +1,12 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
 import { Settings, Building2, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench } from 'lucide-react';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import api from '@/lib/api';
@@ -82,10 +83,7 @@ const TEMPLATE_CARDS: TemplateCard[] = [
 ];
 
 function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
-
-
   return (
-
     <button
       onClick={() => onChange(!value)}
       className={`relative w-11 h-6 rounded-full transition-colors ${value ? 'bg-brand' : 'bg-gray-300'}`}
@@ -94,6 +92,33 @@ function Toggle({ value, onChange }: { value: boolean; onChange: (v: boolean) =>
     </button>
   );
 }
+
+function SettingsNavItem({
+  label, value, active, onClick, indent,
+}: {
+  label: string;
+  value: string;
+  active: string;
+  onClick: (v: string) => void;
+  indent?: boolean;
+}) {
+  const isActive = active === value;
+  return (
+    <button
+      onClick={() => onClick(value)}
+      className={[
+        'flex items-center w-full text-left text-sm rounded-md py-1.5 transition-colors whitespace-nowrap md:whitespace-normal',
+        indent ? 'pl-7 pr-3 border-l-2 ml-2 md:ml-0' : 'px-3',
+        isActive
+          ? 'bg-brand/10 text-brand font-semibold' + (indent ? ' border-brand' : '')
+          : 'text-gray-600 hover:bg-gray-100 hover:text-gray-900' + (indent ? ' border-transparent' : ''),
+      ].join(' ')}
+    >
+      {label}
+    </button>
+  );
+}
+
 
 export default function SettingsPage() {
   const { currentTenant, user, updateCurrentTenant } = useAuthStore();
@@ -123,8 +148,9 @@ export default function SettingsPage() {
   const [tableInfoOpen, setTableInfoOpen] = useState(false);
   const [tableInfo, setTableInfo] = useState<{ name: string; rows: number }[]>([]);
 
+  const searchParams = useSearchParams();
   // ── DB tools: master PIN, health check, initialize ──────────────────────
-  const [activeTab, setActiveTab] = useState('store');
+  const [activeTab, setActiveTab] = useState(() => searchParams?.get('tab') || 'store');
   const [masterPinStatus, setMasterPinStatus] = useState<{ available: boolean; isSet: boolean }>({ available: false, isSet: false });
   const [healthCheckOpen, setHealthCheckOpen] = useState(false);
   const [healthReport, setHealthReport] = useState<HealthCheckReport | null>(null);
@@ -314,9 +340,11 @@ export default function SettingsPage() {
   };
 
   const [updateStatus, setUpdateStatus] = useState<UpdateStatus | null>(null);
+  const [appVersion, setAppVersion] = useState<string>('');
 
   useEffect(() => {
     if (typeof window !== 'undefined' && window.electronAPI) {
+      window.electronAPI.getAppInfo().then(info => setAppVersion(info.version));
       const unsubscribe = window.electronAPI.onUpdateStatus((status) => {
         setUpdateStatus(status as UpdateStatus);
       });
@@ -584,6 +612,7 @@ export default function SettingsPage() {
     cloud_last_heartbeat: null as string | null,
     cloud_last_error: null as string | null,
   });
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used in saveCloud(), not yet wired to a spinner
   const [savingCloud, setSavingCloud] = useState(false);
   const [testingCloud, setTestingCloud] = useState(false);
   const [registeringCloud, setRegisteringCloud] = useState(false);
@@ -934,24 +963,57 @@ export default function SettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center gap-3 mb-6">
-        <Settings size={28} className="text-brand" />
-        <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
-      </div>
+      <Tabs orientation="vertical" value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:flex-row gap-6 items-start">
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="flex flex-col md:!flex-row gap-6 items-stretch">
+        {/* Settings sidebar nav */}
+        <div className="w-full md:w-56 md:min-w-[14rem] shrink-0 md:sticky md:top-0">
+          <div className="flex items-center gap-3 mb-6">
+            <Settings size={28} className="text-brand" />
+            <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
+          </div>
 
-        <TabsList className="flex md:flex-col justify-start h-auto md:!h-auto md:!min-h-full w-full md:w-64 md:min-w-[16rem] bg-transparent p-0 overflow-x-auto border-b md:border-b-0 md:border-r border-gray-200 rounded-none md:space-y-1 pb-2 md:pb-0 shrink-0">
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="store">{t('settings.storeDetails')}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="pos">{t('settings.posWorkflow')}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="receipts">{t('settings.tabReceiptsPrinters', { defaultValue: 'Receipts & Printers' })}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="loyalty">{t('settings.loyaltyAndDiscounts', { defaultValue: 'Loyalty & Discounts' })}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="data">{t('settings.tabDataCloud', { defaultValue: 'Data & Cloud' })}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="account">{t('settings.account')}</TabsTrigger>
-          <TabsTrigger className="justify-start data-[state=active]:bg-gray-100 data-[state=active]:shadow-none w-full text-left px-4 py-2 md:flex-none md:h-auto" value="about">{t('settings.tabAbout', { defaultValue: 'About' })}</TabsTrigger>
-        </TabsList>
+          <nav className="flex md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-gray-200 pb-2 md:pb-0 md:pr-2">
 
-<div className="flex-1 min-w-0">
+            {/* Store group */}
+            <div className="hidden md:block px-3 pt-3 pb-2 mt-2 mb-1 border-b border-gray-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupStore')}</p>
+            </div>
+            <SettingsNavItem label={t('settings.storeDetails')} value="store" active={activeTab} onClick={setActiveTab} />
+            <SettingsNavItem label={t('settings.tabPrinters')} value="receipts-printers" active={activeTab} onClick={setActiveTab} indent />
+            <SettingsNavItem label={t('settings.tabPrinting')} value="receipts-printing" active={activeTab} onClick={setActiveTab} indent />
+
+            {/* Operations group */}
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupOperations')}</p>
+            </div>
+            <SettingsNavItem label={t('settings.posWorkflow')} value="pos" active={activeTab} onClick={setActiveTab} />
+            <SettingsNavItem label={t('settings.tabKds')} value="kds" active={activeTab} onClick={setActiveTab} />
+
+            {/* Customers group */}
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupCustomers')}</p>
+            </div>
+            <SettingsNavItem label={t('settings.loyaltyAndDiscounts')} value="loyalty" active={activeTab} onClick={setActiveTab} />
+
+            {/* Data group */}
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupData')}</p>
+            </div>
+            <SettingsNavItem label={t('settings.tabBackupData')} value="data" active={activeTab} onClick={setActiveTab} />
+            <SettingsNavItem label={t('settings.tabIntegrations')} value="integrations" active={activeTab} onClick={setActiveTab} />
+
+            {/* Account group */}
+            <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
+              <p className="text-[11px] font-bold uppercase tracking-widest text-gray-400">{t('settings.navGroupAccount')}</p>
+            </div>
+            <SettingsNavItem label={t('settings.account')} value="account" active={activeTab} onClick={setActiveTab} />
+            <SettingsNavItem label={t('settings.tabUpdates')} value="updates" active={activeTab} onClick={setActiveTab} />
+            <SettingsNavItem label={t('settings.tabAbout')} value="about" active={activeTab} onClick={setActiveTab} />
+
+          </nav>
+        </div>
+
+        <div className="flex-1 min-w-0 overflow-hidden pb-32">
 
         <TabsContent value="store">
           <div className="pb-6 max-w-3xl space-y-6">
@@ -1192,7 +1254,6 @@ export default function SettingsPage() {
               </div>
             </div>
 
-            
             {/* POS Workflow */}
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1220,9 +1281,12 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
+          </div>
+        </TabsContent>
 
-            
-            <div className="max-w-2xl space-y-6">
+        {/* Kitchen Display — own tab under Operations */}
+        <TabsContent value="kds">
+          <div className="pb-6 max-w-3xl space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <ChefHat size={20} className="text-gray-500" />
@@ -1240,7 +1304,6 @@ export default function SettingsPage() {
 
               {kdsInfo && !kdsInfoLoading && (
                 <div className="flex flex-col gap-6 w-full">
-                  {/* Local Network / Tailscale IPs */}
                   {kdsInfo.ips_data && kdsInfo.ips_data.length > 0 ? (
                     <>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
@@ -1262,8 +1325,6 @@ export default function SettingsPage() {
                           </div>
                         ))}
                       </div>
-
-                      {/* mDNS URL */}
                       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
                         <div className="flex items-start gap-3">
                           <div className="flex-1">
@@ -1279,7 +1340,6 @@ export default function SettingsPage() {
                       </div>
                     </>
                   ) : (
-                    // Fallback for older server response
                     <div className="flex flex-col sm:flex-row gap-6 items-start">
                       <div className="shrink-0">
                         {kdsInfo.qr_data_url ? (
@@ -1328,7 +1388,6 @@ export default function SettingsPage() {
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
               <strong>{t('settings.howItWorks')}</strong> {t('settings.howItWorksBody')}
             </div>
-          </div>
           </div>
         </TabsContent>
 
@@ -1505,7 +1564,8 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
-        <TabsContent value="receipts">
+        {/* Printers sub-page */}
+        <TabsContent value="receipts-printers">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -1731,7 +1791,12 @@ export default function SettingsPage() {
               <strong>{t('settings.defaultPrinterTipTitle')}</strong> {t('settings.defaultPrinterTipBody')}
             </div>
           </div>
-            <div className="pb-6">
+          </div>
+        </TabsContent>
+
+        {/* Print Options sub-page */}
+        <TabsContent value="receipts-printing">
+          <div className="pb-6 max-w-3xl">
           <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
@@ -1820,9 +1885,7 @@ export default function SettingsPage() {
             </div>
           </div>
 
-          </div>
-            <div className="pb-6">
-          <div className="space-y-6">
+            <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <FileText size={20} className="text-gray-500" />
@@ -1866,11 +1929,11 @@ export default function SettingsPage() {
               </div>
             </div>
           </div>
-
-          </div>
           </div>
         </TabsContent>
 
+
+        {/* Backup & Data tab — database tools only */}
         <TabsContent value="data">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
@@ -2065,6 +2128,12 @@ export default function SettingsPage() {
               </button>
             </div>
           </div>
+          </div>
+        </TabsContent>
+
+        {/* Integrations tab — cloud + OrderFlow + More Apps */}
+        <TabsContent value="integrations">
+          <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">{t('settings.cloud')}</h2>
 
@@ -2207,7 +2276,7 @@ export default function SettingsPage() {
 
 
           </div>
-            <div className="max-w-2xl space-y-6">
+            <div className="space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Smartphone size={20} className="text-gray-500" />
@@ -2270,6 +2339,7 @@ export default function SettingsPage() {
           </div>
         </TabsContent>
 
+        {/* About tab */}
         <TabsContent value="about">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
@@ -2288,6 +2358,12 @@ export default function SettingsPage() {
                 </a>
               </div>
             </div>
+          </div>
+        </TabsContent>
+
+        {/* Software Updates tab */}
+        <TabsContent value="updates">
+          <div className="pb-6 max-w-3xl space-y-6">
             <div className="bg-white rounded-xl border border-gray-100 p-6">
             <div className="flex items-center gap-2 mb-4">
               <RefreshCw size={20} className="text-gray-500" />
@@ -2324,8 +2400,11 @@ export default function SettingsPage() {
                      : updateStatus.status.replace(/-/g, ' ')}
                   </span>
                 </div>
-                {updateStatus.version && (
-                  <p className="text-sm text-gray-600">{t('settings.version')}: {updateStatus.version}</p>
+                {appVersion && (
+                  <p className="text-sm font-medium text-gray-900">{t('settings.version')}: {appVersion}</p>
+                )}
+                {updateStatus.version && updateStatus.version !== appVersion && (
+                  <p className="text-sm text-gray-600 mt-1">Latest Available: {updateStatus.version}</p>
                 )}
                 {updateStatus.percent !== undefined && (
                   <div className="mt-2">
@@ -2446,11 +2525,13 @@ export default function SettingsPage() {
         }}
       />
       {isAdmin && isDirty && (
-        <div className={`fixed bottom-6 left-1/2 -translate-x-1/2 bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6 z-50 animate-in slide-in-from-bottom-5 duration-300 ${shakeSaveBar ? 'animate-shake-centered' : ''}`}>
-          <span className="text-sm font-medium">{t('settings.unsavedChanges', { defaultValue: 'You have unsaved changes' })}</span>
-          <div className="flex items-center gap-2">
-            <button onClick={resetAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50 text-white">{t('settings.discard', { defaultValue: 'Discard' })}</button>
-            <button onClick={saveAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-brand hover:opacity-90 rounded-full font-medium transition-colors disabled:opacity-50 text-white">{(savingBusiness || savingLoyalty || savingDiscount) ? t('settings.saving') : t('settings.saveChanges', { defaultValue: 'Save Changes' })}</button>
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none animate-in slide-in-from-bottom-5 duration-300">
+          <div className={`bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6 pointer-events-auto ${shakeSaveBar ? 'animate-shake' : ''}`}>
+            <span className="text-sm font-medium">{t('settings.unsavedChanges', { defaultValue: 'You have unsaved changes' })}</span>
+            <div className="flex items-center gap-2">
+              <button onClick={resetAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50 text-white">{t('settings.discard', { defaultValue: 'Discard' })}</button>
+              <button onClick={saveAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-brand hover:opacity-90 rounded-full font-medium transition-colors disabled:opacity-50 text-white">{(savingBusiness || savingLoyalty || savingDiscount) ? t('settings.saving') : t('settings.saveChanges', { defaultValue: 'Save Changes' })}</button>
+            </div>
           </div>
         </div>
       )}
