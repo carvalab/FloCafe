@@ -2,6 +2,19 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.2] - 2026-07-15
+
+### Added
+- Products: "Out of Stock" badges, a "Low Stock Threshold" field, and required-field indicators on product forms and modals.
+
+### Changed
+- Settings: reorganized into five groups (Store, Operations, Customers, Data, Account), unified global save, and various layout/UI fixes — sidebar active-state for shortcut items, unsaved-changes popup animation, app version always visible in the Updates tab.
+
+### Fixed
+- Loyalty: legacy point-expiry dates no longer collapse a customer's wallet balance; the now-meaningless "Next Expiry" UI is removed (#78).
+- Addon Groups: min/max selection bounds are now validated on save, and removing or deactivating an addon that would break a group's minimum selection is blocked (#82).
+- i18n: native currency symbols restored globally.
+
 ## [1.9.1] - 2026-07-14
 
 ### Fixed
