@@ -1,3 +1,4 @@
+import { useCallback } from 'react';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { t as translate, type Language } from '@/lib/i18n';
 
@@ -9,9 +10,15 @@ export function useI18n(): {
 } {
   const language = usePosSettingsStore((s) => s.language);
   const setLanguage = usePosSettingsStore((s) => s.setLanguage);
+  
+  const t = useCallback(
+    (key: string, params?: Record<string, string | number>) => translate(key, language, params),
+    [language]
+  );
+
   return {
     language,
     setLanguage,
-    t: (key: string, params?: Record<string, string | number>) => translate(key, language, params),
+    t,
   };
 }
