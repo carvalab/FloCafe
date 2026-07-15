@@ -11,6 +11,13 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(deps):"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # Frontend submodule dependencies
   - package-ecosystem: "npm"
@@ -23,6 +30,13 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(deps):"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
 
   # GitHub Actions
   - package-ecosystem: "github-actions"
@@ -34,3 +48,10 @@ updates:
       - "dependencies"
     commit-message:
       prefix: "chore(ci):"
+    groups:
+      minor-and-patch:
+        patterns:
+          - "*"
+        update-types:
+          - "minor"
+          - "patch"
