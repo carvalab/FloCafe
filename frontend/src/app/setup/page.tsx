@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent } from '@/components/ui/card';
-import { ArrowLeft, ArrowRight, Check, Database, KeyRound, Search, Sparkles, UtensilsCrossed } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, Database, KeyRound, Search, Sparkles, UtensilsCrossed, Eye, EyeOff } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { COUNTRIES, getCountryByCode, countryName, type Country } from '@/lib/countries';
 import { getBrowserLanguage, t as translate, type Language } from '@/lib/i18n';
@@ -31,6 +31,10 @@ export default function SetupPage() {
   const { logout } = useAuthStore();
   const [step, setStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [showMasterPin, setShowMasterPin] = useState(false);
+  const [showConfirmMasterPin, setShowConfirmMasterPin] = useState(false);
   const [profile, setProfile] = useState<SetupProfile>('express');
   const [serviceModel, setServiceModel] = useState<ServiceModel>('qsr');
   const [language, setLanguage] = useState<Language>('en');
@@ -121,9 +125,6 @@ export default function SetupPage() {
 
     setLoading(true);
     try {
-      // Derive country profile fields. Argentina is the only path with new
-      // demo data; everything else ships with the legacy profile and India
-      // default fields when missing.
       const countryProfile = selectedCountry;
       const countryCode = countryProfile?.code || country;
       const countryPayload = {
@@ -285,31 +286,51 @@ export default function SetupPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="master-pin">{t('setup.pinLabel')}</Label>
-                      <Input
-                        id="master-pin"
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={4}
-                        value={masterPin}
-                        onChange={(e) => setMasterPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="••••"
-                        className="text-center text-lg tracking-[0.5em]"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="master-pin"
+                          type={showMasterPin ? "text" : "password"}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={4}
+                          value={masterPin}
+                          onChange={(e) => setMasterPin(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="••••"
+                          className="text-center text-lg tracking-[0.5em] pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowMasterPin(!showMasterPin)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                          tabIndex={-1}
+                        >
+                          {showMasterPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="master-pin-confirm">{t('setup.confirmPinLabel')}</Label>
-                      <Input
-                        id="master-pin-confirm"
-                        type="password"
-                        inputMode="numeric"
-                        pattern="[0-9]*"
-                        maxLength={4}
-                        value={masterPinConfirm}
-                        onChange={(e) => setMasterPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
-                        placeholder="••••"
-                        className="text-center text-lg tracking-[0.5em]"
-                      />
+                      <div className="relative">
+                        <Input
+                          id="master-pin-confirm"
+                          type={showConfirmMasterPin ? "text" : "password"}
+                          inputMode="numeric"
+                          pattern="[0-9]*"
+                          maxLength={4}
+                          value={masterPinConfirm}
+                          onChange={(e) => setMasterPinConfirm(e.target.value.replace(/\D/g, '').slice(0, 4))}
+                          placeholder="••••"
+                          className="text-center text-lg tracking-[0.5em] pr-10"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmMasterPin(!showConfirmMasterPin)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                          tabIndex={-1}
+                        >
+                          {showConfirmMasterPin ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -365,27 +386,49 @@ export default function SetupPage() {
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="password">{t('setup.password')}</Label>
-                      <Input
-                        id="password"
-                        type="password"
-                        autoComplete="new-password"
-                        value={form.password}
-                        onChange={(e) => setForm({ ...form, password: e.target.value })}
-                        placeholder={t('setup.passwordPlaceholder')}
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="password"
+                          type={showPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          value={form.password}
+                          onChange={(e) => setForm({ ...form, password: e.target.value })}
+                          placeholder={t('setup.passwordPlaceholder')}
+                          className="pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                          tabIndex={-1}
+                        >
+                          {showPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                     <div className="space-y-2">
                       <Label htmlFor="confirmPassword">{t('setup.confirmPassword')}</Label>
-                      <Input
-                        id="confirmPassword"
-                        type="password"
-                        autoComplete="new-password"
-                        value={form.confirmPassword}
-                        onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
-                        placeholder={t('setup.confirmPasswordPlaceholder')}
-                        required
-                      />
+                      <div className="relative">
+                        <Input
+                          id="confirmPassword"
+                          type={showConfirmPassword ? "text" : "password"}
+                          autoComplete="new-password"
+                          value={form.confirmPassword}
+                          onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
+                          placeholder={t('setup.confirmPasswordPlaceholder')}
+                          className="pr-10"
+                          required
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground focus:outline-none"
+                          tabIndex={-1}
+                        >
+                          {showConfirmPassword ? <EyeOff size={16} /> : <Eye size={16} />}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   {passwordsEntered && (
