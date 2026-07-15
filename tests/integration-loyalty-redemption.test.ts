@@ -312,24 +312,31 @@ async function main() {
     assertEqual(wallet5After.data.balance, expectedBalance5, `final wallet balance = ${expectedBalance5} points`);
 
     // ═══════════════════════════════════════════════════════════════════
-    // Scenario 6: Expired points excluded from wallet balance
+    // Scenario 6: Legacy expires_at no longer affects wallet balance (#78)
     // ═══════════════════════════════════════════════════════════════════
-    console.log('\n─── Scenario 6: Expired points excluded from wallet ───');
+    // The loyalty system is a single on/off switch now — points never expire.
+    // A leftover expires_at on an old ledger row (from before that simplification)
+    // must not make its credit vanish from the balance: since debits aren't paired
+    // to specific credits, dropping an expired credit while its spend stays in the
+    // debit sum silently collapses the customer's balance. Legacy rows also get
+    // expires_at cleared by migration v21, but the balance query itself must not
+    // depend on the column either.
+    console.log('\n─── Scenario 6: legacy expires_at ignored in wallet balance ───');
 
-    seedCustomer(db, 'cust-redeem-4', 'Expired Points Customer', '4444444444');
+    seedCustomer(db, 'cust-redeem-4', 'Legacy Expiry Customer', '4444444444');
 
-    // Give customer 1000 valid points and 500 expired points
     seedWalletCredit(db, 'cust-redeem-4', 1000);
-    // Manually insert expired credit (expires_at in the past)
+    // Manually insert a credit with a past expires_at, simulating a pre-migration row.
     db.prepare(
       `INSERT INTO loyalty_ledger (customer_id, bill_id, type, amount, description, expires_at, created_at, updated_at)
-       VALUES (?, NULL, 'credit', ?, 'Expired test credit', datetime('now', '-1 month'), datetime('now', '-2 month'), datetime('now', '-2 month'))`
+       VALUES (?, NULL, 'credit', ?, 'Legacy credit with stale expiry', datetime('now', '-1 month'), datetime('now', '-2 month'), datetime('now', '-2 month'))`
     ).run('cust-redeem-4', 500);
 
-    // Wallet balance should only include non-expired points
+    // Wallet balance must include all credits regardless of expires_at.
     const wallet6 = await api(baseUrl, '/api/customers/cust-redeem-4/wallet', { headers: authHeader });
     assertEqual(wallet6.status, 200, 'wallet endpoint returns 200');
-    assertEqual(wallet6.data.balance, 1000, 'wallet balance = 1000 (expired 500 excluded)');
+    assertEqual(wallet6.data.balance, 1500, 'wallet balance = 1500 (legacy expires_at ignored)');
+    assert(wallet6.data.next_expiry === undefined, 'next_expiry field no longer exists on the wallet payload');
 
     // ═══════════════════════════════════════════════════════════════════
     // Scenario 7: Wallet payment when loyalty is disabled

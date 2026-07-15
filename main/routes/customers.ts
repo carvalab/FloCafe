@@ -16,7 +16,7 @@ function getWalletBalance(customerId: string | number | null): number {
   const db = getDatabase();
   const credits = db.prepare(`
     SELECT COALESCE(SUM(amount), 0) as total FROM loyalty_ledger
-    WHERE customer_id = ? AND type = 'credit' AND (expires_at IS NULL OR expires_at > datetime('now'))
+    WHERE customer_id = ? AND type = 'credit'
   `).get(customerId) as { total: number };
 
   const debits = db.prepare(`
@@ -45,7 +45,7 @@ router.get('/', (req: Request, res: Response) => {
       COALESCE((SELECT COUNT(*) FROM orders o WHERE o.customer_id = c.id), 0) as visits_count,
       COALESCE((SELECT SUM(total) FROM orders o WHERE o.customer_id = c.id), 0) as total_spent,
       MAX(0,
-        COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'credit' AND (ll.expires_at IS NULL OR ll.expires_at > datetime('now'))), 0) -
+        COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'credit'), 0) -
         COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'debit'), 0)
       ) as wallet_balance
       FROM customers c WHERE c.is_active = 1`;
@@ -129,12 +129,8 @@ router.get('/:id/wallet', (req: Request, res: Response) => {
     const transactions = db.prepare(`
       SELECT * FROM loyalty_ledger WHERE customer_id = ? ORDER BY created_at DESC LIMIT 100
     `).all(customerId);
-    const nextExpiryRow = db.prepare(`
-      SELECT MIN(expires_at) as next_expiry FROM loyalty_ledger
-      WHERE customer_id = ? AND type = 'credit' AND expires_at IS NOT NULL AND expires_at > datetime('now')
-    `).get(customerId) as { next_expiry: string | null };
 
-    res.json({ balance, transactions, next_expiry: nextExpiryRow?.next_expiry || null });
+    res.json({ balance, transactions });
   } catch (error: any) {
     res.status(500).json({ error: error.message });
   }

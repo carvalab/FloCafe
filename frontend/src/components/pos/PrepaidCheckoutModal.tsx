@@ -56,7 +56,6 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletAmount, setWalletAmount] = useState('');
-  const [nextExpiry, setNextExpiry] = useState<string | null>(null);
   const [processing, setProcessing] = useState(false);
 
   // Discount state (applied to the order once checkout is confirmed)
@@ -86,12 +85,10 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
       api.get(`/customers/${customer.id}/wallet`)
         .then((res) => {
           setWalletBalance(Number(res.data.balance) || 0);
-          setNextExpiry(res.data.next_expiry || null);
         })
         .catch(() => {});
     } else {
       setWalletBalance(null);
-      setNextExpiry(null);
     }
   }, [customer?.id]);
 
@@ -175,11 +172,6 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
 
   const fmt = (n: number) =>
     n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-  const fmtExpiry = (d: string) => {
-    try { return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
-    catch { return d; }
-  };
 
   const handleConfirm = () => {
     if (!preview) return;
@@ -310,9 +302,6 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
                     : '…'}
                 </span>
-                {nextExpiry && (
-                  <span className="text-orange-500">{t('pos.expiresDate', { date: fmtExpiry(nextExpiry) })}</span>
-                )}
               </div>
             </div>
           )}

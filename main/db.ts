@@ -786,6 +786,19 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 21,
+    name: 'clear_legacy_loyalty_expiry',
+    up: () => {
+      // v14 turned off expiry for new loyalty points, but left expires_at on
+      // pre-existing ledger rows untouched. Since wallet balance nets all-time
+      // debits against only unexpired credits, a legacy credit hitting its old
+      // expiry date silently drops out of the credit sum while the debits that
+      // already spent it stay — collapsing the customer's balance. Clearing
+      // expires_at retroactively aligns legacy rows with the non-expiry policy.
+      db.exec(`UPDATE loyalty_ledger SET expires_at = NULL WHERE expires_at IS NOT NULL`);
+    },
+  },
 ];
 
 function runMigrations(): void {

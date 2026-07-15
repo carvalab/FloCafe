@@ -50,7 +50,6 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const [processing, setProcessing] = useState(false);
   const [walletBalance, setWalletBalance] = useState<number | null>(null);
   const [walletAmount, setWalletAmount] = useState('');
-  const [nextExpiry, setNextExpiry] = useState<string | null>(null);
 
   // Discount state
   const [showDiscount, setShowDiscount] = useState(false);
@@ -106,7 +105,6 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
       api.get(`/customers/${custId}/wallet`)
         .then((res) => {
           setWalletBalance(Number(res.data.balance) || 0);
-          setNextExpiry(res.data.next_expiry || null);
         })
         .catch(() => setWalletBalance(0));
     }
@@ -233,11 +231,6 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
     }
   };
 
-  const fmtExpiry = (d: string) => {
-    try { return new Date(d).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' }); }
-    catch { return d; }
-  };
-
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center z-50 p-0 sm:p-4">
       <div className="bg-white w-full sm:max-w-md rounded-t-3xl sm:rounded-2xl shadow-2xl overflow-hidden">
@@ -328,9 +321,6 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                     ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
                     : '…'}
                 </span>
-                {nextExpiry && (
-                  <span className="text-orange-500">{t('pos.expiresDate', { date: fmtExpiry(nextExpiry) })}</span>
-                )}
               </div>
             </div>
           )}

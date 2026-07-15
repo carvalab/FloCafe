@@ -26,7 +26,7 @@ export default function CustomersPage() {
   const [form, setForm] = useState({ name: '', phone: '', email: '', country_code: dialCode });
 
   const [ledgerCustomer, setLedgerCustomer] = useState<Customer | null>(null);
-  const [ledgerData, setLedgerData] = useState<{ balance: number; next_expiry: string | null; transactions: { id: number; type: string; amount: number; description: string; created_at: string; expires_at?: string }[] } | null>(null);
+  const [ledgerData, setLedgerData] = useState<{ balance: number; transactions: { id: number; type: string; amount: number; description: string; created_at: string; expires_at?: string }[] } | null>(null);
   const [ledgerLoading, setLedgerLoading] = useState(false);
 
   const openLedger = async (c: Customer) => {
@@ -186,12 +186,6 @@ export default function CustomersPage() {
                     <p className="text-xs text-gray-500 mb-0.5">{t('customers.totalBalance')}</p>
                     <p className="text-2xl font-bold text-gray-900">{ledgerData.balance} <span className="text-sm font-normal text-gray-500">{t('customer.ptsSuffix')}</span></p>
                   </div>
-                  {ledgerData.next_expiry && (
-                    <div>
-                      <p className="text-xs text-gray-500 mb-0.5">{t('customers.nextExpiry')}</p>
-                      <p className="text-sm font-semibold text-orange-500">{fmtDate(ledgerData.next_expiry)}</p>
-                    </div>
-                  )}
                 </div>
 
                 {/* Ledger table */}
