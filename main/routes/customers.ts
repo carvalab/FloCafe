@@ -1,5 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
+import { requireRole } from '../middleware/security';
 
 function parseCustomer(c: any): any {
   if (!c) return c;
@@ -28,7 +29,7 @@ function getWalletBalance(customerId: string | number | null): number {
 }
 
 // Cleanup endpoint: delete all customers with null IDs - must be before /:id
-router.delete('/admin/cleanup', (req: Request, res: Response) => {
+router.delete('/admin/cleanup', requireRole('owner'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const result = db.prepare("DELETE FROM customers WHERE id IS NULL").run();
@@ -38,7 +39,7 @@ router.delete('/admin/cleanup', (req: Request, res: Response) => {
   }
 });
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     let query = `SELECT c.*,
@@ -70,7 +71,7 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/search', (req: Request, res: Response) => {
+router.get('/search', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const { q } = req.query;
     if (!q || String(q).length < 2) {
@@ -92,7 +93,7 @@ router.get('/search', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id', (req: Request, res: Response) => {
+router.get('/:id', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const customerRaw = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
@@ -116,7 +117,7 @@ router.get('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:id/wallet', (req: Request, res: Response) => {
+router.get('/:id/wallet', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const customerId = req.params.id;
@@ -136,7 +137,7 @@ router.get('/:id/wallet', (req: Request, res: Response) => {
   }
 });
 
-router.post('/', (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const { phone, name, email, address, notes, country_code } = req.body;
 
@@ -201,7 +202,7 @@ router.post('/', (req: Request, res: Response) => {
   }
 });
 
-router.put('/:id', (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
       phone, name, email, address, notes, country_code
@@ -234,7 +235,7 @@ router.put('/:id', (req: Request, res: Response) => {
   }
 });
 
-router.delete('/:id', (req: Request, res: Response) => {
+router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id) as any;

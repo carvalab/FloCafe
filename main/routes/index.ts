@@ -70,7 +70,7 @@ export function registerRoutes(app: Express): void {
   });
 
   // Legacy/flat customer search endpoint (frontend uses this)
-  app.get('/api/customers-search', (req, res) => {
+  app.get('/api/customers-search', requireRole('owner', 'manager', 'cashier', 'waiter'), (req, res) => {
     try {
       const { q } = req.query;
       if (!q || String(q).length < 2) {
@@ -93,7 +93,7 @@ export function registerRoutes(app: Express): void {
   });
 
   // CRM lookup endpoint (frontend uses this)
-  app.get('/api/crm/lookup', (req, res) => {
+  app.get('/api/crm/lookup', requireRole('owner', 'manager', 'cashier', 'waiter'), (req, res) => {
     try {
       const { phone, country_code } = req.query;
       if (!phone) {
