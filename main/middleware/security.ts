@@ -10,6 +10,8 @@ interface RateLimitOptions {
   max?: number;
   message?: string;
   skipSuccessfulRequests?: boolean;
+  /** When false, private/LAN IPs are NOT exempt — use for auth endpoints. Default: true. */
+  bypassPrivateIp?: boolean;
 }
 
 const DEFAULT_WINDOW_MS = 60 * 1000; // 1 minute
@@ -33,8 +35,11 @@ export function rateLimit(options: RateLimitOptions = {}) {
     // Normalize IPv4-mapped IPv6 address (e.g. ::ffff:127.0.0.1 -> 127.0.0.1)
     const normalizedIp = ip.startsWith('::ffff:') ? ip.substring(7) : ip;
 
-    // Bypass rate limit for local / private / Tailscale IPs
-    if (isAllowedPrivateIp(normalizedIp)) {
+    // Bypass rate limit for local / private / Tailscale IPs (general API traffic).
+    // Auth endpoints opt out of this bypass via bypassPrivateIp: false so that
+    // LAN-based brute-force against /api/auth/login is still throttled.
+    const bypassPrivateIp = options.bypassPrivateIp !== false;
+    if (bypassPrivateIp && isAllowedPrivateIp(normalizedIp)) {
       return next();
     }
 
@@ -70,12 +75,15 @@ export function rateLimit(options: RateLimitOptions = {}) {
 
 /**
  * Stricter rate limiter for authentication endpoints.
+ * Private/LAN IPs are NOT exempt — LAN-based brute-force is a real threat
+ * for a POS system. (vuln-0003)
  */
 export function authRateLimit() {
   return rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutes
     max: 10,
     message: 'Too many authentication attempts. Please try again later.',
+    bypassPrivateIp: false,
   });
 }
 

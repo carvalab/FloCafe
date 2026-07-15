@@ -6,6 +6,7 @@ import { randomBytes } from 'crypto';
 import { getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import { getCurrentSchemaVersion, getDatabase, now } from '../db';
 import { isMasterPinAvailable, setMasterPin } from '../services/master-pin';
+import { authRateLimit } from '../middleware/security';
 
 const router = Router();
 
@@ -300,7 +301,7 @@ function resetSuccessfulLogin(ip: string) {
 
 // ── POST /api/auth/login ──────────────────────────────────────────────────────
 
-router.post('/login', (req: Request, res: Response) => {
+router.post('/login', authRateLimit(), (req: Request, res: Response) => {
   try {
     const ip = req.ip || req.socket.remoteAddress || 'unknown';
     const rateLimit = checkRateLimit(ip);

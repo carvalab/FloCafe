@@ -42,7 +42,7 @@ async function run() {
   // 6. Rate Limiter Bypass Tests
   console.log('Testing Rate Limiter Bypass...');
   
-  const createRateLimitedApp = (maxRequests: number, ipOverride?: string) => {
+  const createRateLimitedApp = (maxRequests: number, ipOverride?: string, extraOptions?: Record<string, any>) => {
     const app = express();
     if (ipOverride) {
       app.use((req, res, next) => {
@@ -53,7 +53,7 @@ async function run() {
         next();
       });
     }
-    app.use(rateLimit({ windowMs: 60 * 1000, max: maxRequests }));
+    app.use(rateLimit({ windowMs: 60 * 1000, max: maxRequests, ...(extraOptions || {}) }));
     app.get('/test', (req, res) => {
       res.status(200).json({ ok: true });
     });
@@ -90,7 +90,27 @@ async function run() {
     assert(resPrivate.status === 200, `IPv4-mapped IPv6 request ${i + 1} should bypass rate limiting`);
   }
 
+  // Test that private IPs ARE rate-limited when bypassPrivateIp:false (auth endpoints, vuln-0003)
+  console.log('Testing Auth Rate Limit (bypassPrivateIp: false)...');
+  const authApp = createRateLimitedApp(2, '192.168.1.100', { bypassPrivateIp: false });
+  let authRes = await request(authApp).get('/test');
+  assert(authRes.status === 200, 'Auth: private IP first request OK');
+  authRes = await request(authApp).get('/test');
+  assert(authRes.status === 200, 'Auth: private IP second request OK');
+  authRes = await request(authApp).get('/test');
+  assert(authRes.status === 429, 'Auth: private IP third request rate-limited (vuln-0003)');
+
+  // Loopback should also be rate-limited when bypassPrivateIp:false
+  const authLoopbackApp = createRateLimitedApp(2, '127.0.0.1', { bypassPrivateIp: false });
+  authRes = await request(authLoopbackApp).get('/test');
+  assert(authRes.status === 200, 'Auth: loopback first request OK');
+  authRes = await request(authLoopbackApp).get('/test');
+  assert(authRes.status === 200, 'Auth: loopback second request OK');
+  authRes = await request(authLoopbackApp).get('/test');
+  assert(authRes.status === 429, 'Auth: loopback third request rate-limited when bypass disabled (vuln-0003)');
+
   console.log('✅ All CORS IP Validation & Rate Limiter tests passed!');
+
 }
 
 run().catch(err => {
