@@ -89,7 +89,7 @@ function taxShape(s: Record<string, string>) {
 
 // ── Specific routes (must come BEFORE /:key wildcard) ─────────────────────
 
-router.get('/business', (req: Request, res: Response) => {
+router.get('/business', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json(businessShape(s));
@@ -119,7 +119,7 @@ router.put('/business', requireRole('owner', 'manager'), (req: Request, res: Res
   }
 });
 
-router.get('/tax', (req: Request, res: Response) => {
+router.get('/tax', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json(taxShape(s));
@@ -139,7 +139,7 @@ router.put('/tax', requireRole('owner', 'manager'), (req: Request, res: Response
   }
 });
 
-router.get('/loyalty', (req: Request, res: Response) => {
+router.get('/loyalty', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({
@@ -166,7 +166,7 @@ router.put('/loyalty', requireRole('owner', 'manager'), (req: Request, res: Resp
 
 // ─── Discount settings ──────────────────────────────────────────────────────
 
-router.get('/discount', (req: Request, res: Response) => {
+router.get('/discount', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({
@@ -227,7 +227,7 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
 
 // ─── Cloud Sync settings (must come BEFORE /:key wildcard) ──────────────────
 
-router.get('/cloud', (req: Request, res: Response) => {
+router.get('/cloud', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     res.json(cloudSync.getStatus());
   } catch (error: any) {
@@ -308,7 +308,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'printer_method', 'paper_size', 'bill_template',
 ]);
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     const s = getAllSettings(getDatabase());
     res.json({ settings: publicSettingsShape(s) });
@@ -317,7 +317,7 @@ router.get('/', (req: Request, res: Response) => {
   }
 });
 
-router.get('/:key', (req: Request, res: Response) => {
+router.get('/:key', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
   try {
     if (SENSITIVE_SETTING_KEYS.has(req.params.key)) {
       return res.status(403).json({ error: 'This setting is sensitive and cannot be read directly' });
