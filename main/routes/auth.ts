@@ -285,13 +285,14 @@ function checkRateLimit(ip: string): { allowed: boolean; waitMinutes?: number } 
   return { allowed: true };
 }
 
-function incrementFailedLogin(ip: string) {
+function incrementFailedLogin(ip: string): number {
   const record = loginAttempts.get(ip) || { count: 0, lockedUntil: 0 };
   record.count += 1;
   if (record.count >= MAX_ATTEMPTS) {
     record.lockedUntil = Date.now() + LOCKOUT_MINUTES * 60000;
   }
   loginAttempts.set(ip, record);
+  return Math.max(0, MAX_ATTEMPTS - record.count);
 }
 
 function resetSuccessfulLogin(ip: string) {
@@ -319,8 +320,12 @@ router.post('/login', authRateLimit(), (req: Request, res: Response) => {
     const user = db.prepare('SELECT * FROM users WHERE email = ? AND is_active = 1').get(email) as any;
 
     if (!user || !bcrypt.compareSync(password, user.password)) {
-      incrementFailedLogin(ip);
-      return res.status(401).json({ error: 'Invalid credentials' });
+      const attemptsRemaining = incrementFailedLogin(ip);
+      return res.status(401).json({
+        error: 'Invalid credentials',
+        attempts_remaining: attemptsRemaining,
+        lockout_minutes: attemptsRemaining === 0 ? LOCKOUT_MINUTES : undefined,
+      });
     }
 
     resetSuccessfulLogin(ip);

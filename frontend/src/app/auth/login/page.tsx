@@ -82,17 +82,38 @@ function LoginContent() {
       await login(email, password);
       toast.success(t('auth.signInSuccess'));
     } catch (err: unknown) {
-      const error = err as { response?: { status?: number; data?: { error?: string } } };
-      if (error.response?.status === 401) {
-        setLoginError(t('auth.invalidCredentials'));
+      const error = err as { response?: { status?: number; data?: { error?: string; attempts_remaining?: number; lockout_minutes?: number } } };
+      const status = error.response?.status;
+      const data = error.response?.data;
+
+      if (status === 401) {
+        const remaining = data?.attempts_remaining;
+        if (remaining === 0) {
+          // Just got locked out
+          const mins = data?.lockout_minutes ?? 15;
+          setLoginError(t('auth.lockedOut').replace('{minutes}', String(mins)));
+        } else if (typeof remaining === 'number' && remaining < 4) {
+          // Warn only when getting close (≤ 4 remaining to avoid noise on first attempt)
+          setLoginError(
+            t('auth.invalidCredentials') + ' ' +
+            t('auth.attemptsRemaining').replace('{count}', String(remaining))
+          );
+        } else {
+          setLoginError(t('auth.invalidCredentials'));
+        }
+      } else if (status === 429) {
+        // Middleware-level lockout (authRateLimit window exhausted)
+        const msg = data?.error || t('auth.lockedOut').replace('{minutes}', '15');
+        setLoginError(msg);
       } else {
-        const msg = error.response?.data?.error || t('auth.loginFailed');
+        const msg = data?.error || t('auth.loginFailed');
         setDbError(msg);
       }
     } finally {
       setLoading(false);
     }
   };
+
 
 
   if (showTenantSelect) {
