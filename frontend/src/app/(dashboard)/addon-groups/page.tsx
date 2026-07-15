@@ -223,11 +223,17 @@ export default function AddonGroupsPage() {
                     {group.addons?.map((addon) => (
                       <div key={addon.id} className="flex items-center justify-between py-1.5 px-3 bg-gray-50 rounded-lg">
                         {editingAddon?.addon.id === addon.id ? (
-                          <div className="flex items-center gap-2 flex-1">
-                            <input type="text" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })}
-                              className="flex-1 px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:ring-1 focus:ring-brand" />
-                            <input type="number" step="0.01" value={addonForm.price} onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })}
-                              className="w-24 px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:ring-1 focus:ring-brand" />
+                          <div className="flex items-end gap-2 flex-1">
+                            <label className="flex-1">
+                              <span className="block text-[11px] font-medium text-gray-500 mb-0.5">{t('products.nameLabel')}</span>
+                              <input type="text" value={addonForm.name} onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:ring-1 focus:ring-brand" />
+                            </label>
+                            <label className="w-24">
+                              <span className="block text-[11px] font-medium text-gray-500 mb-0.5">{t('products.columnPrice')}</span>
+                              <input type="number" step="0.01" value={addonForm.price} onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })}
+                                className="w-full px-2 py-1 text-sm border border-gray-300 rounded outline-none focus:ring-1 focus:ring-brand" />
+                            </label>
                             <button onClick={handleUpdateAddon} className="text-xs text-brand font-medium hover:underline">{t('common.save')}</button>
                             <button onClick={() => { setEditingAddon(null); setAddonForm({ name: '', price: '0' }); }} className="text-xs text-gray-400 hover:underline">{t('tables.cancel')}</button>
                           </div>
@@ -251,13 +257,19 @@ export default function AddonGroupsPage() {
 
                   {/* Add Addon Form */}
                   {addingAddonTo === group.id ? (
-                    <div className="flex items-center gap-2 mt-3">
-                      <input type="text" placeholder={t('products.addonNamePlaceholder')} value={addonForm.name}
-                        onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })}
-                        className="flex-1 px-3 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
-                      <input type="number" step="0.01" placeholder={t('products.addonPricePlaceholder')} value={addonForm.price}
-                        onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })}
-                        className="w-24 px-3 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                    <div className="flex items-end gap-2 mt-3">
+                      <label className="flex-1">
+                        <span className="block text-[11px] font-medium text-gray-500 mb-0.5">{t('products.nameLabel')}</span>
+                        <input type="text" placeholder={t('products.addonNamePlaceholder')} value={addonForm.name}
+                          onChange={(e) => setAddonForm({ ...addonForm, name: e.target.value })}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      </label>
+                      <label className="w-24">
+                        <span className="block text-[11px] font-medium text-gray-500 mb-0.5">{t('products.columnPrice')}</span>
+                        <input type="number" step="0.01" placeholder={t('products.addonPricePlaceholder')} value={addonForm.price}
+                          onChange={(e) => setAddonForm({ ...addonForm, price: e.target.value })}
+                          className="w-full px-3 py-1.5 text-sm border border-gray-300 rounded-lg outline-none focus:ring-1 focus:ring-brand" />
+                      </label>
                       <button onClick={() => handleAddAddon(group.id)}
                         className="px-3 py-1.5 bg-brand text-white text-sm rounded-lg hover:bg-brand-hover">{t('products.addButton')}</button>
                       <button onClick={() => { setAddingAddonTo(null); setAddonForm({ name: '', price: '0' }); }}

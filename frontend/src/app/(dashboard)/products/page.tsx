@@ -886,10 +886,15 @@ export default function ProductsPage() {
                       <button type="button" onClick={addAddonItem} className="text-xs text-brand hover:underline">{t('products.addAddonInline')}</button>
                     </div>
                     <div className="space-y-2">
+                      <div className="grid grid-cols-[minmax(0,1fr)_6rem_1.5rem] gap-2 px-1 text-[11px] font-medium uppercase tracking-wide text-gray-500">
+                        <span>{t('products.nameLabel')}</span>
+                        <span>{t('products.columnPrice')}</span>
+                        <span aria-hidden="true" />
+                      </div>
                       {addonList.map((addon, idx) => (
-                        <div key={idx} className="flex gap-2">
+                        <div key={idx} className="grid grid-cols-[minmax(0,1fr)_6rem_1.5rem] gap-2 items-center">
                           <input type="text" value={addon.name} onChange={(e) => updateAddonItem(idx, 'name', e.target.value)} placeholder={t('common.namePlaceholder')} className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
-                          <input type="number" step="0.01" value={addon.price} onChange={(e) => updateAddonItem(idx, 'price', Number(e.target.value))} placeholder={t('common.pricePlaceholder')} className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
+                          <input type="number" step="0.01" value={addon.price} onChange={(e) => updateAddonItem(idx, 'price', Number(e.target.value))} placeholder={t('common.pricePlaceholder')} aria-label={t('products.columnPrice')} className="w-24 px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand outline-none" />
                           <button type="button" onClick={() => removeAddonItem(idx)} className="text-gray-400 hover:text-red-500"><X size={16} /></button>
                         </div>
                       ))}
