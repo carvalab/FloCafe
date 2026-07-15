@@ -355,6 +355,7 @@ export default function SetupPage() {
                     <Input
                       id="email"
                       type="email"
+                      autoComplete="email"
                       value={form.email}
                       onChange={(e) => setForm({ ...form, email: e.target.value })}
                       placeholder={t('setup.ownerEmailPlaceholder')}
@@ -367,6 +368,7 @@ export default function SetupPage() {
                       <Input
                         id="password"
                         type="password"
+                        autoComplete="new-password"
                         value={form.password}
                         onChange={(e) => setForm({ ...form, password: e.target.value })}
                         placeholder={t('setup.passwordPlaceholder')}
@@ -378,6 +380,7 @@ export default function SetupPage() {
                       <Input
                         id="confirmPassword"
                         type="password"
+                        autoComplete="new-password"
                         value={form.confirmPassword}
                         onChange={(e) => setForm({ ...form, confirmPassword: e.target.value })}
                         placeholder={t('setup.confirmPasswordPlaceholder')}

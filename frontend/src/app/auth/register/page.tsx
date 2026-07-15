@@ -88,6 +88,7 @@ export default function RegisterPage() {
                 <input
                   type="email"
                   name="email"
+                  autoComplete="email"
                   value={form.email}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
@@ -100,6 +101,7 @@ export default function RegisterPage() {
                 <input
                   type="password"
                   name="password"
+                  autoComplete="new-password"
                   value={form.password}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
@@ -112,6 +114,7 @@ export default function RegisterPage() {
                 <input
                   type="password"
                   name="password_confirmation"
+                  autoComplete="new-password"
                   value={form.password_confirmation}
                   onChange={handleChange}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-brand focus:border-brand outline-none"
