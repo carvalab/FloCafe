@@ -190,6 +190,19 @@ async function main() {
   });
   assertEqual(strongChangeRes.status, 200, 'user can change to strong password');
 
+  // ── Rate Limit on Staff Mutations ─────────────────────────────────────────
+  let rateLimitHit = false;
+  for (let i = 0; i < 12; i++) {
+    const res = await request(app).put(`/api/staff/${newStaffId}`).set(ownerAuth).send({
+      name: 'rate-limit-test'
+    });
+    if (res.status === 429) {
+      rateLimitHit = true;
+      break;
+    }
+  }
+  assert(rateLimitHit, 'owner hits authRateLimit after 10 requests to PUT /api/staff/:id');
+
   // ── vuln-0007: IDOR on Order List Endpoints ──────────────────────────────
   // 1. Chef cannot access orders at all
   const chefOrdersRes = await request(app).get('/api/orders/').set(chefAuth);

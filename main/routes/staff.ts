@@ -8,7 +8,7 @@ import { Router, Request, Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 import { getDatabase, now } from '../db';
-import { requireRole, validatePassword } from '../middleware/security';
+import { requireRole, validatePassword, authRateLimit } from '../middleware/security';
 
 const router = Router();
 
@@ -67,7 +67,7 @@ router.get('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
 
 // ── Create ────────────────────────────────────────────────────────────────────
 
-router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.post('/', requireRole('owner', 'manager'), authRateLimit(), (req: Request, res: Response) => {
   try {
     const { name, email, password, role, pin } = req.body;
 
@@ -119,7 +119,7 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
 
 // ── Update ────────────────────────────────────────────────────────────────────
 
-router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager'), authRateLimit(), (req: Request, res: Response) => {
   try {
     const { name, email, password, role, pin, is_active } = req.body;
     const db = getDatabase();
