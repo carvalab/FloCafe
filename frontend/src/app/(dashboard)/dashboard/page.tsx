@@ -6,7 +6,6 @@ import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
 import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight } from 'lucide-react';
-import { getCurrencySymbol } from '@/lib/countries';
 import { useI18n } from '@/hooks/useI18n';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
@@ -58,7 +57,6 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
 
   const isOwner = currentTenant?.role === 'owner';
-  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
   const fmt = useFormatCurrency();
 
   useEffect(() => {
@@ -88,11 +86,10 @@ export default function DashboardPage() {
   const tiles = [
     {
       label: t('dashboard.todaySales'),
-      value: stats?.sales ?? 0,
+      value: fmt(stats?.sales ?? 0),
       icon: Banknote,
       color: 'bg-green-50 border-green-200',
       iconColor: 'text-green-600',
-      prefix: currency,
       href: '/orders',
     },
     {
@@ -145,7 +142,7 @@ export default function DashboardPage() {
                   <tile.icon size={20} className={tile.iconColor} />
                 </div>
                 <p className="text-3xl font-bold text-gray-900">
-                  {tile.prefix ? `${tile.prefix}${tile.value.toLocaleString()}` : tile.value}
+                  {tile.value}
                 </p>
               </Link>
             ))}

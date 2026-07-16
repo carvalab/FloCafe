@@ -16,7 +16,7 @@
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
 import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
-import { getCountryByCode } from '@/lib/countries';
+import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
 
 export interface ReceiptOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -125,7 +125,7 @@ export function buildClassicReceiptBytes(
     isReprint = false,
   } = opts;
   const cols = CHARS[paperWidth];
-  const rawCurrency = tenant.currency ?? '';
+  const rawCurrency = getCurrencySymbol(tenant.currency ?? 'INR', getCountryByCode(tenant.country ?? 'IN')?.locale);
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const locale = getCountryByCode(tenant.country ?? 'IN')?.locale ?? 'en-US';
   const order = bill.order;
@@ -275,7 +275,7 @@ export function buildCompactReceiptBytes(
 ): Uint8Array {
   const { paperWidth = 58, footerNote, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
-  const rawCurrency = tenant.currency ?? '';
+  const rawCurrency = getCurrencySymbol(tenant.currency ?? 'INR', getCountryByCode(tenant.country ?? 'IN')?.locale);
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const locale = getCountryByCode(tenant.country ?? 'IN')?.locale ?? 'en-US';
   const order = bill.order;
@@ -373,7 +373,7 @@ export function buildDetailedReceiptBytes(
 ): Uint8Array {
   const { paperWidth = 58, footerNote, gstin, address, phone, useUnicode = false, isReprint = false } = opts;
   const cols = CHARS[paperWidth];
-  const rawCurrency = tenant.currency ?? '';
+  const rawCurrency = getCurrencySymbol(tenant.currency ?? 'INR', getCountryByCode(tenant.country ?? 'IN')?.locale);
   const currency = padCurrencyPrefix(useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency));
   const locale = getCountryByCode(tenant.country ?? 'IN')?.locale ?? 'en-US';
   const order = bill.order;

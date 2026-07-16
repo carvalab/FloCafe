@@ -26,7 +26,7 @@ import PrepaidCheckoutModal, { type PrepaidPayment, type PrepaidDiscount } from 
 import PosTopbar from '@/components/pos/PosTopbar';
 import { usePrinterStore } from '@/hooks/usePrinter';
 import { useI18n } from '@/hooks/useI18n';
-import { getCurrencySymbol } from '@/lib/countries';
+import { getCurrencySymbol, getCountryByCode } from '@/lib/countries';
 
 export default function POSPage() {
   const { currentTenant } = useAuthStore();
@@ -55,7 +55,7 @@ export default function POSPage() {
   const [showPrepaidCheckout, setShowPrepaidCheckout] = useState(false);
   const [pendingOrder, setPendingOrder] = useState<Order | null>(null);
 
-  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
   const { printBill, printKot } = usePrinterStore();
   const billingIsPrepaid = billingType === 'prepaid';
   const shouldTakePaymentNow = billingIsPrepaid;

@@ -9,7 +9,7 @@ import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Down
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
 import ImageUploader from '@/components/products/ImageUploader';
-import { getCurrencySymbol } from '@/lib/countries';
+import { getCurrencySymbol, getCountryByCode } from '@/lib/countries';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useConfirm } from '@/hooks/use-confirm';
 import { nameToColor } from '@/lib/image-utils';
@@ -91,7 +91,7 @@ export default function ProductsPage() {
   const [catDeleteModal, setCatDeleteModal] = useState<{ open: boolean; id: number | null; name: string; productCount: number }>({ open: false, id: null, name: '', productCount: 0 });
   const [catReassignTo, setCatReassignTo] = useState<string>('');
 
-  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
   const fmt = useFormatCurrency();
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';

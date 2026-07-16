@@ -8,7 +8,7 @@
 import type { Bill, Tenant } from '@/lib/types';
 import toast from 'react-hot-toast';
 import { normalizeCurrencyToAscii } from './unicode';
-import { getCountryByCode } from '@/lib/countries';
+import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
 
 export type PaperSize = 'a4' | 'a5' | 'thermal58' | 'thermal80';
 
@@ -66,7 +66,7 @@ export function generateBillHtml(
 ): string {
   const { paperSize = 'a4', includeGst = false, gstin, address, phone, footerNote, businessName, useUnicode = false, isReprint = false } = opts;
   const displayName = businessName ?? tenant.business_name;
-  const rawCurrency = tenant.currency ?? '₹';
+  const rawCurrency = getCurrencySymbol(tenant.currency ?? 'INR', getCountryByCode(tenant.country ?? 'IN')?.locale);
   const currency = useUnicode ? rawCurrency : normalizeCurrencyToAscii(rawCurrency);
   const locale = getCountryByCode(tenant.country ?? 'IN')?.locale ?? 'en-US';
   const order = bill.order;

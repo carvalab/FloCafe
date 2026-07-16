@@ -862,6 +862,7 @@ export default function SettingsPage() {
         business_name: form.businessName,
         timezone: form.timezone,
         currency: form.currency,
+        country: form.countryCode,
         billing_type: form.billingType,
         tables_required: form.tablesRequired,
         gstin: form.gstin,
@@ -883,7 +884,7 @@ export default function SettingsPage() {
       posSettings.setBillShowGstn(form.billShowGstn);
       posSettings.setBillingType(form.billingType);
       posSettings.setTablesRequired(form.tablesRequired);
-      updateCurrentTenant({ currency: form.currency, timezone: form.timezone });
+      updateCurrentTenant({ currency: form.currency, timezone: form.timezone, country: form.countryCode });
       if (!silent) toast.success(t('settings.storeSaved'));
     } catch (err) {
       if (!silent) toast.error(t('settings.saveFailed'));

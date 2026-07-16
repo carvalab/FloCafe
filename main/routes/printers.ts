@@ -312,6 +312,7 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
       phone: settings.business_phone || '',
       gstin: settings.gstin || '',
       currency_symbol: settings.currency_symbol || '₹',
+      country: settings.country || 'IN',
       instagram_handle: settings.instagram_handle || '',
       customer_name: customer?.name || '',
       customer_phone: customer?.phone

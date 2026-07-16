@@ -8,6 +8,7 @@ import { nameToColor } from '@/lib/image-utils';
 import TagBadge from './DietaryBadge';
 import api from '@/lib/api';
 import { useI18n } from '@/hooks/useI18n';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 const CATEGORY_COLORS: Record<string, { bg: string; text: string; border: string; activeBg: string; activeText: string }> = {
   red: { bg: 'bg-red-50', text: 'text-red-700', border: 'border-red-200', activeBg: 'bg-red-500', activeText: 'text-white' },
@@ -53,6 +54,7 @@ export default function ProductGrid({
   const cart = useCartStore();
   const { showProductImages } = usePosSettingsStore();
   const { t } = useI18n();
+  const fmt = useFormatCurrency();
 
   const filtered = products.filter((p) => {
     const matchCat = !selectedCategory || p.category_id === selectedCategory;
@@ -178,7 +180,7 @@ export default function ProductGrid({
                 <h3 className="font-medium text-gray-900 text-sm line-clamp-2 leading-snug">{product.name}</h3>
                 <div className="flex items-center justify-between mt-1">
                   <p className="text-brand font-bold">
-                    {currency}{Number(product.price).toLocaleString()}
+                    {fmt(Number(product.price))}
                   </p>
                   <div className="flex items-center gap-1 shrink-0">
                     {!showProductImages && product.tags && product.tags.length > 0 && (

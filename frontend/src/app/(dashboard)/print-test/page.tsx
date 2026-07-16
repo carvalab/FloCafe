@@ -8,6 +8,7 @@ import { printerService } from '@/lib/printer/PrinterService';
 import { createTestBill, createTestOrder, createTestTenant, createTestCustomer } from '@/lib/printer/test-data';
 import { printWebBill, generateBillHtml } from '@/lib/printer/web-print';
 import { shareBillViaWhatsApp, getWhatsAppMessage } from '@/lib/whatsapp-share';
+import { formatCurrencyForTenant } from '@/lib/countries';
 import toast from 'react-hot-toast';
 
 type TestMode = 'receipt' | 'gst' | 'kot' | 'web-a4' | 'web-a5' | 'whatsapp';
@@ -299,15 +300,15 @@ function generateThermalReceiptHtml(
   const fontSize = paperWidth === 58 ? '10px' : '12px';
   const padding = paperWidth === 58 ? '4px' : '6px';
   
-  const formatCurrency = (amount: number) => `₹${amount.toFixed(2)}`;
+  const fmtCurrency = (amount: number) => formatCurrencyForTenant(amount, tenant.country, tenant.currency);
   
   const items = bill.order?.items || [];
   const rows = items.map((item, idx) => `
     <tr>
       <td style="font-size:${fontSize};padding:${padding};">${idx + 1}. ${item.product_name}</td>
       <td style="font-size:${fontSize};padding:${padding};text-align:right;">${item.quantity}</td>
-      <td style="font-size:${fontSize};padding:${padding};text-align:right;">${formatCurrency(item.unit_price)}</td>
-      <td style="font-size:${fontSize};padding:${padding};text-align:right;">${formatCurrency(item.subtotal)}</td>
+      <td style="font-size:${fontSize};padding:${padding};text-align:right;">${fmtCurrency(item.unit_price)}</td>
+      <td style="font-size:${fontSize};padding:${padding};text-align:right;">${fmtCurrency(item.subtotal)}</td>
     </tr>
   `).join('');
 
@@ -341,25 +342,25 @@ function generateThermalReceiptHtml(
       <table style="width:100%;font-size:${fontSize};">
         <tr>
           <td style="padding:${padding};">Subtotal</td>
-          <td style="text-align:right;padding:${padding};">${formatCurrency(bill.subtotal)}</td>
+          <td style="text-align:right;padding:${padding};">${fmtCurrency(bill.subtotal)}</td>
         </tr>
         ${bill.discount_amount > 0 ? `
         <tr>
           <td style="padding:${padding};">Discount</td>
-          <td style="text-align:right;padding:${padding};">-${formatCurrency(bill.discount_amount)}</td>
+          <td style="text-align:right;padding:${padding};">-${fmtCurrency(bill.discount_amount)}</td>
         </tr>
         ` : ''}
         <tr>
           <td style="padding:${padding};">CGST</td>
-          <td style="text-align:right;padding:${padding};">${formatCurrency(cgst)}</td>
+          <td style="text-align:right;padding:${padding};">${fmtCurrency(cgst)}</td>
         </tr>
         <tr>
           <td style="padding:${padding};">SGST</td>
-          <td style="text-align:right;padding:${padding};">${formatCurrency(sgst)}</td>
+          <td style="text-align:right;padding:${padding};">${fmtCurrency(sgst)}</td>
         </tr>
         <tr style="font-weight:bold;">
           <td style="padding:${padding};">TOTAL</td>
-          <td style="text-align:right;padding:${padding};">${formatCurrency(bill.total)}</td>
+          <td style="text-align:right;padding:${padding};">${fmtCurrency(bill.total)}</td>
         </tr>
       </table>
       <hr style="border:1px dashed #000;margin:8px 0;">

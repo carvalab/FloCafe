@@ -150,7 +150,7 @@ export function createTestTenant(overrides?: Partial<Tenant>): Tenant {
     database_name: 'tenant_test_restaurant',
     business_type: 'restaurant',
     country: 'IN',
-    currency: '₹',
+    currency: 'INR',
     timezone: 'Asia/Kolkata',
     plan: 'trial',
     status: 'active',

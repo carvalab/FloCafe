@@ -167,9 +167,6 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
     ? parseFloat((totalPayment - remaining).toFixed(2))
     : 0;
 
-  const fmt = (n: number) =>
-    n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
   const handleConfirm = () => {
     if (!preview) return;
     if (totalPayment < remaining - 0.01) {
@@ -239,7 +236,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   <div className="h-10 w-32 bg-white/10 rounded animate-pulse mt-1" />
                 ) : (
                   <p className="text-4xl font-bold mt-1 tracking-tight">
-                    {currency}{fmt(remaining)}
+                    {currencyFmt(remaining)}
                   </p>
                 )}
                 <p className="text-xs text-slate-400 mt-1.5">
@@ -249,12 +246,12 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                   <div className="mt-2 space-y-1">
                     <div className="flex justify-between text-xs text-slate-300">
                       <span>{t('pos.subtotal')}</span>
-                      <span>{currency}{fmt(preview.subtotal)}</span>
+                      <span>{currencyFmt(preview.subtotal)}</span>
                     </div>
                     {preview.discountAmount > 0 && (
                       <div className="flex justify-between text-xs text-emerald-400 font-medium">
                         <span>{t('pos.discount')}</span>
-                        <span>− {currency}{fmt(preview.discountAmount)}</span>
+                        <span>− {currencyFmt(preview.discountAmount)}</span>
                       </div>
                     )}
                     <TaxBreakdown
@@ -264,13 +261,13 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                     {preview.packagingCharge > 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
                         <span>{t('pos.packaging')}</span>
-                        <span>{currency}{fmt(preview.packagingCharge)}</span>
+                        <span>{currencyFmt(preview.packagingCharge)}</span>
                       </div>
                     )}
                     {preview.roundOff !== 0 && (
                       <div className="flex justify-between text-xs text-slate-300">
                         <span>{t('pos.roundOff')}</span>
-                        <span>{preview.roundOff > 0 ? '+' : ''}{currency}{fmt(preview.roundOff)}</span>
+                        <span>{preview.roundOff > 0 ? '+' : ''}{currencyFmt(preview.roundOff)}</span>
                       </div>
                     )}
                   </div>
@@ -295,7 +292,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
+                    ? t('pos.pointsApproxValue', { count: walletBalance, value: currencyFmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
                     : '…'}
                 </span>
               </div>
@@ -445,7 +442,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
               <span className={`text-xl font-bold tabular-nums ${
                 change > 0 ? 'text-emerald-600' : 'text-gray-300'
               }`}>
-                {currency}{change > 0 ? fmt(change) : '0.00'}
+                {change > 0 ? currencyFmt(change) : currencyFmt(0)}
               </span>
             </div>
           )}
@@ -460,7 +457,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), currency, value: fmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
+                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), value: currencyFmt(Math.floor(walletBalance / LOYALTY_REDEMPTION_RATE)) })
                     : t('pos.noBalance')}
                 </span>
               </div>
@@ -501,7 +498,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
             className="w-full h-12 text-base font-semibold rounded-xl"
             size="lg"
           >
-            {taxLoading ? t('pos.calculatingTax') : processing ? t('pos.processingPayment') : t('pos.confirmPaymentAmount', { currency, amount: fmt(remaining) })}
+            {taxLoading ? t('pos.calculatingTax') : processing ? t('pos.processingPayment') : t('pos.confirmPaymentAmount', { amount: currencyFmt(remaining) })}
           </Button>
         </div>
       </div>

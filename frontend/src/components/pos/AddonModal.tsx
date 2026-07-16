@@ -5,6 +5,7 @@ import { X, Plus, Minus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { Button } from '@/components/ui/button';
 import { useI18n } from '@/hooks/useI18n';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import type { Product, Addon, AddonGroup } from '@/lib/types';
 
 interface Props {
@@ -16,6 +17,7 @@ interface Props {
 
 export default function AddonModal({ product, currency, onAdd, onClose }: Props) {
   const { t } = useI18n();
+  const fmt = useFormatCurrency();
   const [selected, setSelected] = useState<Record<number, Addon[]>>({});
   const [quantity, setQuantity] = useState(1);
   const [instructions, setInstructions] = useState('');
@@ -63,7 +65,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
         <div className="flex justify-between items-center p-5 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-bold text-gray-900">{product.name}</h2>
-            <p className="text-brand font-semibold">{currency}{Number(product.price).toLocaleString()}</p>
+            <p className="text-brand font-semibold">{fmt(Number(product.price))}</p>
           </div>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
             <X size={20} />
@@ -112,7 +114,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
                     >
                       <span className="font-medium">{addon.name}</span>
                       <span className={isSelected(group.id, addon.id) ? 'text-brand font-semibold' : 'text-gray-500'}>
-                        {Number(addon.price) === 0 ? t('pos.freeAddon') : t('pos.addonPrice', { currency, price: Number(addon.price).toLocaleString() })}
+                        {Number(addon.price) === 0 ? t('pos.freeAddon') : `+${fmt(Number(addon.price))}`}
                       </span>
                     </button>
                   ))}
@@ -155,7 +157,7 @@ export default function AddonModal({ product, currency, onAdd, onClose }: Props)
             </button>
           </div>
           <Button onClick={handleAdd} disabled={!isValid} className="w-full" size="lg">
-            {t('pos.addToCart', { currency, total: itemTotal.toLocaleString() })}
+            {t('pos.addToCart', { total: fmt(itemTotal) })}
           </Button>
         </div>
       </div>

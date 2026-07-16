@@ -312,7 +312,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 <span className="text-gray-700 font-medium">{t('pos.loyalty')}</span>
                 <span className="font-semibold text-gray-700">
                   {walletBalance !== null
-                    ? t('pos.pointsApproxValue', { count: walletBalance, currency, value: currencyFmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
+                    ? t('pos.pointsApproxValue', { count: walletBalance, value: currencyFmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
                     : '…'}
                 </span>
               </div>
@@ -491,7 +491,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                 </div>
                 <span className={`text-sm font-semibold ${walletBalance > 0 ? 'text-purple-700' : 'text-gray-400'}`}>
                   {walletBalance > 0
-                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), currency, value: currencyFmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
+                    ? t('pos.pointsApproxValue', { count: walletBalance.toLocaleString(), value: currencyFmt(Math.floor(walletBalance / (LOYALTY_REDEMPTION_RATE))) })
                     : t('pos.noBalance')}
                 </span>
               </div>

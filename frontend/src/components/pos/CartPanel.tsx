@@ -118,7 +118,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
               {existingOrder.items.filter((i: OrderItem) => i.status !== 'cancelled').map((item: OrderItem) => (
                 <div key={item.id} className="flex justify-between items-center">
                   <span className="text-xs text-gray-500">{item.quantity}× {item.product_name}</span>
-                  <span className="text-xs text-gray-400">{currency}{Number(item.total).toLocaleString()}</span>
+                  <span className="text-xs text-gray-400">{fmt(Number(item.total))}</span>
                 </div>
               ))}
             </div>
@@ -157,7 +157,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
                     <p className="text-xs text-gray-400 italic mt-0.5 break-words">{item.special_instructions}</p>
                   )}
                   <p className="text-sm text-gray-500">
-                    {currency}{Number(item.product.price).toLocaleString()}
+                    {fmt(Number(item.product.price))}
                   </p>
                 </div>
                 <div className="flex items-center gap-1.5 shrink-0">
@@ -204,7 +204,7 @@ export default function CartPanel({ tables, currency, submitting, onPlaceOrder, 
         <div className="flex justify-between mb-4 text-lg">
           <span className="font-semibold text-gray-900">{t('pos.subtotal')}</span>
           <span className="font-bold text-brand">
-            {currency}{cart.subtotal().toLocaleString()}
+            {fmt(cart.subtotal())}
           </span>
         </div>
         <div className="flex gap-2">

@@ -110,8 +110,10 @@ export const useAuthStore = create<AuthState>((set) => ({
       api.get('/auth/me')
         .then(({ data }) => {
           const tenants: Tenant[] = data.tenants;
-          const resolved = currentTenant ?? (tenants.length === 1 ? tenants[0] : null);
-          if (resolved && !currentTenant) localStorage.setItem('tenant', JSON.stringify(resolved));
+          // Find the fresh version of the currently selected tenant, or default to the first one
+          const freshTenant = currentTenant ? tenants.find((t: Tenant) => t.id === currentTenant.id) : null;
+          const resolved = freshTenant ?? (tenants.length === 1 ? tenants[0] : null);
+          if (resolved) localStorage.setItem('tenant', JSON.stringify(resolved));
           set({
             user: data.user,
             token,

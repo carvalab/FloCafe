@@ -114,7 +114,7 @@ async function runArgentinaOnboarding(baseUrl, db) {
     body: {
       name: 'Sofía Owner',
       email: 'ar-owner@test.local',
-      password: 'test1234',
+      password: 'Test1234',
       business_type: 'restaurant',
       business_name: 'Burger AR',
       setup_profile: 'demo',
@@ -131,8 +131,12 @@ async function runArgentinaOnboarding(baseUrl, db) {
   const tenant = res.data.tenant;
   assertEqual(tenant.country, 'AR', 'tenant.country = AR');
   assertEqual(tenant.currency, 'ARS', 'tenant.currency = ARS');
+  assertEqual(tenant.currency_symbol, '$', 'tenant.currency_symbol = $ (not ARS)');
   assertEqual(tenant.timezone, 'America/Argentina/Buenos_Aires', 'tenant.timezone = AR');
   assertEqual(tenant.language, 'es', 'tenant.language = es');
+
+  const curSymbol = db.prepare("SELECT value FROM settings WHERE key = 'currency_symbol'").get();
+  assertEqual(curSymbol.value, '$', 'DB currency_symbol = $ for ARS');
 
   const burger = db.prepare("SELECT id FROM products WHERE id = 'prod-demo-hamburguesa-clasica'").get();
   assert(!!burger, 'Argentina demo seeds the hamburger menu');

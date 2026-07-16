@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import api from '@/lib/api';
 import { useI18n } from '@/hooks/useI18n';
+import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import toast from 'react-hot-toast';
 import type { Table, Order, Bill, OrderItem } from '@/lib/types';
 
@@ -29,6 +30,7 @@ export default function TableCheckoutModal({
   onAddCartToOrder
 }: Props) {
   const { t } = useI18n();
+  const fmt = useFormatCurrency();
   const [order, setOrder] = useState<Order | null>(null);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -143,7 +145,7 @@ export default function TableCheckoutModal({
                     )}
                   </div>
                   <span className="text-xs text-gray-600 ml-2 font-medium">
-                    {currency}{Number(item.total).toLocaleString()}
+                    {fmt(Number(item.total))}
                   </span>
                 </div>
               ))}
@@ -154,7 +156,7 @@ export default function TableCheckoutModal({
         <div className="p-5 border-t border-gray-100 space-y-3">
           <div className="flex justify-between text-sm">
             <span className="text-gray-500">{t('pos.subtotal')}</span>
-            <span>{currency}{Number(order.subtotal).toLocaleString()}</span>
+            <span>{fmt(Number(order.subtotal))}</span>
           </div>
           <TaxBreakdown
             taxAmount={Number(order.tax_amount)}
@@ -163,12 +165,12 @@ export default function TableCheckoutModal({
           />
           <div className="flex justify-between text-lg font-bold">
             <span>{t('pos.total')}</span>
-            <span className="text-brand">{currency}{Number(order.total).toLocaleString()}</span>
+            <span className="text-brand">{fmt(Number(order.total))}</span>
           </div>
           {order.bill && order.bill.payment_status !== 'paid' && Number(order.bill.balance) > 0 && (
             <div className="flex justify-between text-sm font-medium">
               <span className="text-orange-600">{t('pos.balanceDue')}</span>
-              <span className="text-orange-600">{currency}{Number(order.bill.balance).toLocaleString()}</span>
+              <span className="text-orange-600">{fmt(Number(order.bill.balance))}</span>
             </div>
           )}
 

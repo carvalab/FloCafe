@@ -11,7 +11,7 @@ import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
 import { useConfirm } from '@/hooks/use-confirm';
 import type { OrderItem, Table, Product, Customer } from '@/lib/types';
 import type { Order, Bill } from '@/lib/types';
-import { getCurrencySymbol } from '@/lib/countries';
+import { getCurrencySymbol, getCountryByCode } from '@/lib/countries';
 import { usePrinterStore } from '@/hooks/usePrinter';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useHeldOrdersStore } from '@/store/held-orders';
@@ -129,7 +129,7 @@ export default function OrdersPage() {
   const [linkingCustomer, setLinkingCustomer] = useState(false);
   const linkSearchRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const currency = getCurrencySymbol(currentTenant?.currency || 'INR');
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
   const fmt = useFormatCurrency();
   const isOwnerOrManager = currentTenant?.role === 'owner' || currentTenant?.role === 'manager';
 
@@ -384,7 +384,7 @@ export default function OrdersPage() {
             { ...latestBill, order },
             {
               business_name: currentTenant?.business_name || t('common.businessNameFallback'),
-              currency: currentTenant?.currency || 'INR',
+              currency,
               country: currentTenant?.country || 'IN',
             },
             { isReprint: false }
@@ -412,7 +412,7 @@ export default function OrdersPage() {
         { ...order.bill, order },
         {
           business_name: currentTenant?.business_name || t('common.businessNameFallback'),
-          currency: currentTenant?.currency || 'INR',
+          currency,
           country: currentTenant?.country || 'IN',
         },
         { isReprint }
@@ -473,7 +473,7 @@ export default function OrdersPage() {
         { phone: order.customer.phone, country_code: order.customer.country_code },
         {
           business_name: currentTenant?.business_name || t('common.businessNameFallback'),
-          currency: currentTenant?.currency || 'INR',
+          currency,
           country: currentTenant?.country || 'IN',
         }
       );

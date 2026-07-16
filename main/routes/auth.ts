@@ -7,6 +7,7 @@ import { getCountryCallingCode, type CountryCode } from 'libphonenumber-js';
 import { getCurrentSchemaVersion, getDatabase, now } from '../db';
 import { isMasterPinAvailable, setMasterPin } from '../services/master-pin';
 import { authRateLimit, validatePassword } from '../middleware/security';
+import { getCurrencySymbol, getCountryByCode } from '../countries';
 
 const router = Router();
 
@@ -81,7 +82,7 @@ function buildLocalTenant(db: ReturnType<typeof getDatabase>, userRole: string) 
     business_type: s.business_type || 'restaurant',
     country: s.country || 'IN',
     currency: s.currency || 'INR',
-    currency_symbol: s.currency_symbol || '₹',
+    currency_symbol: getCurrencySymbol(s.currency || 'INR', getCountryByCode(s.country)?.locale) || '₹',
     timezone: s.timezone || 'Asia/Kolkata',
     language: s.language || 'en',
     service_model: s.service_model || 'finedine',
@@ -114,15 +115,6 @@ function upsertSettings(db: ReturnType<typeof getDatabase>, entries: Record<stri
   }
 }
 
-function currencySymbolFor(currency: string): string {
-  switch (currency) {
-    case 'INR': return '₹';
-    case 'USD': return '$';
-    case 'EUR': return '€';
-    case 'GBP': return '£';
-    default: return currency;
-  }
-}
 
 function insertCategory(db: ReturnType<typeof getDatabase>, id: string, name: string, color: string, icon: string, sortOrder: number): void {
   db.prepare(`
@@ -617,7 +609,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
         business_type: normalizedBusinessType,
         country,
         currency: normalizedCurrency,
-        currency_symbol: currency_symbol || currencySymbolFor(normalizedCurrency),
+        currency_symbol: currency_symbol || getCurrencySymbol(normalizedCurrency, getCountryByCode(country)?.locale),
         timezone,
         language,
         business_address: outletAddress,

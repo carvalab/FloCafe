@@ -6,7 +6,8 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { formatCurrency } from '@/lib/countries';
+import { formatCurrency, getCountryByCode, getCurrencySymbol } from '@/lib/countries';
+import { useAuthStore } from '@/store/auth';
 import type { Order, OrderItem, Bill } from '@/lib/types';
 import { useI18n } from '@/hooks/useI18n';
 import { ORDER_TYPE_LABEL_KEYS } from '@/lib/order-types';
@@ -205,8 +206,9 @@ function HistoryOrderCard({ order, currency, locale }: { order: HistoryOrder; cu
 
 export default function OrderHistoryGrid() {
   const [orders] = useState<HistoryOrder[]>(MOCK_HISTORY);
-  const currency = 'INR'; // sourced from tenant.currency in the real page
-  const locale = 'en-IN'; // matched from currency in the real page
+  const currentTenant = useAuthStore((s) => s.currentTenant);
+  const currency = getCurrencySymbol(currentTenant?.currency || 'INR', getCountryByCode(currentTenant?.country ?? 'IN')?.locale);
+  const locale = getCountryByCode(currentTenant?.country ?? 'IN')?.locale ?? 'en-IN';
 
   return (
     <div className="p-4">

@@ -6,7 +6,7 @@
  */
 
 import type { Bill, Tenant, Customer } from '@/lib/types';
-import { getCountryByCode } from '@/lib/countries';
+import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
 
 export interface WhatsAppShareOptions {
   /** Points earned from this bill (cashback) */
@@ -27,7 +27,7 @@ export function getWhatsAppShareUrl(
   opts: WhatsAppShareOptions = {}
 ): string {
   const { pointsEarned = 0, walletBalance, businessPhone } = opts;
-  const currency = tenant.currency ?? '₹';
+  const currency = getCurrencySymbol(tenant.currency ?? 'INR', getCountryByCode(tenant.country ?? 'IN')?.locale);
   const locale = getCountryByCode(tenant.country ?? 'IN')?.locale ?? 'en-US';
 
   // Build the message

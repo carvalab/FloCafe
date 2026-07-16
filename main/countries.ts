@@ -91,7 +91,7 @@ export const getCountryByCode = (code: string): Country | undefined => {
 export const getCurrencySymbol = (currency: string, locale = 'en-US'): string => {
   if (!currency) return currency;
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'symbol' })
+    return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' })
       .formatToParts(0)
       .find((p) => p.type === 'currency')?.value ?? currency;
   } catch {
@@ -102,7 +102,7 @@ export const getCurrencySymbol = (currency: string, locale = 'en-US'): string =>
 export const formatCurrency = (amount: number, currency: string, locale = 'en-US'): string => {
   if (!currency) return amount.toFixed(2);
   try {
-    return new Intl.NumberFormat(locale, { style: 'currency', currency }).format(amount);
+    return new Intl.NumberFormat(locale, { style: 'currency', currency, currencyDisplay: 'narrowSymbol' }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
   }
