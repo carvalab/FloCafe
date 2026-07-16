@@ -13,6 +13,9 @@ docs/superpowers/
 .superpowers
 .gstack
 
+# Local pentest reports/PoCs — never commit
+vuln/
+
 # Apple signing assets — NEVER commit
 xcode/
 build/flo.provisionprofile

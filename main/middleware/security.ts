@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
+import { getDatabase } from '../db';
 
 interface RateLimitRecord {
   count: number;
@@ -87,6 +88,58 @@ export function authRateLimit() {
   });
 }
 
+interface UserAuthCacheEntry {
+  isActive: boolean;
+  role: string;
+  expiresAt: number;
+}
+
+// Bounds how long a deactivated/role-changed user's existing JWT keeps working
+// after the DB is updated (vuln-0001). Kept short so requireAuth doesn't need
+// a DB hit on every single request.
+const USER_AUTH_CACHE_TTL_MS = 30 * 1000;
+
+const userAuthCache = new Map<string, UserAuthCacheEntry>();
+
+/**
+ * Looks up (and caches) whether a JWT's subject is still an active user, and
+ * their current role. requireAuth uses this to reject tokens for deactivated
+ * users instead of trusting the JWT's signature/expiry alone.
+ */
+export function getUserAuthStatus(userId: string): { isActive: boolean; role: string } | null {
+  const now = Date.now();
+  const cached = userAuthCache.get(userId);
+  if (cached && cached.expiresAt > now) {
+    return { isActive: cached.isActive, role: cached.role };
+  }
+
+  const db = getDatabase();
+  const user = db.prepare('SELECT is_active, role FROM users WHERE id = ?').get(userId) as
+    | { is_active: number; role: string }
+    | undefined;
+
+  if (!user) {
+    userAuthCache.delete(userId);
+    return null;
+  }
+
+  const entry: UserAuthCacheEntry = {
+    isActive: user.is_active === 1,
+    role: user.role,
+    expiresAt: now + USER_AUTH_CACHE_TTL_MS,
+  };
+  userAuthCache.set(userId, entry);
+  return { isActive: entry.isActive, role: entry.role };
+}
+
+/**
+ * Forces the next requireAuth check for this user to re-read the DB instead
+ * of serving a stale cache entry. Call after deactivate/reactivate/role changes.
+ */
+export function invalidateUserAuthCache(userId: string): void {
+  userAuthCache.delete(userId);
+}
+
 /**
  * Role-based authorization middleware.
  * Must be used after requireAuth.
@@ -131,6 +184,47 @@ export function isAllowedPrivateIp(ip: string): boolean {
   if (a === 100 && b >= 64 && b <= 127) return true;
 
   return false;
+}
+
+/**
+ * Checks if an IP address is disallowed as an outbound fetch target for the
+ * SSRF-guarded image proxy (vuln-0003): loopback, private ranges, link-local
+ * (includes the 169.254.169.254 cloud metadata address), CGNAT, multicast,
+ * and other reserved ranges. This is a broader blocklist than
+ * isAllowedPrivateIp, which is a LAN-convenience allowlist for rate
+ * limiting/CORS and intentionally does not cover link-local/metadata.
+ * Best-effort — covers the realistic SSRF targets, not every obscure
+ * IPv6 transition/compat range.
+ */
+export function isBlockedSsrfTarget(ip: string): boolean {
+  const version = net.isIP(ip);
+  if (version === 4) {
+    const parts = ip.split('.').map(Number);
+    if (parts.length !== 4 || parts.some((n) => Number.isNaN(n))) return true;
+    const [a, b] = parts;
+    if (a === 0) return true; // 0.0.0.0/8 - "this network"
+    if (a === 10) return true; // private
+    if (a === 100 && b >= 64 && b <= 127) return true; // CGNAT / Tailscale
+    if (a === 127) return true; // loopback
+    if (a === 169 && b === 254) return true; // link-local, incl. cloud metadata
+    if (a === 172 && b >= 16 && b <= 31) return true; // private
+    if (a === 192 && b === 0) return true; // IETF protocol assignments
+    if (a === 192 && b === 168) return true; // private
+    if (a === 198 && (b === 18 || b === 19)) return true; // benchmark
+    if (a >= 224) return true; // multicast (224-239) + reserved (240-255)
+    return false;
+  }
+  if (version === 6) {
+    const normalized = ip.toLowerCase();
+    if (normalized === '::1' || normalized === '::') return true; // loopback / unspecified
+    if (/^fe[89ab]/.test(normalized)) return true; // link-local fe80::/10
+    if (/^f[cd]/.test(normalized)) return true; // unique local fc00::/7
+    // IPv4-mapped (::ffff:a.b.c.d) — validate the embedded IPv4 address
+    const mapped = normalized.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isBlockedSsrfTarget(mapped[1]);
+    return false;
+  }
+  return true; // unparseable — fail closed
 }
 
 export const corsOptions = {

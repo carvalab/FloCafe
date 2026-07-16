@@ -10,7 +10,7 @@ import { registerRoutes } from './routes';
 import { getJWTSecret } from './routes/auth';
 import { getDbHealth } from './db';
 import { setupKdsWebSocket } from './services/kds';
-import { rateLimit, corsOptions } from './middleware/security';
+import { rateLimit, corsOptions, getUserAuthStatus } from './middleware/security';
 
 let server: http.Server | null = null;
 let app: Express;
@@ -40,7 +40,18 @@ function requireAuth(req: Request, res: Response, next: NextFunction): void {
   }
   try {
     const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as any;
-    (req as any).user = decoded;
+
+    // Reject tokens for users deactivated (or deleted) since the token was
+    // issued, instead of trusting the JWT's signature/expiry alone (vuln-0001).
+    const status = getUserAuthStatus(decoded.userId);
+    if (!status || !status.isActive) {
+      res.status(401).json({ error: 'Invalid or expired token' });
+      return;
+    }
+
+    // Use the DB's current role rather than the JWT's role claim, so a role
+    // change takes effect without waiting for the token to expire.
+    (req as any).user = { ...decoded, role: status.role };
     next();
   } catch {
     res.status(401).json({ error: 'Invalid or expired token' });

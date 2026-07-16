@@ -1,7 +1,29 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now, generateShortId } from '../db';
-import { requireRole } from '../middleware/security';
+import { requireRole, isBlockedSsrfTarget } from '../middleware/security';
 import * as crypto from 'crypto';
+import * as dns from 'dns';
+
+/**
+ * Resolves a hostname and rejects it if any resolved address is a
+ * loopback/private/link-local/metadata/reserved IP (vuln-0003 SSRF guard).
+ */
+async function assertPublicHostname(hostname: string): Promise<void> {
+  let addresses: dns.LookupAddress[];
+  try {
+    addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
+  } catch {
+    throw new Error('Could not resolve hostname');
+  }
+  if (addresses.length === 0) {
+    throw new Error('Could not resolve hostname');
+  }
+  for (const { address } of addresses) {
+    if (isBlockedSsrfTarget(address)) {
+      throw new Error('URL resolves to a disallowed address');
+    }
+  }
+}
 
 /**
  * Validate that an image_url value is a valid Base64 data URI or null.
@@ -280,17 +302,73 @@ router.post('/fetch-url', requireRole('owner', 'manager'), async (req: Request, 
       return res.status(400).json({ error: 'Only HTTPS URLs are supported' });
     }
 
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+    // Follow redirects manually (capped) so each hop's hostname/IP is
+    // re-validated — fetch()'s automatic redirect handling would otherwise
+    // let an allowed URL 302 into an internal address (vuln-0003).
+    const MAX_REDIRECTS = 5;
+    let currentUrl = url;
+    // Named to avoid colliding with Express's Response type imported above.
+    let response: Awaited<ReturnType<typeof fetch>> | undefined;
 
-    try {
-      const response = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'FloCafe-ImageProxy/1.0' },
-      });
+    for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(currentUrl);
+      } catch {
+        return res.status(400).json({ error: 'Invalid URL' });
+      }
+      if (parsedUrl.protocol !== 'https:') {
+        return res.status(400).json({ error: 'Only HTTPS URLs are supported' });
+      }
 
+      try {
+        await assertPublicHostname(parsedUrl.hostname);
+      } catch {
+        return res.status(400).json({ error: 'URL is not allowed' });
+      }
+
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15_000); // 15s timeout
+
+      let hopResponse: Awaited<ReturnType<typeof fetch>>;
+      try {
+        hopResponse = await fetch(currentUrl, {
+          signal: controller.signal,
+          redirect: 'manual',
+          headers: { 'User-Agent': 'FloCafe-ImageProxy/1.0' },
+        });
+      } catch (fetchError: any) {
+        clearTimeout(timeout);
+        if (fetchError.name === 'AbortError') {
+          return res.status(504).json({ error: 'Request timed out' });
+        }
+        return res.status(502).json({ error: 'Could not fetch the image' });
+      }
       clearTimeout(timeout);
 
+      // "manual" redirect mode surfaces 3xx as an opaqueredirect/redirect
+      // response instead of following it — inspect Location ourselves.
+      if (hopResponse.status >= 300 && hopResponse.status < 400) {
+        const location = hopResponse.headers.get('location');
+        if (!location) {
+          return res.status(502).json({ error: 'Could not fetch the image' });
+        }
+        if (hop === MAX_REDIRECTS) {
+          return res.status(502).json({ error: 'Too many redirects' });
+        }
+        currentUrl = new URL(location, currentUrl).toString();
+        continue;
+      }
+
+      response = hopResponse;
+      break;
+    }
+
+    if (!response) {
+      return res.status(502).json({ error: 'Could not fetch the image' });
+    }
+
+    try {
       if (!response.ok) {
         return res.status(502).json({ error: 'Could not fetch the image' });
       }
@@ -335,11 +413,7 @@ router.post('/fetch-url', requireRole('owner', 'manager'), async (req: Request, 
       const dataUri = `data:${detectedType};base64,${base64}`;
 
       res.json({ data: dataUri });
-    } catch (fetchError: any) {
-      clearTimeout(timeout);
-      if (fetchError.name === 'AbortError') {
-        return res.status(504).json({ error: 'Request timed out' });
-      }
+    } catch {
       return res.status(502).json({ error: 'Could not fetch the image' });
     }
   } catch (error: any) {

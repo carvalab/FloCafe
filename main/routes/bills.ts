@@ -206,18 +206,31 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
 
     const db = getDatabase();
 
-    // Pre-compute cashback eligibility (safe to read order items outside txn — they don't change)
-    let loyaltyCashbackToCredit = 0;
-    {
-      const tempBill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
-      if (tempBill && tempBill.payment_status !== 'paid') {
-        const effectiveCustomerId = tempBill.customer_id || (bodyCustomerId ? String(bodyCustomerId) : null);
+    // BUG #2 FIX: Entire payment logic inside transaction to prevent race conditions
+    const result = withTxn(() => {
+      // Re-read bill inside transaction — gets current state even under concurrent access
+      const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
+      if (!bill) {
+        throw Object.assign(new Error('Bill not found'), { statusCode: 404 });
+      }
+
+      if (bill.payment_status === 'paid') {
+        throw Object.assign(new Error('Bill is already paid'), { statusCode: 400 });
+      }
+
+      // Compute cashback eligibility inside the transaction so it reads the
+      // same consistent snapshot the payment itself commits against —
+      // computing this outside withTxn left a TOCTOU gap where concurrent
+      // discount/order changes could produce stale cashback (vuln-0006).
+      let loyaltyCashbackToCredit = 0;
+      {
+        const effectiveCustomerIdForCashback = bill.customer_id || (bodyCustomerId ? String(bodyCustomerId) : null);
         const loyaltySetting = (db.prepare(
           `SELECT value FROM settings WHERE key = 'loyalty_enabled'`
         ).get() as any)?.value;
-        if ((loyaltySetting === 'true' || loyaltySetting === '1') && effectiveCustomerId) {
+        if ((loyaltySetting === 'true' || loyaltySetting === '1') && effectiveCustomerIdForCashback) {
           // BUG #20 FIX: Calculate cashback on discounted subtotal (proportional)
-          const order = db.prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?').get(tempBill.order_id) as any;
+          const order = db.prepare('SELECT subtotal, discount_amount FROM orders WHERE id = ?').get(bill.order_id) as any;
           const orderDiscount = order?.discount_amount || 0;
           const orderSubtotal = order?.subtotal || 0;
 
@@ -226,7 +239,7 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
             FROM order_items oi
             JOIN products p ON p.id = oi.product_id
             WHERE oi.order_id = ? AND oi.status != 'cancelled'
-          `).all(tempBill.order_id) as { subtotal: number; cb_percent: number }[];
+          `).all(bill.order_id) as { subtotal: number; cb_percent: number }[];
           for (const item of items) {
             let effectiveSubtotal = item.subtotal;
             // Apply proportional discount to each item's subtotal
@@ -240,19 +253,6 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
             }
           }
         }
-      }
-    }
-
-    // BUG #2 FIX: Entire payment logic inside transaction to prevent race conditions
-    const result = withTxn(() => {
-      // Re-read bill inside transaction — gets current state even under concurrent access
-      const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(req.params.id) as any;
-      if (!bill) {
-        throw Object.assign(new Error('Bill not found'), { statusCode: 404 });
-      }
-
-      if (bill.payment_status === 'paid') {
-        throw Object.assign(new Error('Bill is already paid'), { statusCode: 400 });
       }
 
       // BUG #8 FIX: Default to remaining balance (not full total)

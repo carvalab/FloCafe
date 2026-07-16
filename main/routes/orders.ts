@@ -198,7 +198,10 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
 
         const unitPrice = parseFloat(product.price);
         const quantity = item.quantity;
-        const itemDiscount = item.discount_amount || 0;
+        // item.discount_amount is intentionally ignored here — discounts are only
+        // applied through the dedicated PATCH discount endpoints, which enforce
+        // discount_mode/max_percentage/max_amount/approval (vuln-0002).
+        const itemDiscount = 0;
 
         // Validate quantity and price
         if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
@@ -344,7 +347,10 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
 
         const unitPrice = parseFloat(product.price);
         const quantity = item.quantity;
-        const itemDiscount = item.discount_amount || 0;
+        // item.discount_amount is intentionally ignored here — discounts are only
+        // applied through the dedicated PATCH discount endpoints, which enforce
+        // discount_mode/max_percentage/max_amount/approval (vuln-0002).
+        const itemDiscount = 0;
 
         // Validate quantity and price
         if (!quantity || quantity <= 0 || !Number.isFinite(quantity)) {
