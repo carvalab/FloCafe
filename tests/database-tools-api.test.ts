@@ -109,14 +109,14 @@ async function runTests() {
   console.log('\nTest 1: setup requires master_pin');
   {
     const missingPin = await request(app).post('/api/auth/setup/initialize').send({
-      name: 'Owner', email: 'owner@example.com', password: 'x',
+      name: 'Owner', email: 'owner@example.com', password: 'TestPass123',
       business_type: 'restaurant', setup_profile: 'empty', service_model: 'qsr',
       terms_accepted: true,
     });
     assert(missingPin.status === 400, `setup without master_pin returns 400 (got ${missingPin.status})`);
 
     const ok = await request(app).post('/api/auth/setup/initialize').send({
-      name: 'Owner', email: 'owner@example.com', password: 'x',
+      name: 'Owner', email: 'owner@example.com', password: 'TestPass123',
       business_type: 'restaurant', setup_profile: 'empty', service_model: 'qsr',
       terms_accepted: true, master_pin: '1234',
     });

@@ -115,7 +115,7 @@ async function main() {
       body: JSON.stringify({
         name: 'First Owner',
         email: 'owner@example.com',
-        password: 'x',
+        password: 'TestPass123',
         business_type: 'restaurant',
         business_name: 'First Cafe',
         setup_profile: 'express',
@@ -131,7 +131,7 @@ async function main() {
       body: JSON.stringify({
         name: 'First Owner',
         email: 'owner@example.com',
-        password: 'x',
+        password: 'TestPass123',
         business_type: 'restaurant',
         business_name: 'First Cafe',
         setup_profile: 'express',
@@ -165,7 +165,7 @@ async function main() {
       body: JSON.stringify({
         name: 'Second Owner',
         email: 'second@example.com',
-        password: 'x',
+        password: 'TestPass123',
         business_type: 'restaurant',
         terms_accepted: true,
       }),
