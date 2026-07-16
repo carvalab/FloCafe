@@ -442,7 +442,7 @@ export default function KdsStandalonePage() {
                         <span className="text-gray-900 text-sm font-semibold flex-1 truncate">{item.product_name}</span>
                         <ChevronRight size={14} className="text-gray-400 shrink-0" />
                       </div>
-                      {item.addons && item.addons.length > 0 && (
+                      {Array.isArray(item.addons) && item.addons.length > 0 && (
                         <div className="ml-[26px] flex flex-wrap gap-1 mt-1">
                           {item.addons.map((addon, i) => (
                             <span key={i} className="text-[10px] bg-white/70 text-blue-600 px-1.5 py-0.5 rounded border border-blue-200">
@@ -504,7 +504,7 @@ export default function KdsStandalonePage() {
               </button>
             </div>
 
-            {activeItem.addons && activeItem.addons.length > 0 && (
+            {Array.isArray(activeItem.addons) && activeItem.addons.length > 0 && (
               <div className="bg-blue-50 rounded-xl p-3">
                 <p className="text-xs font-semibold text-blue-700 mb-1.5 uppercase tracking-wide">{t('kds.addonsLabel')}</p>
                 <div className="flex flex-wrap gap-1.5">
