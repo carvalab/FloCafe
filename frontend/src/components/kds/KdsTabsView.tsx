@@ -54,7 +54,7 @@ export function KdsTabsView({ orders, updating, updateItemStatus }: KdsTabsViewP
 
   return (
     <>
-      <div className="flex flex-wrap items-center gap-2 mb-4">
+      <div className="shrink-0 flex flex-wrap items-center gap-2 mb-4">
         {(Object.keys(STATUS_CONFIG) as KitchenStatus[]).map((status) => {
           const config = STATUS_CONFIG[status];
           const count = orderCounts(status);
