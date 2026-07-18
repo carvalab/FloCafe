@@ -173,7 +173,7 @@ function checkForUpdates(): void {
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
-let bonjour: Bonjour | null = null;
+let bonjour: InstanceType<typeof Bonjour> | null = null;
 let isQuitting = false;
 let hasCleanedUp = false;
 

@@ -812,7 +812,7 @@ const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
               CASE WHEN phone IS NULL THEN NULL
                    ELSE REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(REPLACE(phone, '+', ''), ' ', ''), '-', ''), '(', ''), ')', ''), '.', '')
               END
-            ) STORED
+            ) VIRTUAL
         `);
       }
     },
