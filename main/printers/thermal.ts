@@ -477,7 +477,12 @@ export async function printKOT(order: any, items: any[], stationName: string, us
     const profile = resolvePrinterProfile(printer);
     const cols = getColumnsForPrinter(printer, profile);
 
-    const data = formatKOT(order, items, stationName, cols, useUnicode, profile.cutMode);
+    const db = getDatabase();
+    const biz = db.prepare('SELECT * FROM settings LIMIT 1').get() as any;
+    const locale = biz?.country ? getCountryByCode(biz.country)?.locale ?? 'en-US' : 'en-US';
+    const tzOptions = biz?.timezone ? { timeZone: biz.timezone } : undefined;
+
+    const data = formatKOT(order, items, stationName, cols, useUnicode, profile.cutMode, locale, tzOptions);
     console.log('[Printer] KOT data length:', data.length, 'bytes');
     return await dispatchPrint(printer, data);
   } catch (error: any) {
@@ -559,12 +564,14 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
   const locale = getCountryByCode(biz.country)?.locale ?? 'en-US';
 
+  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store') + '{/BOLD}{/CENTER}');
   lines.push(bar);
   lines.push('Bill #: ' + (bill.bill_number || order.order_number));
-  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn') + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn'));
+  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn', tzOptions) + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn', tzOptions));
   lines.push(dash);
   lines.push(itemHeader(itemNameLen, amtLen, cols));
   lines.push(dash);
@@ -626,6 +633,8 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
   const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
   const locale = getCountryByCode(biz.country)?.locale ?? 'en-US';
 
+  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
 
@@ -637,7 +646,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   lines.push(dash);
   lines.push('{CENTER}Invoice #: ' + (bill.bill_number || order.order_number) + '{/CENTER}');
-  lines.push('{CENTER}' + date.toLocaleDateString(locale + '-u-nu-latn') + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn') + '{/CENTER}');
+  lines.push('{CENTER}' + date.toLocaleDateString(locale + '-u-nu-latn', tzOptions) + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn', tzOptions) + '{/CENTER}');
   lines.push(dash);
 
   lines.push(itemHeader(itemNameLen, amtLen, cols));
@@ -720,6 +729,8 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
   const locale = getCountryByCode(biz.country)?.locale ?? 'en-US';
 
+  const tzOptions = biz.timezone ? { timeZone: biz.timezone } : undefined;
+
   lines.push('{INIT}');
   if (isReprint) lines.push('{CENTER}{BOLD}{DOUBLE_HEIGHT}{DOUBLE_WIDTH}** REPRINT **{/DOUBLE_WIDTH}{/DOUBLE_HEIGHT}{/BOLD}{/CENTER}');
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store').toUpperCase() + '{/BOLD}{/CENTER}');
@@ -727,8 +738,8 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   lines.push('{CENTER}TAX INVOICE{/CENTER}');
   lines.push(bar);
   lines.push('Invoice #: ' + (bill.bill_number || order.order_number));
-  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn'));
-  lines.push('Time: ' + date.toLocaleTimeString(locale + '-u-nu-latn'));
+  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn', tzOptions));
+  lines.push('Time: ' + date.toLocaleTimeString(locale + '-u-nu-latn', tzOptions));
   lines.push(dash);
   lines.push(itemHeader(itemNameLen, 10, cols));
   lines.push(dash);
@@ -865,7 +876,7 @@ function truncate(text: string, length: number): string {
   return text.length > length ? text.substring(0, length - 2) + '..' : text;
 }
 
-export function formatKOT(order: any, items: any[], stationName: string, cols: number = 48, useUnicode: boolean = false, cutMode: PrinterCutMode = 'full'): Buffer {
+export function formatKOT(order: any, items: any[], stationName: string, cols: number = 48, useUnicode: boolean = false, cutMode: PrinterCutMode = 'full', locale: string = 'en-US', tzOptions?: any): Buffer {
   const lines: string[] = [];
   const bar = '='.repeat(cols);
 
@@ -877,7 +888,7 @@ export function formatKOT(order: any, items: any[], stationName: string, cols: n
   if (order.table) {
     lines.push('Table: ' + order.table.name);
   }
-  lines.push('Time: ' + new Date(order.created_at).toLocaleTimeString('en-US-u-nu-latn'));
+  lines.push('Time: ' + new Date(order.created_at).toLocaleTimeString(locale + '-u-nu-latn', tzOptions));
   lines.push(bar);
   lines.push('');
 
