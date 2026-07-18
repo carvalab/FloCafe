@@ -19,6 +19,7 @@ import { useRouter } from 'next/navigation';
 import { useCartStore } from '@/store/cart';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { useI18n } from '@/hooks/useI18n';
+import { useFormatDate } from '@/hooks/useFormatDate';
 import { ORDER_TYPE_LABEL_KEYS } from '@/lib/order-types';
 
 const itemStatusConfig: Record<string, { dot: string; color: string; labelKey: string }> = {
@@ -85,6 +86,7 @@ export default function OrdersPage() {
   const cartStore = useCartStore();
   const { setTablesRequired, autoPrintBill } = usePosSettingsStore();
   const { t } = useI18n();
+  const { formatTime, formatDateTime } = useFormatDate();
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState(true);
   const [tabFilter, setTabFilter] = useState<FilterType>('active');
@@ -719,7 +721,7 @@ export default function OrdersPage() {
                  <div className="p-4 border-b border-gray-100 bg-blue-50/50 flex justify-between items-center">
                    <div>
                      <p className="font-bold text-gray-900">{tables.find(t => t.id === heldOrder.tableId)?.name || t('common.tableFallback')}</p>
-                     <p className="text-xs text-gray-500">{new Date(heldOrder.heldAt).toLocaleTimeString()}</p>
+                     <p className="text-xs text-gray-500">{formatTime(heldOrder.heldAt)}</p>
                    </div>
                    <span className="bg-blue-100 text-blue-700 text-xs px-2 py-1 rounded-full font-bold tracking-wide">{t('orders.held')}</span>
                  </div>
@@ -1036,7 +1038,7 @@ export default function OrdersPage() {
                         <div className="mt-2 pl-4 space-y-1">
                           {printHistory[order.bill!.id].map((print, index) => (
                             <div key={print.id} className="text-xs text-gray-500">
-                              {index + 1}. {t('orders.printHistoryEntry', { printedType: print.print_type === 'reprint' ? t('orders.reprint') : t('orders.printed'), user: print.user_name, time: new Date(print.printed_at).toLocaleString() })}
+                              {index + 1}. {t('orders.printHistoryEntry', { printedType: print.print_type === 'reprint' ? t('orders.reprint') : t('orders.printed'), user: print.user_name, time: formatDateTime(print.printed_at) })}
                             </div>
                           ))}
                         </div>

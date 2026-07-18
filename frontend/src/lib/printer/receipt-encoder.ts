@@ -17,6 +17,7 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
 import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
 import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
+import { formatDate } from './format-date';
 
 export interface ReceiptOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -159,7 +160,7 @@ export function buildClassicReceiptBytes(
 
   enc
     .size('small')
-    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
+    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
     .newline()
     .size('normal')
     .align('left')
@@ -223,7 +224,7 @@ export function buildClassicReceiptBytes(
   // Payment methods
   if (bill.payment_details && bill.payment_details.length > 0) {
     for (const p of bill.payment_details) {
-      enc.text(padRow(capitalise(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
+      enc.text(padRow(capitalize(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
     }
   }
 
@@ -297,7 +298,7 @@ export function buildCompactReceiptBytes(
 
   // Bill # and date on one line
   enc
-    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
+    .text(padRow(`Bill #${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
     .newline();
 
   if (order?.table?.name) {
@@ -347,7 +348,7 @@ export function buildCompactReceiptBytes(
 
   if (bill.payment_details && bill.payment_details.length > 0) {
     for (const p of bill.payment_details) {
-      enc.text(padRow(capitalise(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
+      enc.text(padRow(capitalize(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
     }
   }
 
@@ -412,7 +413,7 @@ export function buildDetailedReceiptBytes(
 
   // Bill info
   enc
-    .text(padRow(`Bill #: ${bill.bill_number}`, formatDate(bill.order?.created_at), cols))
+    .text(padRow(`Bill #: ${bill.bill_number}`, formatDate(bill.order?.created_at, locale), cols))
     .newline();
 
   if (order?.customer?.name) {
@@ -490,7 +491,7 @@ export function buildDetailedReceiptBytes(
   // Payment methods
   if (bill.payment_details && bill.payment_details.length > 0) {
     for (const p of bill.payment_details) {
-      enc.text(padRow(capitalise(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
+      enc.text(padRow(capitalize(p.method), formatAmount(p.amount, currency, locale), cols)).newline();
     }
   }
 
@@ -542,21 +543,6 @@ function formatAmount(value: number | string, currency: string, locale: string):
   })}`;
 }
 
-function capitalise(str: string): string {
+function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString('en', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
 }

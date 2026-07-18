@@ -8,7 +8,8 @@ import { printerService } from '@/lib/printer/PrinterService';
 import { createTestBill, createTestOrder, createTestTenant, createTestCustomer } from '@/lib/printer/test-data';
 import { printWebBill, generateBillHtml } from '@/lib/printer/web-print';
 import { shareBillViaWhatsApp, getWhatsAppMessage } from '@/lib/whatsapp-share';
-import { formatCurrencyForTenant } from '@/lib/countries';
+import { formatCurrencyForTenant, getCountryByCode } from '@/lib/countries';
+import { formatDate } from '@/lib/printer/format-date';
 import toast from 'react-hot-toast';
 
 type TestMode = 'receipt' | 'gst' | 'kot' | 'web-a4' | 'web-a5' | 'whatsapp';
@@ -323,7 +324,7 @@ function generateThermalReceiptHtml(
       ${options?.gstin ? `<p style="margin:2px 0;font-size:${fontSize};">GSTIN: ${options.gstin}</p>` : ''}
       <hr style="border:1px dashed #000;margin:4px 0;">
       <p style="margin:2px 0;">Bill #: ${bill.bill_number}</p>
-      <p style="margin:2px 0;">${new Date().toLocaleString()}</p>
+      <p style="margin:2px 0;">${formatDate(new Date().toISOString(), getCountryByCode(tenant.country ?? 'IN')?.locale)}</p>
       <hr style="border:1px dashed #000;margin:4px 0;">
       <table style="width:100%;border-collapse:collapse;font-size:${fontSize};">
         <thead>
@@ -389,7 +390,7 @@ function generateKotHtml(
     <div style="text-align:center;padding:${padding};font-family:'Courier New',monospace;font-size:${fontSize};">
       <h2 style="margin:0;font-size:${paperWidth === 58 ? '14px' : '16px'};">KOT</h2>
       <p style="margin:2px 0;">Order #: ${order.order_number}</p>
-      <p style="margin:2px 0;">${new Date(order.created_at).toLocaleString()}</p>
+      <p style="margin:2px 0;">${formatDate(order.created_at, 'en-US')}</p>
       <hr style="border:1px dashed #000;margin:4px 0;">
       <table style="width:100%;border-collapse:collapse;font-size:${fontSize};">
         <tbody>

@@ -9,6 +9,7 @@ import type { Bill, Tenant } from '@/lib/types';
 import toast from 'react-hot-toast';
 import { normalizeCurrencyToAscii } from './unicode';
 import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
+import { formatDate } from './format-date';
 
 export type PaperSize = 'a4' | 'a5' | 'thermal58' | 'thermal80';
 
@@ -114,7 +115,7 @@ export function generateBillHtml(
       <table>
         <tr>
           <td><strong>Bill #:</strong> ${bill.bill_number}</td>
-          <td><strong>Date:</strong> ${formatDate(order?.created_at)}</td>
+          <td><strong>Date:</strong> ${formatDate(order?.created_at, locale)}</td>
         </tr>
         ${order?.table?.name ? `<tr><td><strong>Table:</strong> ${order.table.name}</td><td></td></tr>` : ''}
         ${order?.customer?.name ? `<tr><td><strong>Customer:</strong> ${order.customer.name}${order.customer.phone ? ` (${order.customer.phone})` : ''}</td><td></td></tr>` : ''}
@@ -264,19 +265,4 @@ function formatAmount(value: number | string, currency: string, locale: string):
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString('en', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
 }

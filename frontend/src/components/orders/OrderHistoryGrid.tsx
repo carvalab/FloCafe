@@ -8,6 +8,7 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatCurrency, getCountryByCode, getCurrencySymbol } from '@/lib/countries';
 import { useAuthStore } from '@/store/auth';
+import { useFormatDate } from '@/hooks/useFormatDate';
 import type { Order, OrderItem, Bill } from '@/lib/types';
 import { useI18n } from '@/hooks/useI18n';
 import { ORDER_TYPE_LABEL_KEYS } from '@/lib/order-types';
@@ -109,14 +110,9 @@ const STATUS_LABEL_KEY: Record<string, string> = {
   cancelled: 'orders.voided',
 };
 
-function formatTimestamp(iso: string): string {
-  return new Date(iso).toLocaleString(undefined, {
-    month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit',
-  });
-}
-
 function HistoryOrderCard({ order, currency, locale }: { order: HistoryOrder; currency: string; locale: string }) {
   const { t } = useI18n();
+  const { formatDate } = useFormatDate();
   const items: OrderItem[] = order.items ?? [];
   const bill = order.bill;
   const fmt = (n: number) => formatCurrency(n, currency, locale);
@@ -127,7 +123,7 @@ function HistoryOrderCard({ order, currency, locale }: { order: HistoryOrder; cu
         <div className="flex items-start justify-between gap-2">
           <div>
             <CardTitle className="text-base font-bold">#{order.order_number}</CardTitle>
-            <CardDescription>{formatTimestamp(order.created_at)}</CardDescription>
+            <CardDescription>{formatDate(order.created_at, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })}</CardDescription>
           </div>
           <Badge className={STATUS_BADGE[order.status] ?? ''} variant="outline">
             {STATUS_LABEL_KEY[order.status] ? t(STATUS_LABEL_KEY[order.status]) : order.status}

@@ -10,6 +10,7 @@ import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Bill, Tenant } from '@/lib/types';
 import { normalizeCurrencyToAscii, padCurrencyPrefix } from './unicode';
 import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
+import { formatDate } from './format-date';
 
 export interface GstBillOptions {
   /** 58 mm (2.5", 32 chars) or 80 mm (3.5", 48 chars). Default: 58 */
@@ -75,7 +76,7 @@ export function buildGstBillBytes(
   // ── Bill Details ─────────────────────────────────────────────────────────
   enc.align('left');
   enc.text(`Bill #: ${bill.bill_number}`).newline();
-  enc.text(`Date: ${formatDate(bill.order?.created_at)}`).newline();
+  enc.text(`Date: ${formatDate(bill.order?.created_at, locale)}`).newline();
 
   if (order?.table?.name) {
     enc.text(`Table: ${order.table.name}`).newline();
@@ -218,19 +219,4 @@ function formatAmount(value: number | string, currency: string, locale: string):
 
 function capitalize(str: string): string {
   return str.charAt(0).toUpperCase() + str.slice(1);
-}
-
-function formatDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleString('en', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
 }

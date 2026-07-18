@@ -564,7 +564,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   lines.push('{CENTER}{BOLD}' + (biz.name || 'Store') + '{/BOLD}{/CENTER}');
   lines.push(bar);
   lines.push('Bill #: ' + (bill.bill_number || order.order_number));
-  lines.push('Date: ' + date.toLocaleDateString() + ' ' + date.toLocaleTimeString());
+  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn') + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn'));
   lines.push(dash);
   lines.push(itemHeader(itemNameLen, amtLen, cols));
   lines.push(dash);
@@ -637,7 +637,7 @@ function formatClassicReceipt(order: any, bill: any, biz: any, cols: number = 48
 
   lines.push(dash);
   lines.push('{CENTER}Invoice #: ' + (bill.bill_number || order.order_number) + '{/CENTER}');
-  lines.push('{CENTER}' + date.toLocaleDateString() + ' ' + date.toLocaleTimeString() + '{/CENTER}');
+  lines.push('{CENTER}' + date.toLocaleDateString(locale + '-u-nu-latn') + ' ' + date.toLocaleTimeString(locale + '-u-nu-latn') + '{/CENTER}');
   lines.push(dash);
 
   lines.push(itemHeader(itemNameLen, amtLen, cols));
@@ -727,8 +727,8 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   lines.push('{CENTER}TAX INVOICE{/CENTER}');
   lines.push(bar);
   lines.push('Invoice #: ' + (bill.bill_number || order.order_number));
-  lines.push('Date: ' + date.toLocaleDateString());
-  lines.push('Time: ' + date.toLocaleTimeString());
+  lines.push('Date: ' + date.toLocaleDateString(locale + '-u-nu-latn'));
+  lines.push('Time: ' + date.toLocaleTimeString(locale + '-u-nu-latn'));
   lines.push(dash);
   lines.push(itemHeader(itemNameLen, 10, cols));
   lines.push(dash);
@@ -877,7 +877,7 @@ export function formatKOT(order: any, items: any[], stationName: string, cols: n
   if (order.table) {
     lines.push('Table: ' + order.table.name);
   }
-  lines.push('Time: ' + new Date(order.created_at).toLocaleTimeString());
+  lines.push('Time: ' + new Date(order.created_at).toLocaleTimeString('en-US-u-nu-latn'));
   lines.push(bar);
   lines.push('');
 
@@ -907,7 +907,7 @@ export function buildTestPage(paperWidth: string = '80mm', cutMode: PrinterCutMo
     bar,
     '',
     `Paper: ${paperWidth}`,
-    `Time: ${new Date().toLocaleString()}`,
+    `Time: ${new Date().toLocaleString('en-US-u-nu-latn')}`,
     '',
     bar,
     '{CENTER}If you can read this, your printer is working!{/CENTER}',

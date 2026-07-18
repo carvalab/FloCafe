@@ -7,6 +7,7 @@
 
 import ReceiptPrinterEncoder from '@point-of-sale/receipt-printer-encoder';
 import type { Order } from '@/lib/types';
+import { formatDate, formatTime } from './format-date';
 
 export interface KotOptions {
   /** 58 mm (32 chars) or 80 mm (48 chars). Default: 58 */
@@ -106,16 +107,4 @@ export function buildKotBytes(
 
 function truncate(str: string, max: number): string {
   return str.length > max ? str.slice(0, max - 1) + '…' : str;
-}
-
-function formatTime(iso?: string): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleTimeString('en', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
 }

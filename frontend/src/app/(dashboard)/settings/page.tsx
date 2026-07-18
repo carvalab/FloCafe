@@ -19,6 +19,7 @@ import { HealthCheckDialog } from '@/components/settings/HealthCheckDialog';
 import { InitializeDatabaseDialog } from '@/components/settings/InitializeDatabaseDialog';
 import type { HealthCheckReport } from '@/types/electron';
 import { useI18n } from '@/hooks/useI18n';
+import { useFormatDate } from '@/hooks/useFormatDate';
 
 const CLASSIC_PREVIEW = `   STORE NAME
    Jane Doe
@@ -127,6 +128,7 @@ export default function SettingsPage() {
   const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
   usePrinterStatusSync();
   const { t, language, setLanguage } = useI18n();
+  const { formatDate, formatTime, formatDateTime } = useFormatDate();
   const isAdmin = currentTenant?.role === 'admin' || currentTenant?.role === 'owner';
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -1552,7 +1554,7 @@ export default function SettingsPage() {
                   </div>
                   {pairingRotatedAt && (
                     <p className="text-xs text-gray-400">
-                      {t('settings.codeGenerated', { date: new Date(pairingRotatedAt).toLocaleDateString() })}
+                      {t('settings.codeGenerated', { date: formatDate(pairingRotatedAt) })}
                     </p>
                   )}
                   <button
@@ -2180,7 +2182,7 @@ export default function SettingsPage() {
                       {(cloudStatus.cloud_registration_status === 'unregistered' || cloudStatus.cloud_registration_status === 'registration_failed') && t('settings.notRegistered')}
                     </p>
                     <p className="text-xs text-gray-500">
-                      {cloudStatus.cloud_registration_status === 'registered' && (cloudStatus.cloud_last_heartbeat ? t('settings.liveChannelHeartbeat', { mode: cloudStatus.cloud_relay_mode.replace('_', ' '), time: new Date(cloudStatus.cloud_last_heartbeat).toLocaleTimeString() }) : t('settings.liveChannel', { mode: cloudStatus.cloud_relay_mode.replace('_', ' ') }))}
+                      {cloudStatus.cloud_registration_status === 'registered' && (cloudStatus.cloud_last_heartbeat ? t('settings.liveChannelHeartbeat', { mode: cloudStatus.cloud_relay_mode.replace('_', ' '), time: formatTime(cloudStatus.cloud_last_heartbeat) }) : t('settings.liveChannel', { mode: cloudStatus.cloud_relay_mode.replace('_', ' ') }))}
                       {cloudStatus.cloud_registration_status === 'pending' && t('settings.storeIdPending', { id: cloudStatus.cloud_pending_store_id || '—' })}
                       {cloudStatus.cloud_registration_status === 'rejected' && t('settings.registrationContactSupport')}
                       {cloudStatus.cloud_registration_status === 'registration_failed' && (cloudStatus.cloud_last_error ? t('settings.registrationLastError', { error: cloudStatus.cloud_last_error }) : t('settings.registrationLastFailed'))}
@@ -2249,7 +2251,7 @@ export default function SettingsPage() {
                 </label>
 
                 {cloudSettings.cloud_last_sync && (
-                  <p className="text-xs text-gray-400">{t('settings.lastSync', { time: new Date(cloudSettings.cloud_last_sync).toLocaleString() })}</p>
+                  <p className="text-xs text-gray-400">{t('settings.lastSync', { time: formatDateTime(cloudSettings.cloud_last_sync) })}</p>
                 )}
               </div>
             </div>

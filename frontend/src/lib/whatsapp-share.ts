@@ -7,6 +7,7 @@
 
 import type { Bill, Tenant, Customer } from '@/lib/types';
 import { getCountryByCode, getCurrencySymbol } from '@/lib/countries';
+import { formatDate } from './printer/format-date';
 
 export interface WhatsAppShareOptions {
   /** Points earned from this bill (cashback) */
@@ -35,7 +36,7 @@ export function getWhatsAppShareUrl(
 
   lines.push(`*${tenant.business_name}*`);
   lines.push(`Bill #: ${bill.bill_number}`);
-  lines.push(`Date: ${formatDate(bill.order?.created_at)}`);
+  lines.push(`Date: ${formatDate(bill.order?.created_at, locale)}`);
   lines.push(``);
   lines.push(`*Total: ${formatAmount(bill.total, currency, locale)}*`);
 
@@ -121,17 +122,4 @@ export function getWhatsAppMessage(
 
 function formatAmount(value: number | string, currency: string, locale: string): string {
   return `${currency}${Number(value).toLocaleString(locale, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
-}
-
-function formatDate(iso?: string): string {
-  if (!iso) return '';
-  try {
-    return new Date(iso).toLocaleDateString('en', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
 }
