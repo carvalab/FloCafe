@@ -580,7 +580,6 @@ async function initialize(): Promise<void> {
     console.log('[Flo] Starting local server...');
     await startServer();
 
-    console.log('[Flo] Starting cloud sync...');
     cloudSync.start();
 
     console.log('[Flo] Starting KDS server on port 3002...');

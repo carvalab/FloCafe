@@ -41,6 +41,7 @@ type CloudSettings = {
   orders_enabled: boolean;
   reports_enabled: boolean;
   command_polling_enabled: boolean;
+  cloud_registration_status: string;
 };
 
 type CloudCommand = {
@@ -197,12 +198,14 @@ class CloudSyncService {
     this.maybeStartRelay();
     this.maybeStartStatusPoll();
 
-    log.info('[CloudSync] started', {
-      server: cfg.server_url,
-      sync: cfg.sync_enabled,
-      commands: cfg.command_polling_enabled,
-      registered: Boolean(cfg.api_key),
-    });
+    if (cfg.api_key || cfg.cloud_registration_status !== 'unregistered') {
+      log.info('[CloudSync] started', {
+        server: cfg.server_url,
+        sync: cfg.sync_enabled,
+        commands: cfg.command_polling_enabled,
+        registered: Boolean(cfg.api_key),
+      });
+    }
   }
 
   stop() {
@@ -1011,6 +1014,7 @@ class CloudSyncService {
         orders_enabled: s.cloud_orders_enabled === '1',
         reports_enabled: s.cloud_reports_enabled === '1',
         command_polling_enabled: s.cloud_command_polling_enabled === '1',
+        cloud_registration_status: s.cloud_registration_status || 'unregistered',
       };
     } catch (err) {
       log.warn('[CloudSync] settings unavailable', (err as Error).message);
