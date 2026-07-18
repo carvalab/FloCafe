@@ -15,12 +15,14 @@ import {
   LogOut,
   PanelLeft,
   ChefHat,
+  UserCircle,
 } from 'lucide-react';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore } from '@/store/pos-settings';
 import { getLandingPage } from '@/components/layout/AuthGuard';
 import api from '@/lib/api';
 import { useI18n } from '@/hooks/useI18n';
+import { useConfirm } from '@/hooks/use-confirm';
 import {
   Sidebar,
   SidebarContent,
@@ -50,10 +52,11 @@ const ALL_NAV_ITEMS = [
 
 export default function AppSidebar() {
   const pathname = usePathname();
-  const { currentTenant, logout } = useAuthStore();
+  const { user, currentTenant, logout } = useAuthStore();
   const { tablesRequired, setTablesRequired } = usePosSettingsStore();
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const { t } = useI18n();
+  const { confirm, ConfirmDialog } = useConfirm();
   const closeMobile = () => { if (isMobile) setOpenMobile(false); };
 
   const role = currentTenant?.role || 'cashier';
@@ -131,7 +134,13 @@ export default function AppSidebar() {
             </SidebarMenuButton>
           </SidebarMenuItem>
           <SidebarMenuItem>
-            <SidebarMenuButton onClick={logout} tooltip={t('nav.logoutTooltip')}>
+            <SidebarMenuButton tooltip={user?.name || user?.email || t('nav.user', { defaultValue: 'User' })}>
+              <UserCircle />
+              <span className="truncate">{user?.name || user?.email || t('nav.user', { defaultValue: 'User' })}</span>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <SidebarMenuButton onClick={async () => { if (await confirm(t('nav.confirmLogout', { defaultValue: 'Are you sure you want to log out?' }))) logout(); }} tooltip={t('nav.logoutTooltip')}>
               <LogOut />
               <span>{t('nav.logout')}</span>
             </SidebarMenuButton>
@@ -139,6 +148,7 @@ export default function AppSidebar() {
         </SidebarMenu>
       </SidebarFooter>
       <SidebarRail />
+      {ConfirmDialog}
     </Sidebar>
   );
 }

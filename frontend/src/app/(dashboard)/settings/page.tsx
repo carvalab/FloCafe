@@ -252,8 +252,8 @@ export default function SettingsPage() {
 
     if (pinGate.mode === 'backup') {
       try {
-        await api.post('/db/backup', { master_pin: pin });
-        toast.success(t('settings.backupCreated'));
+        const response = await api.post('/db/backup', { master_pin: pin });
+        toast.success(`${t('settings.backupCreated')} ${response.data.path}`, { duration: 5000 });
         setPinGate(null);
         return { success: true };
       } catch (err: unknown) {
@@ -275,8 +275,8 @@ export default function SettingsPage() {
     }
     if (!masterPinStatus.available) {
       try {
-        await api.post('/db/backup', {});
-        toast.success(t('settings.backupCreated'));
+        const response = await api.post('/db/backup', {});
+        toast.success(`${t('settings.backupCreated')} ${response.data.path}`, { duration: 5000 });
       } catch {
         toast.error(t('settings.backupFailed'));
       }
@@ -589,12 +589,14 @@ export default function SettingsPage() {
     businessName: string; countryCode: string; timezone: string; currency: string;
     billingType: 'postpaid' | 'prepaid';
     tablesRequired: boolean;
+    taxRegistered: boolean;
     gstin: string; businessAddress: string; businessPhone: string; instagramHandle: string;
     billShowName: boolean; billShowAddress: boolean; billShowPhone: boolean; billShowGstn: boolean;
   };
   const [savedBusiness, setSavedBusiness] = useState<BusinessForm>({
     businessName: '', countryCode: '', timezone: '', currency: '', billingType: 'postpaid',
     tablesRequired: true,
+    taxRegistered: false,
     gstin: '', businessAddress: '', businessPhone: '', instagramHandle: '',
     billShowName: true, billShowAddress: true, billShowPhone: true, billShowGstn: false,
   });
@@ -617,12 +619,13 @@ export default function SettingsPage() {
     cloud_last_heartbeat: null as string | null,
     cloud_last_error: null as string | null,
   });
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars -- used in saveCloud(), not yet wired to a spinner
+   
   const [savingCloud, setSavingCloud] = useState(false);
   const [testingCloud, setTestingCloud] = useState(false);
   const [registeringCloud, setRegisteringCloud] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
   const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
+  const [showInitializeCloudConfirm, setShowInitializeCloudConfirm] = useState(false);
   const [registerEmail, setRegisterEmail] = useState('');
 
   const resetBusiness = async () => {
@@ -642,6 +645,7 @@ export default function SettingsPage() {
         currency: d.currency || '',
         billingType: d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid',
         tablesRequired: typeof d.tables_required === 'boolean' ? d.tables_required : true,
+        taxRegistered: d.tax_registered === 'true' || d.tax_registered === true || d.tax_registered === 1,
         gstin: d.gstin || '',
         businessAddress: d.business_address || '',
         businessPhone: d.business_phone || '',
@@ -736,6 +740,7 @@ export default function SettingsPage() {
         currency: d.currency || '',
         billingType: d.billing_type === 'prepaid' ? 'prepaid' : 'postpaid',
         tablesRequired: typeof d.tables_required === 'boolean' ? d.tables_required : true,
+        taxRegistered: d.tax_registered === 'true' || d.tax_registered === true || d.tax_registered === 1,
         gstin: d.gstin || '',
         businessAddress: d.business_address || '',
         businessPhone: d.business_phone || '',
@@ -830,6 +835,7 @@ export default function SettingsPage() {
       await api.put('/settings/loyalty', {
         loyalty_enabled: loyaltyEnabled,
       });
+      setSavedLoyaltyEnabled(loyaltyEnabled);
       if (!silent) toast.success(t('settings.loyaltySaved'));
     } catch (err) {
       if (!silent) toast.error(t('settings.saveFailed'));
@@ -848,6 +854,10 @@ export default function SettingsPage() {
         discount_mode: discountMode,
         discount_requires_approval: discountRequiresApproval,
       });
+      setSavedDiscountMaxPct(normalizeDiscountPercentage(discountMaxPct));
+      setSavedDiscountMaxAmount(normalizeDiscountAmount(discountMaxAmount));
+      setSavedDiscountMode(discountMode);
+      setSavedDiscountRequiresApproval(discountRequiresApproval);
       if (!silent) toast.success(t('settings.discountSaved'));
     } catch (err) {
       if (!silent) toast.error(t('settings.saveFailed'));
@@ -858,6 +868,12 @@ export default function SettingsPage() {
   };
 
   const saveBusinessInfo = async (silent = false) => {
+    const phone = form.businessPhone.trim();
+    if (phone && !/^\+?[\d\s\-().]{7,20}$/.test(phone)) {
+      toast.error(t('settings.invalidPhoneFormat', { defaultValue: 'Invalid phone number format' }));
+      return;
+    }
+
     setSavingBusiness(true);
     try {
       await api.put('/settings/business', {
@@ -867,6 +883,7 @@ export default function SettingsPage() {
         country: form.countryCode,
         billing_type: form.billingType,
         tables_required: form.tablesRequired,
+        tax_registered: form.taxRegistered,
         gstin: form.gstin,
         business_address: form.businessAddress,
         business_phone: form.businessPhone,
@@ -952,8 +969,7 @@ export default function SettingsPage() {
     discountMaxAmount !== savedDiscountMaxAmount ||
     discountMode !== savedDiscountMode ||
     discountRequiresApproval !== savedDiscountRequiresApproval ||
-    JSON.stringify(cloudSettings) !== JSON.stringify(savedCloudSettings) ||
-    showPrinterForm;
+    JSON.stringify(cloudSettings) !== JSON.stringify(savedCloudSettings);
 
   useEffect(() => {
     if (!isDirty) return;
@@ -1152,20 +1168,37 @@ export default function SettingsPage() {
                   )}
                 </div>
                 <div>
-                  <label className="block text-sm text-gray-500 mb-1">{t('settings.taxIdLabel')}</label>
+                  <label className="block text-sm text-gray-500 mb-1">{t('settings.taxRegistered', { defaultValue: 'Tax Registered' })}</label>
                   {isAdmin ? (
-                    <input type="text" value={form.gstin} onChange={(e) => setForm((p) => ({ ...p, gstin: e.target.value.toUpperCase() }))}
-                      placeholder={t('settings.taxIdPlaceholder')}
-                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                    <select
+                      value={form.taxRegistered ? 'yes' : 'no'}
+                      onChange={(e) => setForm((p) => ({ ...p, taxRegistered: e.target.value === 'yes' }))}
+                      className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand bg-white"
+                    >
+                      <option value="yes">{t('settings.yes')}</option>
+                      <option value="no">{t('settings.no')}</option>
+                    </select>
                   ) : (
-                    <p className="font-medium text-gray-900">{form.gstin || '—'}</p>
+                    <p className="font-medium text-gray-900">{form.taxRegistered ? t('settings.yes') : t('settings.no')}</p>
                   )}
                 </div>
+                {form.taxRegistered ? (
+                  <div>
+                    <label className="block text-sm text-gray-500 mb-1">{t('settings.taxIdLabel')}</label>
+                    {isAdmin ? (
+                      <input type="text" value={form.gstin} onChange={(e) => setForm((p) => ({ ...p, gstin: e.target.value.toUpperCase() }))}
+                        placeholder={t('settings.taxIdPlaceholder')}
+                        className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
+                    ) : (
+                      <p className="font-medium text-gray-900">{form.gstin || '—'}</p>
+                    )}
+                  </div>
+                ) : <div className="hidden md:block" />}
                 <div>
                   <label className="block text-sm text-gray-500 mb-1">{t('settings.phone')}</label>
                   {isAdmin ? (
                     <input type="text" value={form.businessPhone} onChange={(e) => setForm((p) => ({ ...p, businessPhone: e.target.value }))}
-                      placeholder={t('settings.phonePlaceholder', { dialCode: dialCodeFor(form.countryCode) || '+1' })}
+                      placeholder={t('settings.phonePlaceholder', { dialCode: dialCodeFor(form.countryCode) || '+1', defaultValue: '+1 555 000 0000' })}
                       className="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-brand" />
                   ) : (
                     <p className="font-medium text-gray-900">{form.businessPhone || '—'}</p>
@@ -1276,7 +1309,10 @@ export default function SettingsPage() {
                   <p className="font-medium text-gray-900">{t('settings.showProductImages')}</p>
                   <p className="text-sm text-gray-500">{t('settings.showProductImagesHint')}</p>
                 </div>
-                <Toggle value={posSettings.showProductImages} onChange={posSettings.setShowProductImages} />
+                <Toggle value={posSettings.showProductImages} onChange={(v) => {
+                  posSettings.setShowProductImages(v);
+                  toast.success(v ? t('settings.productImagesEnabled', { defaultValue: 'Product images enabled' }) : t('settings.productImagesDisabled', { defaultValue: 'Product images disabled' }), { id: 'pos-local' });
+                }} />
               </div>
             </div>
 
@@ -1292,7 +1328,10 @@ export default function SettingsPage() {
                     <p className="font-medium text-gray-900">{t('settings.customerMandatory')}</p>
                     <p className="text-sm text-gray-500">{t('settings.customerMandatoryHint')}</p>
                   </div>
-                  <Toggle value={posSettings.customerMandatory} onChange={posSettings.setCustomerMandatory} />
+                  <Toggle value={posSettings.customerMandatory} onChange={(v) => {
+                    posSettings.setCustomerMandatory(v);
+                    toast.success(v ? t('settings.customerMandatoryEnabled', { defaultValue: 'Mandatory customer enabled' }) : t('settings.customerMandatoryDisabled', { defaultValue: 'Mandatory customer disabled' }), { id: 'pos-local' });
+                  }} />
                 </div>
                 <p className="text-sm text-gray-500">{t('settings.phoneDigitsDerived')}</p>
               </div>
@@ -1394,10 +1433,15 @@ export default function SettingsPage() {
               )}
 
               {!kdsInfo && !kdsInfoLoading && (
-                <button onClick={fetchKdsInfo}
-                  className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
-                  {t('settings.loadKdsInfo')}
-                </button>
+                <>
+                  <p className="text-sm text-gray-500 mb-3">
+                    {t('settings.kdsLoadHint', { defaultValue: 'Load connection details to pair kitchen display devices on your local network.' })}
+                  </p>
+                  <button onClick={fetchKdsInfo}
+                    className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
+                    {t('settings.loadKdsInfo')}
+                  </button>
+                </>
               )}
             </div>
 
@@ -1968,8 +2012,8 @@ export default function SettingsPage() {
               <button
                 onClick={async () => {
                   try {
-                    const response = await fetch('/api/db/export');
-                    const blob = await response.blob();
+                    const response = await api.get('/db/export', { responseType: 'blob' });
+                    const blob = new Blob([response.data], { type: 'application/json' });
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
@@ -2165,8 +2209,26 @@ export default function SettingsPage() {
                 </div>
               </div>
 
-              <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
-                <div className="flex items-center gap-2">
+              {cloudStatus.cloud_registration_status === 'unregistered' ? (
+                <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-4">
+                  <div className="p-3 bg-white rounded-full shadow-sm">
+                    <Cloud className="w-6 h-6 text-brand" />
+                  </div>
+                  <div>
+                    <h3 className="font-medium text-gray-900">Cloud Services Disabled</h3>
+                    <p className="text-sm text-gray-500 mt-1 max-w-sm">Initialize cloud services to enable remote sales reporting, bill sync, and online dashboard access.</p>
+                  </div>
+                  <button
+                    onClick={() => setShowInitializeCloudConfirm(true)}
+                    className="px-4 py-2 bg-brand text-white text-sm font-medium rounded-lg hover:opacity-90"
+                  >
+                    Initialize Cloud Services
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
                   {cloudStatus.cloud_registration_status === 'registered' ? (
                     <CheckCircle2 size={16} className="text-green-600 shrink-0" />
                   ) : cloudStatus.cloud_registration_status === 'pending' ? (
@@ -2250,10 +2312,12 @@ export default function SettingsPage() {
                   <span className="text-sm text-gray-700">{t('settings.enableBillSync')}</span>
                 </label>
 
-                {cloudSettings.cloud_last_sync && (
-                  <p className="text-xs text-gray-400">{t('settings.lastSync', { time: formatDateTime(cloudSettings.cloud_last_sync) })}</p>
-                )}
-              </div>
+                    {cloudSettings.cloud_last_sync && (
+                      <p className="text-xs text-gray-400">{t('settings.lastSync', { time: formatDateTime(cloudSettings.cloud_last_sync) })}</p>
+                    )}
+                  </div>
+                </>
+              )}
             </div>
 
             {/* OrderFlow — online orders */}
@@ -2517,6 +2581,29 @@ export default function SettingsPage() {
         </DialogContent>
       </Dialog>
 
+      {/* Initialize Cloud Disclaimer Dialog */}
+      <Dialog open={showInitializeCloudConfirm} onOpenChange={setShowInitializeCloudConfirm}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Initialize Cloud Services</DialogTitle>
+            <DialogDescription>
+              Allow diagnostic and usage data collection to improve the product.
+              <br /><br />
+              This enables basic telemetry and provisions your local database to communicate with the FloAdmin cloud servers for remote reporting and sync.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowInitializeCloudConfirm(false)}>{t('settings.cancel')}</Button>
+            <Button
+              disabled={registeringCloud}
+              onClick={() => { setShowInitializeCloudConfirm(false); registerCloud(''); }}
+            >
+              {registeringCloud ? t('settings.registering') : 'Accept & Initialize'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <MasterPinPrompt
         open={pinGate !== null}
         mode={pinGate?.mode === 'set' ? 'set' : 'verify'}
@@ -2547,8 +2634,8 @@ export default function SettingsPage() {
           <div className={`bg-gray-900 text-white px-6 py-4 rounded-full shadow-2xl flex items-center gap-6 pointer-events-auto ${shakeSaveBar ? 'animate-shake' : ''}`}>
             <span className="text-sm font-medium">{t('settings.unsavedChanges', { defaultValue: 'You have unsaved changes' })}</span>
             <div className="flex items-center gap-2">
-              <button onClick={resetAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50 text-white">{t('settings.discard', { defaultValue: 'Discard' })}</button>
-              <button onClick={saveAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount} className="px-4 py-1.5 text-sm bg-brand hover:opacity-90 rounded-full font-medium transition-colors disabled:opacity-50 text-white">{(savingBusiness || savingLoyalty || savingDiscount) ? t('settings.saving') : t('settings.saveChanges', { defaultValue: 'Save Changes' })}</button>
+              <button onClick={resetAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount || savingCloud} className="px-4 py-1.5 text-sm bg-gray-800 hover:bg-gray-700 rounded-full transition-colors disabled:opacity-50 text-white">{t('settings.discard', { defaultValue: 'Discard' })}</button>
+              <button onClick={saveAllSettings} disabled={savingBusiness || savingLoyalty || savingDiscount || savingCloud} className="px-4 py-1.5 text-sm bg-brand hover:opacity-90 rounded-full font-medium transition-colors disabled:opacity-50 text-white">{(savingBusiness || savingLoyalty || savingDiscount || savingCloud) ? t('settings.saving') : t('settings.saveChanges', { defaultValue: 'Save Changes' })}</button>
             </div>
           </div>
         </div>
