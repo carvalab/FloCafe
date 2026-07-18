@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now } from '../db';
+import { getDatabase, now, getSettingValue } from '../db';
 import { requireRole } from '../middleware/security';
+import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 
 function parseCustomer(c: any): any {
   if (!c) return c;
@@ -39,6 +40,23 @@ router.delete('/admin/cleanup', requireRole('owner'), (req: Request, res: Respon
   }
 });
 
+router.get('/alerts', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const result = db.prepare(`
+      SELECT COUNT(*) as count 
+      FROM customers 
+      WHERE is_active = 1 
+      AND phone IS NOT NULL AND phone != '' 
+      AND phone != '+' || phone_digits
+    `).get() as { count: number };
+    
+    res.json({ invalidPhonesCount: result.count });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
@@ -48,7 +66,8 @@ router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Requ
       MAX(0,
         COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'credit'), 0) -
         COALESCE((SELECT SUM(ll.amount) FROM loyalty_ledger ll WHERE ll.customer_id = c.id AND ll.type = 'debit'), 0)
-      ) as wallet_balance
+      ) as wallet_balance,
+      (SELECT MAX(created_at) FROM orders o WHERE o.customer_id = c.id) as last_visit_at
       FROM customers c WHERE c.is_active = 1`;
     const params: any[] = [];
 
@@ -58,7 +77,24 @@ router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Requ
       params.push(search, search, search);
     }
 
-    query += ' ORDER BY c.name';
+    if (req.query.filter === 'invalid_phones') {
+      query += " AND c.phone IS NOT NULL AND c.phone != '' AND c.phone != '+' || c.phone_digits";
+    }
+
+    const sortField = (req.query.sort as string) || 'name';
+    const sortOrder = (req.query.order as string) === 'desc' ? 'DESC' : 'ASC';
+    
+    const allowedSortFields: Record<string, string> = {
+      name: 'c.name COLLATE NOCASE',
+      phone: 'c.phone_digits',
+      visits: 'visits_count',
+      spent: 'total_spent',
+      loyalty: 'wallet_balance',
+      last_visit: 'last_visit_at'
+    };
+
+    const orderBy = allowedSortFields[sortField] || 'c.name COLLATE NOCASE';
+    query += ` ORDER BY ${orderBy} ${sortOrder}`;
 
     if (req.query.per_page) {
       query += ` LIMIT ${parseInt(req.query.per_page as string)}`;
@@ -125,8 +161,20 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
 
     const db = getDatabase();
 
-    if (phone) {
-      const existing = db.prepare('SELECT * FROM customers WHERE phone = ?').get(phone) as any;
+    let finalPhone = phone ? String(phone).trim() : null;
+    let finalCountryCode = country_code ? String(country_code).trim() : null;
+
+    if (finalPhone) {
+      const tenantCountry = getSettingValue('country') || 'IN';
+      const parsed = parsePhoneE164(finalPhone, tenantCountry);
+      if (!parsed) {
+        return res.status(400).json({ message: 'Phone number is not valid. Use international format (e.g. +919876543210).' });
+      }
+      finalPhone = parsed.e164;
+      finalCountryCode = parsed.countryCode;
+
+      const phoneDigits = stripPhoneDigits(finalPhone);
+      const existing = db.prepare('SELECT * FROM customers WHERE phone_digits = ?').get(phoneDigits) as any;
       if (existing) {
         if (existing.is_active === 0) {
           db.prepare(`
@@ -142,7 +190,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
           `).run(
             String(name).trim(),
             email ? String(email).trim() : null,
-            country_code ? String(country_code).trim() : '',
+            finalCountryCode,
             address ? String(address).trim() : null,
             notes ? String(notes).trim() : null,
             now(),
@@ -151,7 +199,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
           const customer = db.prepare('SELECT * FROM customers WHERE id = ?').get(existing.id);
           return res.status(201).json({ customer });
         } else {
-          return res.status(400).json({ message: 'Customer with this phone already exists' });
+          return res.status(409).json({ message: 'Customer with this phone already exists' });
         }
       }
     }
@@ -162,10 +210,10 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       id,
-      phone ? String(phone).trim() : null,
+      finalPhone,
       String(name).trim(),
       email ? String(email).trim() : null,
-      country_code ? String(country_code).trim() : null,
+      finalCountryCode,
       address ? String(address).trim() : null,
       notes ? String(notes).trim() : null,
       now(),
@@ -192,6 +240,25 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
       return res.status(404).json({ error: 'Customer not found' });
     }
 
+    let finalPhone = phone ? String(phone).trim() : null;
+    let finalCountryCode = country_code ? String(country_code).trim() : null;
+
+    if (finalPhone) {
+      const tenantCountry = getSettingValue('country') || 'IN';
+      const parsed = parsePhoneE164(finalPhone, tenantCountry);
+      if (!parsed) {
+        return res.status(400).json({ error: 'Phone number is not valid. Use international format (e.g. +919876543210).' });
+      }
+      finalPhone = parsed.e164;
+      finalCountryCode = parsed.countryCode;
+
+      const phoneDigits = stripPhoneDigits(finalPhone);
+      const existing = db.prepare('SELECT id FROM customers WHERE phone_digits = ? AND id != ?').get(phoneDigits, req.params.id) as any;
+      if (existing) {
+        return res.status(409).json({ error: 'Customer with this phone already exists' });
+      }
+    }
+
     db.prepare(`
       UPDATE customers SET
         phone = COALESCE(NULLIF(?, ''), phone),
@@ -203,7 +270,7 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
         updated_at = ?
       WHERE id = ?
     `).run(
-      phone, name, email, country_code, address, notes, now(), req.params.id
+      finalPhone, name, email, finalCountryCode, address, notes, now(), req.params.id
     );
 
     const updated = db.prepare('SELECT * FROM customers WHERE id = ?').get(req.params.id);
