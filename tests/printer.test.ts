@@ -258,6 +258,8 @@ console.log('\n✅ Test 6: KOT (Kitchen Order Ticket)');
   assert('renders order number', text.includes('ORD-20260421-0001'));
   assert('renders table number', text.includes('T3'));
   assert('renders each item with qty prefix', text.includes('2x  Cheeseburger'));
+  assert('renders addon from JSON string', text.includes('+ Extra Cheese'));
+  assert('renders second addon from JSON string', text.includes('+ Bacon'));
   assert('renders special instructions with ** markers', text.includes('** No onions **'));
   assert('sets DOUBLE_HEIGHT mode for items', bytesContain(buf, [ESC, 0x21, 0x18]));
   assert('does NOT render prices (KOT has no money)', !text.includes('₹'));

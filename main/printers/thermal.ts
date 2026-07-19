@@ -894,6 +894,12 @@ export function formatKOT(order: any, items: any[], stationName: string, cols: n
 
   for (const item of items) {
     lines.push('{DOUBLE_HEIGHT}{BOLD}' + item.quantity + 'x  ' + item.product_name + '{/BOLD}{/DOUBLE_HEIGHT}');
+    const addons = parseAddons(item.addons);
+    for (const addon of addons) {
+      if (addon?.name) {
+        lines.push('  + ' + truncate(String(addon.name), cols - 4));
+      }
+    }
     if (item.special_instructions) {
       lines.push('  ** ' + item.special_instructions + ' **');
     }
