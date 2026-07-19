@@ -5,9 +5,10 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import api from '@/lib/api';
-import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight } from 'lucide-react';
+import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowRight, Timer, Trophy, Tags, BarChart3 } from 'lucide-react';
 import { useI18n } from '@/hooks/useI18n';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
+import { getCountryByCode } from '@/lib/countries';
 
 interface DailyStats {
   sales: number;
@@ -34,6 +35,58 @@ interface RecentOrder {
   created_at: string;
 }
 
+interface TopStaff {
+  user_id: string;
+  name: string;
+  role: string;
+  revenue: number;
+  orderCount: number;
+}
+
+interface TopCategory {
+  category_id: string | null;
+  name: string;
+  quantity: number;
+  revenue: number;
+}
+
+interface HourBucket {
+  hour: number;
+  orderCount: number;
+}
+
+interface DayBucket {
+  dayIndex: number;
+  orderCount: number;
+}
+
+interface Insights {
+  windowDays: number;
+  aov: number;
+  avgPrepTimeMinutes: number | null;
+  topStaff: TopStaff[];
+  topCategories: TopCategory[];
+  busiestHour: HourBucket | null;
+  idlestHour: HourBucket | null;
+  busiestDayOfWeek: DayBucket | null;
+  idlestDayOfWeek: DayBucket | null;
+}
+
+/** Formats a 0-23 local hour index as a locale-appropriate time label (e.g. "2 PM"). */
+function formatHourLabel(hour: number, locale: string): string {
+  const reference = new Date(Date.UTC(2000, 0, 1, hour));
+  return new Intl.DateTimeFormat(locale, { hour: 'numeric', timeZone: 'UTC' }).format(reference);
+}
+
+/** Formats a 0=Sunday..6=Saturday index as a locale-appropriate weekday name. */
+function formatWeekdayLabel(dayIndex: number, locale: string): string {
+  // Jan 2, 2000 was a Sunday — using local-time Date math (no timeZone
+  // needed here, the hour/day bucketing already resolved to the tenant's
+  // local calendar server-side).
+  const reference = new Date(2000, 0, 2 + dayIndex);
+  return new Intl.DateTimeFormat(locale, { weekday: 'long' }).format(reference);
+}
+
 const orderStatusColor: Record<string, string> = {
   pending: 'text-yellow-600',
   preparing: 'text-blue-600',
@@ -54,10 +107,12 @@ export default function DashboardPage() {
   const [stats, setStats] = useState<DailyStats | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
+  const [insights, setInsights] = useState<Insights | null>(null);
   const [loading, setLoading] = useState(true);
 
   const isOwner = currentTenant?.role === 'owner';
   const fmt = useFormatCurrency();
+  const locale = currentTenant?.country ? (getCountryByCode(currentTenant.country)?.locale ?? 'en-US') : 'en-US';
 
   useEffect(() => {
     if (currentTenant && !isOwner) {
@@ -71,11 +126,13 @@ export default function DashboardPage() {
       api.get('/reports/daily-stats'),
       api.get('/reports/topProducts', { params: { limit: 5 } }),
       api.get('/reports/recentOrders', { params: { limit: 6 } }),
+      api.get('/reports/insights', { params: { days: 30 } }),
     ])
-      .then(([statsRes, topRes, recentRes]) => {
+      .then(([statsRes, topRes, recentRes, insightsRes]) => {
         setStats(statsRes.data);
         setTopProducts(topRes.data.topProducts || []);
         setRecentOrders(recentRes.data.recentOrders || []);
+        setInsights(insightsRes.data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -116,6 +173,22 @@ export default function DashboardPage() {
       iconColor: 'text-purple-600',
       href: '/tables',
     },
+    {
+      label: t('dashboard.aov'),
+      value: fmt(insights?.aov ?? 0),
+      icon: TrendingUp,
+      color: 'bg-teal-50 border-teal-200',
+      iconColor: 'text-teal-600',
+      href: '/orders',
+    },
+    {
+      label: t('dashboard.avgPrepTime'),
+      value: insights?.avgPrepTimeMinutes != null ? localizeTemplate(t('dashboard.minutesValue'), { minutes: insights.avgPrepTimeMinutes }) : '—',
+      icon: Timer,
+      color: 'bg-orange-50 border-orange-200',
+      iconColor: 'text-orange-600',
+      href: '/orders',
+    },
   ];
 
   return (
@@ -130,7 +203,7 @@ export default function DashboardPage() {
         </div>
       ) : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="grid grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
             {tiles.map((tile) => (
               <Link
                 key={tile.label}
@@ -218,6 +291,114 @@ export default function DashboardPage() {
                   ))}
                 </div>
               )}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mt-4">
+            {/* Top Staff */}
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                  <Trophy size={16} className="text-gray-400" />
+                  {t('dashboard.topStaff')}
+                </h2>
+                <Link href="/staff" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
+                  {t('dashboard.viewAll')} <ArrowRight size={12} />
+                </Link>
+              </div>
+              {(insights?.topStaff.length ?? 0) === 0 ? (
+                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {insights!.topStaff.map((staff) => (
+                    <div key={staff.user_id} className="flex items-center justify-between px-4 py-2.5">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-gray-900">{staff.name}</span>
+                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.staffOrderCount'), { orders: staff.orderCount })}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900 shrink-0">
+                        {fmt(Number(staff.revenue))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Top Categories */}
+            <div className="bg-white rounded-xl border border-gray-100 overflow-hidden">
+              <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
+                <h2 className="flex items-center gap-2 font-semibold text-gray-900">
+                  <Tags size={16} className="text-gray-400" />
+                  {t('dashboard.topCategories')}
+                </h2>
+              </div>
+              {(insights?.topCategories.length ?? 0) === 0 ? (
+                <p className="px-4 py-6 text-sm text-gray-400 text-center">{t('dashboard.noSalesYet')}</p>
+              ) : (
+                <div className="divide-y divide-gray-50">
+                  {insights!.topCategories.map((category) => (
+                    <div key={category.category_id ?? category.name} className="flex items-center justify-between px-4 py-2.5">
+                      <div className="min-w-0">
+                        <span className="text-sm font-medium text-gray-900">{category.name}</span>
+                        <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.categoryQuantitySold'), { quantity: category.quantity })}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-gray-900 shrink-0">
+                        {fmt(Number(category.revenue))}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Business Patterns */}
+          <div className="bg-white rounded-xl border border-gray-100 p-4 mt-4">
+            <div className="flex items-center gap-2 mb-1">
+              <BarChart3 size={16} className="text-gray-400" />
+              <h2 className="font-semibold text-gray-900">{t('dashboard.businessPatterns')}</h2>
+            </div>
+            <p className="text-xs text-gray-400 mb-4">
+              {localizeTemplate(t('dashboard.businessPatternsHint'), { days: insights?.windowDays ?? 30 })}
+            </p>
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('dashboard.busiestHour')}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {insights?.busiestHour ? formatHourLabel(insights.busiestHour.hour, locale) : t('dashboard.notEnoughData')}
+                </p>
+                {insights?.busiestHour && (
+                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestHour.orderCount })}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('dashboard.idlestHour')}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {insights?.idlestHour ? formatHourLabel(insights.idlestHour.hour, locale) : t('dashboard.notEnoughData')}
+                </p>
+                {insights?.idlestHour && (
+                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestHour.orderCount })}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('dashboard.busiestDay')}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {insights?.busiestDayOfWeek ? formatWeekdayLabel(insights.busiestDayOfWeek.dayIndex, locale) : t('dashboard.notEnoughData')}
+                </p>
+                {insights?.busiestDayOfWeek && (
+                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.busiestDayOfWeek.orderCount })}</p>
+                )}
+              </div>
+              <div>
+                <p className="text-xs text-gray-500 mb-1">{t('dashboard.idlestDay')}</p>
+                <p className="text-lg font-bold text-gray-900">
+                  {insights?.idlestDayOfWeek ? formatWeekdayLabel(insights.idlestDayOfWeek.dayIndex, locale) : t('dashboard.notEnoughData')}
+                </p>
+                {insights?.idlestDayOfWeek && (
+                  <p className="text-xs text-gray-400">{localizeTemplate(t('dashboard.ordersCount'), { count: insights.idlestDayOfWeek.orderCount })}</p>
+                )}
+              </div>
             </div>
           </div>
         </>
