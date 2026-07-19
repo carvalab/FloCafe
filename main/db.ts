@@ -332,6 +332,33 @@ export async function createBackup(targetPath?: string): Promise<{ path: string;
   return { path: finalPath, schemaVersion: currentVersion };
 }
 
+/**
+ * Lists backups in the managed backups/ directory, newest first. Only
+ * backups written by createBackup()/syncBackupBeforeMigration() live here —
+ * a backup saved to a user-chosen custom path (via the Export Backup /
+ * "choose location" flow) intentionally does not appear here, same as it
+ * never has for the existing File > Export Backup menu action. See #120.
+ */
+export function listBackups(): { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto' }[] {
+  const backupDir = getBackupDir();
+  if (!fs.existsSync(backupDir)) return [];
+
+  return fs.readdirSync(backupDir)
+    .filter((fileName) => fileName.startsWith('flo-backup-') && fileName.endsWith('.db'))
+    .map((fileName) => {
+      const fullPath = path.join(backupDir, fileName);
+      const stat = fs.statSync(fullPath);
+      return {
+        fileName,
+        path: fullPath,
+        sizeBytes: stat.size,
+        createdAt: stat.mtime.toISOString(),
+        kind: (fileName.includes('-pre-v') ? 'auto' : 'manual') as 'manual' | 'auto',
+      };
+    })
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
 function getColumns(dbInstance: Database.Database, tableName: string): string[] {
   try {
     const columns = dbInstance.prepare(`PRAGMA table_info(${tableName})`).all() as { name: string }[];

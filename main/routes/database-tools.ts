@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
-import { getDbPath, createBackup, closeDatabase, initDatabase } from '../db';
+import { getDbPath, createBackup, closeDatabase, initDatabase, listBackups } from '../db';
 import { requireRole } from '../middleware/security';
 import { requireMasterPin } from '../middleware/master-pin';
 import { runHealthCheck, applySafeFixes } from '../services/schema-health';
@@ -25,6 +25,17 @@ router.post('/apply-safe-fixes', requireRole('owner'), (req: Request, res: Respo
   } catch (error: any) {
     console.error('[DB Tools] apply-safe-fixes error:', error);
     res.status(500).json({ error: 'Applying fixes failed: ' + error.message });
+  }
+});
+
+// Read-only listing of the managed backups/ directory (#120). Not master-PIN
+// gated — same read-only rationale as /health-check.
+router.get('/backups', requireRole('owner'), (_req: Request, res: Response) => {
+  try {
+    res.json({ backups: listBackups() });
+  } catch (error: any) {
+    console.error('[DB Tools] list backups error:', error);
+    res.status(500).json({ error: 'Listing backups failed: ' + error.message });
   }
 });
 

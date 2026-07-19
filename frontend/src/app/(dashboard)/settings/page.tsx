@@ -72,6 +72,13 @@ SGST @3%           3
 ===============
 TOTAL            99`;
 
+function formatBackupSize(bytes: number): string {
+  if (!Number.isFinite(bytes) || bytes < 0) return '';
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 interface TemplateCard {
   id: BillTemplate;
   nameKey: string;
@@ -163,11 +170,20 @@ export default function SettingsPage() {
   const [initializeDbOpen, setInitializeDbOpen] = useState(false);
   const [shakeSaveBar, setShakeSaveBar] = useState(false);
 
-  // Unified PIN gate: 'set' opens the set/change-PIN dialog; 'backup'/'import'
-  // open a verify prompt and, on success, run the pending action.
+  // Unified PIN gate: 'set' opens the set/change-PIN dialog; 'backup'/'backup-custom'/
+  // 'import'/'restore' open a verify prompt and, on success, run the pending action.
   type ImportPayload = { app: string; schema_version?: string; data: Record<string, unknown[]> };
-  type PinGate = { mode: 'set' } | { mode: 'backup' } | { mode: 'import'; payload: { data: ImportPayload; overwrite: boolean } } | null;
+  type BackupInfo = { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto' };
+  type PinGate =
+    | { mode: 'set' }
+    | { mode: 'backup' }
+    | { mode: 'backup-custom' }
+    | { mode: 'import'; payload: { data: ImportPayload; overwrite: boolean } }
+    | { mode: 'restore'; payload: { backupPath: string } }
+    | null;
   const [pinGate, setPinGate] = useState<PinGate>(null);
+  const [backups, setBackups] = useState<BackupInfo[]>([]);
+  const [backupsLoading, setBackupsLoading] = useState(false);
 
   const fetchMasterPinStatus = async () => {
     try {
@@ -175,6 +191,18 @@ export default function SettingsPage() {
       setMasterPinStatus(data);
     } catch {
       // ignore — card just shows "Unknown" state until retried
+    }
+  };
+
+  const fetchBackups = async () => {
+    setBackupsLoading(true);
+    try {
+      const { data } = await api.get('/db-tools/backups');
+      setBackups(data.backups ?? []);
+    } catch {
+      // ignore — history card just shows empty state until retried
+    } finally {
+      setBackupsLoading(false);
     }
   };
 
@@ -191,6 +219,7 @@ export default function SettingsPage() {
 
   useEffect(() => {
     fetchMasterPinStatus();
+    fetchBackups();
 
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
@@ -255,11 +284,47 @@ export default function SettingsPage() {
         const response = await api.post('/db/backup', { master_pin: pin });
         toast.success(`${t('settings.backupCreated')} ${response.data.path}`, { duration: 5000 });
         setPinGate(null);
+        fetchBackups();
         return { success: true };
       } catch (err: unknown) {
         const error = err as { response?: { data?: { error?: string } } };
         return { success: false, error: error.response?.data?.error || t('settings.backupFailedGeneric') };
       }
+    }
+
+    if (pinGate.mode === 'backup-custom') {
+      if (!window.electronAPI?.backupDatabase) {
+        return { success: false, error: t('common.notAvailable') };
+      }
+      const result = await window.electronAPI.backupDatabase(pin);
+      if (result.success) {
+        toast.success(`${t('settings.backupCreated')} ${result.path}`, { duration: 5000 });
+        setPinGate(null);
+        return { success: true };
+      }
+      if (result.error === 'Cancelled') {
+        setPinGate(null);
+        return { success: true };
+      }
+      return { success: false, error: result.error || t('settings.backupFailedGeneric') };
+    }
+
+    if (pinGate.mode === 'restore') {
+      if (!window.electronAPI?.restoreBackup) {
+        return { success: false, error: t('common.notAvailable') };
+      }
+      const result = await window.electronAPI.restoreBackup(pin, pinGate.payload.backupPath);
+      if (result.success) {
+        toast.success(t('restore.success'));
+        setPinGate(null);
+        setTimeout(() => window.location.reload(), 1500);
+        return { success: true };
+      }
+      if (result.error === 'Cancelled') {
+        setPinGate(null);
+        return { success: true };
+      }
+      return { success: false, error: result.error || t('settings.restoreFailedGeneric') };
     }
 
     // mode === 'import'
@@ -283,6 +348,61 @@ export default function SettingsPage() {
       return;
     }
     setPinGate({ mode: 'backup' });
+  };
+
+  // Lets the owner pick a custom save location (external drive, cloud-synced
+  // folder, etc.) via the same native save dialog the File menu's "Export
+  // Backup" action already uses. A backup saved this way does not appear in
+  // the Backup History list below — same as it never has for the menu
+  // action — since it's outside the managed backups/ directory. See #120.
+  const handleChooseBackupLocation = async () => {
+    if (masterPinStatus.available && !masterPinStatus.isSet) {
+      toast.error(t('settings.masterPinRequiredForBackup'));
+      return;
+    }
+    if (!masterPinStatus.available) {
+      if (!window.electronAPI?.backupDatabase) {
+        toast.error(t('common.notAvailable'));
+        return;
+      }
+      const result = await window.electronAPI.backupDatabase('');
+      if (result.success) {
+        toast.success(`${t('settings.backupCreated')} ${result.path}`, { duration: 5000 });
+      } else if (result.error !== 'Cancelled') {
+        toast.error(result.error || t('settings.backupFailedGeneric'));
+      }
+      return;
+    }
+    setPinGate({ mode: 'backup-custom' });
+  };
+
+  const handleRestoreFromHistory = async (backup: BackupInfo) => {
+    const ok = await confirm(t('settings.restoreConfirm', { fileName: backup.fileName }), {
+      title: t('settings.confirmRestoreTitle'),
+      confirmLabel: t('settings.restoreBackup'),
+      destructive: true,
+    });
+    if (!ok) return;
+
+    if (masterPinStatus.available && !masterPinStatus.isSet) {
+      toast.error(t('settings.setMasterPinFirst'));
+      return;
+    }
+    if (!masterPinStatus.available) {
+      if (!window.electronAPI?.restoreBackup) {
+        toast.error(t('common.notAvailable'));
+        return;
+      }
+      const result = await window.electronAPI.restoreBackup('', backup.path);
+      if (result.success) {
+        toast.success(t('restore.success'));
+        setTimeout(() => window.location.reload(), 1500);
+      } else if (result.error !== 'Cancelled') {
+        toast.error(result.error || t('settings.restoreFailedGeneric'));
+      }
+      return;
+    }
+    setPinGate({ mode: 'restore', payload: { backupPath: backup.path } });
   };
 
   const handleInitializeDatabase = async (pin: string) => {
@@ -2042,12 +2162,70 @@ export default function SettingsPage() {
               <p className="text-sm text-gray-500 mb-4">
                 {t('settings.createBackupHint')}
               </p>
-              <button
-                onClick={handleCreateBackup}
-                className="px-5 py-2 text-sm bg-gray-600 text-white rounded-lg hover:opacity-90 font-medium"
-              >
-                {t('settings.createBackup')}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={handleCreateBackup}
+                  className="px-5 py-2 text-sm bg-gray-600 text-white rounded-lg hover:opacity-90 font-medium"
+                >
+                  {t('settings.createBackup')}
+                </button>
+                <button
+                  onClick={handleChooseBackupLocation}
+                  className="px-5 py-2 text-sm bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                >
+                  {t('settings.chooseBackupLocation')}
+                </button>
+              </div>
+            </div>
+
+            {/* Backup History */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <Database size={20} className="text-gray-500" />
+                  <h2 className="font-semibold text-gray-900">{t('settings.backupHistory')}</h2>
+                </div>
+                <button
+                  onClick={fetchBackups}
+                  disabled={backupsLoading}
+                  className="p-1.5 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  title={t('settings.refresh')}
+                >
+                  <RefreshCw size={16} className={backupsLoading ? 'animate-spin' : ''} />
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-4">
+                {t('settings.backupHistoryHint')}
+              </p>
+              {backups.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">
+                  {backupsLoading ? t('common.loading') : t('settings.backupHistoryEmpty')}
+                </p>
+              ) : (
+                <div className="divide-y divide-gray-100">
+                  {backups.map((backup) => (
+                    <div key={backup.path} className="flex items-center justify-between py-3 gap-3">
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium text-gray-900">{formatDateTime(backup.createdAt)}</span>
+                          {backup.kind === 'auto' && (
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-amber-50 text-amber-700 border border-amber-100">
+                              {t('settings.backupKindAuto')}
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-xs text-gray-400 truncate">{formatBackupSize(backup.sizeBytes)}</p>
+                      </div>
+                      <button
+                        onClick={() => handleRestoreFromHistory(backup)}
+                        className="shrink-0 px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                      >
+                        {t('settings.restoreBackup')}
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Database Import */}
@@ -2607,7 +2785,12 @@ export default function SettingsPage() {
       <MasterPinPrompt
         open={pinGate !== null}
         mode={pinGate?.mode === 'set' ? 'set' : 'verify'}
-        title={pinGate?.mode === 'backup' ? t('settings.confirmBackupTitle') : pinGate?.mode === 'import' ? t('settings.confirmImportTitle') : undefined}
+        title={
+          pinGate?.mode === 'backup' || pinGate?.mode === 'backup-custom' ? t('settings.confirmBackupTitle')
+          : pinGate?.mode === 'import' ? t('settings.confirmImportTitle')
+          : pinGate?.mode === 'restore' ? t('settings.confirmRestoreTitle')
+          : undefined
+        }
         onCancel={() => setPinGate(null)}
         onSubmit={handlePinGateSubmit}
       />

@@ -64,21 +64,28 @@ export function registerIpcHandlers(): void {
     }
   });
 
-  ipcMain.handle('restore-backup', async (event, pin?: string) => {
+  ipcMain.handle('restore-backup', async (event, pin?: string, presetBackupPath?: string) => {
     const auth = authorizeMasterPin(pin, 'ipc:restore');
     if (!auth.ok) return { success: false, error: auth.error };
 
     try {
-      const result = await dialog.showOpenDialog({
-        filters: [{ name: 'SQLite Database', extensions: ['db'] }],
-        properties: ['openFile'],
-      });
+      // A specific backup (e.g. picked from the Backup History list, #120)
+      // skips the native file picker entirely.
+      let backupPath = presetBackupPath;
+      if (!backupPath) {
+        const result = await dialog.showOpenDialog({
+          filters: [{ name: 'SQLite Database', extensions: ['db'] }],
+          properties: ['openFile'],
+        });
 
-      if (result.canceled || !result.filePaths.length) {
-        return { success: false, error: 'Cancelled' };
+        if (result.canceled || !result.filePaths.length) {
+          return { success: false, error: 'Cancelled' };
+        }
+        backupPath = result.filePaths[0];
+      } else if (!fs.existsSync(backupPath)) {
+        return { success: false, error: 'Backup file no longer exists' };
       }
 
-      const backupPath = result.filePaths[0];
       const backupVersion = getSchemaVersionFromBackup(backupPath);
 
       if (backupVersion === 0) {
