@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, generateOrderNumber, now, parseItemJson, parseRowJson, withTxn, verifyPin, getSettingValue } from '../db';
+import { getDatabase, generateOrderNumber, now, parseItemJson, parseRowJson, withTxn, verifyPin, getSettingValue, insertOrderItemAddons } from '../db';
 import { calculateItemTax } from '../services/tax';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { cloudSync } from '../services/cloud-sync';
@@ -233,15 +233,19 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
         subtotal += itemSubtotal;
 
-        insertItem.run(
+        const itemCreatedAt = now();
+        const insertItemResult = insertItem.run(
           orderId, product.id, product.name, product.sku, unitPrice, quantity,
           itemSubtotal, taxResult.tax_amount, JSON.stringify(taxResult.tax_breakdown),
           product.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
           JSON.stringify(item.addons || null),
-          item.special_instructions || null, now(), now()
+          item.special_instructions || null, itemCreatedAt, itemCreatedAt
         );
+        // Also snapshot addons into the normalized table (issue #125).
+        // addons JSON column above remains the read-path source of truth.
+        insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
         if (product.track_inventory) {
           db.prepare('UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = ? WHERE id = ?')
@@ -371,15 +375,19 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
         const taxResult = calculateItemTax(tenantInfo, product, itemSubtotal, customer);
         const itemTotal = itemSubtotal + (taxResult.tax_type === 'inclusive' ? 0 : taxResult.tax_amount);
 
-        insertItem.run(
+        const itemCreatedAt = now();
+        const insertItemResult = insertItem.run(
           req.params.id, product.id, product.name, product.sku, unitPrice, quantity,
           itemSubtotal, taxResult.tax_amount, JSON.stringify(taxResult.tax_breakdown),
           product.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
           JSON.stringify(item.addons || null),
-          item.special_instructions || null, now(), now()
+          item.special_instructions || null, itemCreatedAt, itemCreatedAt
         );
+        // Also snapshot addons into the normalized table (issue #125).
+        // addons JSON column above remains the read-path source of truth.
+        insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
         if (product.track_inventory) {
           db.prepare('UPDATE products SET stock_quantity = stock_quantity - ?, updated_at = ? WHERE id = ?')

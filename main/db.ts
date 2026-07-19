@@ -938,6 +938,54 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       console.log(`[MIGRATION v24] normalized: ${normalized}, unparseable: ${unparseable}`);
     },
   },
+  {
+    version: 25,
+    name: 'add_order_item_addons_table',
+    up: () => {
+      // Selected addons are snapshotted as JSON on order_items.addons. That
+      // works for print/receipt display but makes addon reporting ("addons
+      // sold by day/product/station") require JSON parsing instead of
+      // indexed SQL, and ambiguous parsed-vs-raw-JSON typing already caused
+      // a KOT print failure (see 02a511e). Add a normalized snapshot table
+      // and backfill it from existing rows. order_items.addons stays the
+      // read-path source of truth for now — this migration only adds the
+      // table and starts populating it; see issue #125.
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS order_item_addons (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_item_id INTEGER NOT NULL,
+          addon_id TEXT,
+          addon_name TEXT NOT NULL,
+          price NUMERIC NOT NULL DEFAULT 0,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (order_item_id) REFERENCES order_items(id) ON DELETE CASCADE,
+          FOREIGN KEY (addon_id) REFERENCES addons(id) ON DELETE SET NULL
+        );
+        CREATE INDEX IF NOT EXISTS idx_order_item_addons_order_item_id ON order_item_addons(order_item_id);
+        CREATE INDEX IF NOT EXISTS idx_order_item_addons_addon_id ON order_item_addons(addon_id);
+      `);
+
+      const rows = db.prepare(
+        `SELECT id, addons, created_at FROM order_items WHERE addons IS NOT NULL AND addons != '' AND addons != 'null'`
+      ).all() as { id: number; addons: string; created_at: string }[];
+
+      let backfilled = 0, skipped = 0;
+      for (const row of rows) {
+        let parsed: any;
+        try {
+          parsed = JSON.parse(row.addons);
+        } catch {
+          skipped++;
+          continue;
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        insertOrderItemAddons(db, row.id, parsed, row.created_at || now());
+        backfilled++;
+      }
+      console.log(`[MIGRATION v25] backfilled addons for ${backfilled} order items (${skipped} unparseable, skipped)`);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
@@ -1424,6 +1472,37 @@ export function now(): string {
 export function verifyPin(storedHash: string | null | undefined, inputPin: string | number): boolean {
   if (!storedHash || !inputPin) return false;
   return bcrypt.compareSync(String(inputPin), storedHash);
+}
+
+/**
+ * Snapshots an order item's selected addons into the normalized
+ * order_item_addons table, in addition to the addons JSON column (which
+ * remains the read-path source of truth). See issue #125 — this exists so
+ * addon reporting can eventually query indexed SQL instead of parsing JSON
+ * per row. Silently skips entries missing a name; malformed input can't
+ * corrupt the JSON column since that write is separate and unaffected.
+ */
+export function insertOrderItemAddons(
+  dbInstance: Database.Database,
+  orderItemId: number | bigint,
+  addons: { id?: string; name?: string; price?: number }[] | null | undefined,
+  createdAt: string
+): void {
+  if (!addons || !Array.isArray(addons) || addons.length === 0) return;
+  const addonExists = dbInstance.prepare('SELECT 1 FROM addons WHERE id = ?');
+  const insertAddon = dbInstance.prepare(`
+    INSERT INTO order_item_addons (order_item_id, addon_id, addon_name, price, quantity, created_at)
+    VALUES (?, ?, ?, ?, 1, ?)
+  `);
+  for (const addon of addons) {
+    if (!addon || !addon.name) continue;
+    // addon_id has an FK to addons(id) — if the catalog addon was since
+    // deleted (or the id never matched one, e.g. ad-hoc/legacy data), fall
+    // back to NULL rather than let the FK violation abort order creation.
+    // addon_name/price are the snapshot of record either way.
+    const linkedAddonId = addon.id && addonExists.get(addon.id) ? addon.id : null;
+    insertAddon.run(orderItemId, linkedAddonId, addon.name, addon.price || 0, createdAt);
+  }
 }
 
 /** Parse JSON string fields on order_item rows returned from SQLite.
