@@ -2,6 +2,16 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.4] - 2026-07-20
+
+### Added
+- Dashboard: Average Order Value, Top Staff, Top Categories, and a Business Patterns panel (busiest/quietest hour and day of week, computed in the tenant's local timezone); a date picker to view any past day's totals instead of only today (#77).
+- Settings: Backup Management & History panel — lists past backups, restores from any of them through the existing Master PIN flow, and supports choosing a custom save location for a backup (#120).
+- Orders: selected addons are now also snapshotted into a normalized `order_item_addons` table alongside the existing JSON column, enabling indexed addon reporting (#125).
+
+### Fixed
+- Orders: new orders are now attributed to the authenticated staff member server-side. Previously every order was created with `user_id` unset, so a waiter could never see their own orders in the Orders list.
+
 ## [1.9.2] - 2026-07-15
 
 ### Added
