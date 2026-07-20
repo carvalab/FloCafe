@@ -5,6 +5,7 @@ import { getDatabase, createBackup, restoreBackup, restoreBackup as restoreFn, n
 import { getLocalIP } from './server';
 import { authorizeMasterPin, isMasterPinAvailable, isMasterPinSet } from './services/master-pin';
 import { runHealthCheck, applySafeFixes } from './services/schema-health';
+import { getStatus as getWhatsAppStatus } from './services/whatsapp';
 
 // Settings keys the renderer is allowed to write via IPC.
 // Must stay in sync with routes/settings.ts ALLOWED_WILDCARD_KEYS.
@@ -213,6 +214,15 @@ export function registerIpcHandlers(): void {
       return { success: true };
     } catch (error: any) {
       return { success: false, error: error.message };
+    }
+  });
+
+  // WhatsApp status snapshot for renderer polling on app focus
+  ipcMain.handle('whatsapp-get-status', async () => {
+    try {
+      return getWhatsAppStatus();
+    } catch (err: any) {
+      return { error: err.message };
     }
   });
 

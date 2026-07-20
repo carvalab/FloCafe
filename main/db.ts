@@ -1012,7 +1012,7 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     up: () => {
       const tenantCountryRow = db.prepare("SELECT value FROM settings WHERE key = 'country'").get() as any;
       const tenantCountry = tenantCountryRow?.value || 'IN';
-      
+
       const { parsePhoneE164 } = require('./lib/phone');
 
       const customers = db.prepare(
@@ -1126,6 +1126,14 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('anonymous_data_consent', 'false', ?)`).run(t);
       db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_enabled', 'false', ?)`).run(t);
       db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics', ?)`).run(t);
+    },
+  },
+  {
+    version: 29,
+    name: 'whatsapp_messaging',
+    up: () => {
+      createWhatsAppSchema();
+      seedWhatsAppDefaults();
     },
   },
   {
@@ -1599,6 +1607,50 @@ function createCloudSyncSchema(): void {
   `);
 }
 
+function createWhatsAppSchema(): void {
+  db.exec(`
+    CREATE TABLE IF NOT EXISTS whatsapp_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      bill_id INTEGER REFERENCES bills(id),
+      customer_id TEXT REFERENCES customers(id),
+      phone_e164 TEXT NOT NULL,
+      direction TEXT NOT NULL CHECK (direction IN ('outbound','inbound')),
+      kind TEXT NOT NULL DEFAULT 'manual_reply'
+        CHECK (kind IN ('bill_receipt','manual_reply','auto_followup')),
+      status TEXT NOT NULL DEFAULT 'queued'
+        CHECK (status IN ('queued','seen','typing','sent','delivered','read','failed')),
+      body TEXT NOT NULL,
+      external_message_id TEXT,
+      error TEXT,
+      queued_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      seen_at TEXT,
+      typing_at TEXT,
+      sent_at TEXT,
+      delivered_at TEXT,
+      read_at TEXT,
+      failed_at TEXT,
+      created_by_user_id TEXT
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_phone
+      ON whatsapp_messages(phone_e164, queued_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_status
+      ON whatsapp_messages(status, queued_at DESC);
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_bill
+      ON whatsapp_messages(bill_id);
+    CREATE INDEX IF NOT EXISTS idx_whatsapp_messages_inbound_unread
+      ON whatsapp_messages(direction, status, queued_at DESC)
+      WHERE direction = 'inbound' AND status NOT IN ('read','failed');
+
+    CREATE TABLE IF NOT EXISTS whatsapp_blocklist (
+      phone_e164 TEXT PRIMARY KEY,
+      reason TEXT,
+      blocked_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      blocked_by_user_id TEXT
+    );
+  `);
+}
+
 function seedCloudSyncDefaults(): void {
   createCloudSyncSchema();
 
@@ -1617,6 +1669,15 @@ function seedCloudSyncDefaults(): void {
   insertSettingIfMissing('cloud_registration_status', 'unregistered');
 
   ensureCloudIdentity();
+}
+
+function seedWhatsAppDefaults(): void {
+  insertSettingIfMissing('whatsapp_enabled', 'false');
+  insertSettingIfMissing('whatsapp_activated_by_user_id', '');
+  insertSettingIfMissing('whatsapp_activated_at', '');
+  insertSettingIfMissing('whatsapp_disclosure_version_acknowledged', '');
+  insertSettingIfMissing('whatsapp_connected_phone', '');
+  insertSettingIfMissing('whatsapp_disclosure_version', '1');
 }
 
 function seedInstallDefaults(): void {

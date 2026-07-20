@@ -23,6 +23,7 @@ import { databaseRoutes } from './database';
 import { databaseToolsRoutes } from './database-tools';
 import { menuCsvRoutes } from './menu-csv';
 import { heldOrderRoutes } from './held-orders';
+import { whatsappRoutes } from './whatsapp';
 import { getDatabase, now, parseItemJson, attachEffectiveAddons, withTxn, getSettingValue, getCachedPairingCode, setCachedPairingCode } from '../db';
 import { cloudSync } from '../services/cloud-sync';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
@@ -75,6 +76,7 @@ export function registerRoutes(app: Express): void {
   app.use('/api/db-tools', databaseToolsRoutes);
   app.use('/api/menu-csv', menuCsvRoutes);
   app.use('/api/held-orders', heldOrderRoutes);
+  app.use('/api/whatsapp', whatsappRoutes);
 
   // Tax preview
   app.post('/api/tax/preview', async (req, res) => {

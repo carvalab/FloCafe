@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from 'react';
 import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
-import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, Banknote, Search, Plus, ChevronDown, ChevronRight, UserPlus, User, ShoppingBag } from 'lucide-react';
+import { CreditCard, Trash2, RotateCcw, Clock, MessageCircle, Printer, XCircle, Lock, Percent, Banknote, Search, Plus, ChevronDown, ChevronRight, UserPlus, User, ShoppingBag, Send } from 'lucide-react';
 import toast from 'react-hot-toast';
 import PaymentModal from '@/components/pos/PaymentModal';
 import { shareBillViaWhatsApp } from '@/lib/whatsapp-share';
@@ -484,6 +484,43 @@ export default function OrdersPage() {
     }
   };
 
+  const handleSendViaFlo = async (order: Order) => {
+    if (!order.bill) {
+      toast.error(t('orders.billNotFound'));
+      return;
+    }
+    if (!order.customer?.phone) {
+      toast.error('Add this customer\'s phone number to send via Flo.');
+      return;
+    }
+    try {
+      const message = `Receipt for bill ${order.bill.bill_number} — Total ${currency} ${order.bill.total}`;
+      const { data } = await api.post('/whatsapp/send', {
+        bill_id: order.bill.id,
+        phone_e164: order.customer.phone,
+        body: message,
+      });
+      if (data?.ok) {
+        toast.success('Receipt sent via WhatsApp.');
+      }
+    } catch (err: unknown) {
+      const axiosErr = err as { response?: { data?: { error?: string; reason?: string } } };
+      const reason = axiosErr?.response?.data?.reason;
+      const msg = axiosErr?.response?.data?.error ?? t('orders.whatsappFailed');
+      if (reason === 'feature_off') {
+        toast.error('Enable WhatsApp in Settings → WhatsApp to send receipts automatically.');
+      } else if (reason === 'not_connected') {
+        toast.error('Flo isn\'t connected to WhatsApp. Reconnect in WhatsApp → Connection.');
+      } else if (reason === 'blocked') {
+        toast.error('This customer asked to stop receiving messages. Manage blocklist in WhatsApp → Connection.');
+      } else if (reason === 'rate_limited') {
+        toast.error(msg || 'Too many messages sent to this number recently.');
+      } else {
+        toast.error(msg);
+      }
+    }
+  };
+
   const handleApplyDiscount = async () => {
     if (!discountModal) return;
 
@@ -815,13 +852,22 @@ export default function OrdersPage() {
                       </span>
                     )}
                     {paid && order.customer?.phone && (
-                      <button
-                        onClick={() => handleWhatsAppShare(order)}
-                        className="p-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
-                        title={t('common.shareViaWhatsApp')}
-                      >
-                        <MessageCircle size={14} />
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleSendViaFlo(order)}
+                          className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-colors"
+                          title="Send via Flo"
+                        >
+                          <Send size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleWhatsAppShare(order)}
+                          className="p-1.5 rounded-lg bg-green-500 hover:bg-green-600 text-white transition-colors"
+                          title={t('common.shareViaWhatsApp')}
+                        >
+                          <MessageCircle size={14} />
+                        </button>
+                      </>
                     )}
                     {order.bill && (
                       <button
