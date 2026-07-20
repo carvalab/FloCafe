@@ -1,7 +1,3 @@
-<p align="center">
-  <img src="logo/logo-white.png" alt="FloCafe" width="200">
-</p>
-
 <h1 align="center">FloCafe</h1>
 
 <p align="center">
