@@ -650,9 +650,16 @@ export default function SettingsPage() {
 
   // Mobile App Pairing
   const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [pairingRotatedAt, setPairingRotatedAt] = useState<string | null>(null);
+  const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
+  const [pairingUnavailable, setPairingUnavailable] = useState(false);
   const [rotatingCode, setRotatingCode] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
+  const [pairedDevices, setPairedDevices] = useState<Array<{
+    id: string; platform: string | null; app_version: string | null;
+    user_agent: string | null; country: string | null;
+    first_seen_at: string | null; last_seen_at: string | null;
+  }>>([]);
+  const [devicesLoading, setDevicesLoading] = useState(false);
 
   // Printing local state (buffered — saved only on explicit Save)
   type PrintingForm = {
@@ -838,8 +845,13 @@ export default function SettingsPage() {
 
     api.get('/mobile/pairing-code').then((res) => {
       setPairingCode(res.data.pairing_code);
-      setPairingRotatedAt(res.data.rotated_at);
-    }).catch(() => {});
+      setPairingExpiresAt(res.data.expires_at);
+      setPairingUnavailable(false);
+    }).catch(() => {
+      setPairingUnavailable(true);
+    });
+
+    loadPairedDevices();
 
     api.get('/settings/cloud').then((res) => {
       const settings = {
@@ -1081,12 +1093,26 @@ export default function SettingsPage() {
     try {
       const res = await api.post('/mobile/rotate-code');
       setPairingCode(res.data.pairing_code);
-      setPairingRotatedAt(res.data.rotated_at);
+      setPairingExpiresAt(res.data.expires_at);
+      setPairingUnavailable(false);
       toast.success(t('settings.pairingCodeRotated'));
+      loadPairedDevices();
     } catch {
       toast.error(t('settings.pairingCodeFailed'));
     } finally {
       setRotatingCode(false);
+    }
+  };
+
+  const loadPairedDevices = async () => {
+    setDevicesLoading(true);
+    try {
+      const res = await api.get('/mobile/devices');
+      setPairedDevices(res.data.devices || []);
+    } catch {
+      setPairedDevices([]);
+    } finally {
+      setDevicesLoading(false);
     }
   };
 
@@ -1725,7 +1751,9 @@ export default function SettingsPage() {
               <p className="text-sm text-gray-500 mb-4">
                 {t('settings.mobileAppHint')}
               </p>
-              {pairingCode ? (
+              {pairingUnavailable ? (
+                <p className="text-sm text-gray-500">{t('settings.mobilePairingNeedsCloud')}</p>
+              ) : pairingCode ? (
                 <div className="space-y-3">
                   <div className="flex items-center gap-3">
                     <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
@@ -1741,9 +1769,9 @@ export default function SettingsPage() {
                       {copiedCode ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
                     </button>
                   </div>
-                  {pairingRotatedAt && (
+                  {pairingExpiresAt && (
                     <p className="text-xs text-gray-400">
-                      {t('settings.codeGenerated', { date: formatDate(pairingRotatedAt) })}
+                      {t('settings.codeExpires', { date: formatDate(pairingExpiresAt) })}
                     </p>
                   )}
                   <button
@@ -1766,6 +1794,40 @@ export default function SettingsPage() {
                 >
                   {rotatingCode ? t('settings.generating') : t('settings.generatePairingCode')}
                 </button>
+              )}
+
+              {!pairingUnavailable && (
+                <div className="mt-6 pt-6 border-t border-gray-100">
+                  <p className="text-sm font-medium text-gray-900 mb-3">{t('settings.pairedDevices')}</p>
+                  {devicesLoading ? (
+                    <p className="text-sm text-gray-400">{t('settings.loading')}</p>
+                  ) : pairedDevices.length === 0 ? (
+                    <p className="text-sm text-gray-500">{t('settings.noPairedDevices')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pairedDevices.map((d) => (
+                        <div key={d.id} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-900 capitalize">
+                              {d.platform || t('settings.unknownPlatform')}
+                              {d.country ? ` · ${d.country}` : ''}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {t('settings.lastActive', { date: formatDate(d.last_seen_at) })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {t('settings.firstPaired', { date: formatDate(d.first_seen_at) })}
+                            {d.app_version ? ` · v${d.app_version}` : ''}
+                          </p>
+                          {d.user_agent && (
+                            <p className="text-xs text-gray-400 mt-1 truncate" title={d.user_agent}>{d.user_agent}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               )}
             </div>
           </div>

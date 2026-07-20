@@ -359,6 +359,30 @@ class CloudSyncService {
     return { ok: true, data, status: this.getStatus() };
   }
 
+  /**
+   * Generate (or, with revoke=true, explicitly rotate) the RevFlo pairing
+   * code for this store. revoke=true also disconnects every already-paired
+   * device — only the explicit "Generate new code" action in Settings should
+   * pass it; a plain cache-miss refetch must not silently kick anyone off.
+   * See specs/floadmin.md § Device pairing.
+   */
+  async generatePairingCode(revoke: boolean): Promise<{ code: string; expires_at: string }> {
+    const res = await this.signedFetch('/api/pos/pairing-code', {
+      method: 'POST',
+      body: JSON.stringify({ revoke_devices: revoke }),
+    });
+    if (!res.ok) throw new Error(`Pairing code request failed (${res.status})`);
+    return res.json() as Promise<{ code: string; expires_at: string }>;
+  }
+
+  /** Devices (RevFlo installs) currently paired to this store. */
+  async listPairedDevices(): Promise<Record<string, unknown>[]> {
+    const res = await this.signedFetch('/api/pos/devices', { method: 'GET' });
+    if (!res.ok) throw new Error(`Device list request failed (${res.status})`);
+    const data = (await res.json().catch(() => ({ devices: [] }))) as { devices?: Record<string, unknown>[] };
+    return Array.isArray(data.devices) ? data.devices : [];
+  }
+
   pushBill(bill: Record<string, unknown>) {
     this.enqueueEvent('bill.paid', 'bill', String(bill.id ?? bill.pos_bill_id ?? ''), bill);
   }

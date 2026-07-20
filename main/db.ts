@@ -96,6 +96,20 @@ export function ensureCloudIdentity(): { posHash: string; deviceSecret: string }
   return { posHash, deviceSecret };
 }
 
+/** Locally-cached RevFlo pairing code (plaintext) — FloAdmin only ever returns it once. */
+export function getCachedPairingCode(): { code: string; expiresAt: string } | null {
+  const code = getSettingValue('mobile_pairing_code');
+  const expiresAt = getSettingValue('mobile_pairing_code_expires_at');
+  if (!code || !expiresAt) return null;
+  if (new Date(expiresAt).getTime() <= Date.now()) return null;
+  return { code, expiresAt };
+}
+
+export function setCachedPairingCode(code: string, expiresAt: string): void {
+  upsertSetting('mobile_pairing_code', code);
+  upsertSetting('mobile_pairing_code_expires_at', expiresAt);
+}
+
 /** Random UUID, generated once and persisted — never derived from store/device identity. */
 export function ensureTelemetryAnonId(): string {
   let anonId = getSettingValue('telemetry_anon_id');

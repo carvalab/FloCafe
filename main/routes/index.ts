@@ -1,5 +1,4 @@
 import { Express } from 'express';
-import { randomBytes } from 'crypto';
 import { authRoutes } from './auth';
 import { requireRole } from '../middleware/security';
 import { categoryRoutes } from './categories';
@@ -23,7 +22,7 @@ import { databaseRoutes } from './database';
 import { databaseToolsRoutes } from './database-tools';
 import { menuCsvRoutes } from './menu-csv';
 import { heldOrderRoutes } from './held-orders';
-import { getDatabase, now, parseItemJson, withTxn, getSettingValue } from '../db';
+import { getDatabase, now, parseItemJson, withTxn, getSettingValue, getCachedPairingCode, setCachedPairingCode } from '../db';
 import { cloudSync } from '../services/cloud-sync';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 
@@ -61,13 +60,42 @@ export function registerRoutes(app: Express): void {
     calculateTaxPreview(req, res);
   });
 
-  // Mobile pairing code — cryptographically random, owner-only
-  app.get('/api/mobile/pairing-code', requireRole('owner'), (req, res) => {
-    const pairingCode = randomBytes(4).toString('hex'); // 8-char random code
-    res.json({
-      pairing_code: pairingCode,
-      rotated_at: new Date().toISOString(),
-    });
+  // Mobile pairing code — proxies FloAdmin (see cloud-sync.ts generatePairingCode).
+  // Cache-first: repeat GETs (e.g. reopening Settings) must NOT generate a new
+  // code or disconnect paired devices — only a stale/missing cache calls out.
+  app.get('/api/mobile/pairing-code', requireRole('owner'), async (req, res) => {
+    try {
+      const cached = getCachedPairingCode();
+      if (cached) {
+        return res.json({ pairing_code: cached.code, expires_at: cached.expiresAt });
+      }
+      const { code, expires_at } = await cloudSync.generatePairingCode(false);
+      setCachedPairingCode(code, expires_at);
+      res.json({ pairing_code: code, expires_at });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+    }
+  });
+
+  // Explicit rotate — disconnects every currently-paired RevFlo device.
+  app.post('/api/mobile/rotate-code', requireRole('owner'), async (req, res) => {
+    try {
+      const { code, expires_at } = await cloudSync.generatePairingCode(true);
+      setCachedPairingCode(code, expires_at);
+      res.json({ pairing_code: code, expires_at });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+    }
+  });
+
+  // Paired RevFlo devices for this store — Settings > Mobile App session list.
+  app.get('/api/mobile/devices', requireRole('owner'), async (req, res) => {
+    try {
+      const devices = await cloudSync.listPairedDevices();
+      res.json({ devices });
+    } catch (error: any) {
+      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+    }
   });
 
   // Legacy/flat customer search endpoint (frontend uses this)
