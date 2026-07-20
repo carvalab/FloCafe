@@ -126,6 +126,25 @@ export function startKdsServer(): Promise<void> {
       });
     });
 
+    // Public tenant metadata — language + KDS defaults.
+    // No auth: the standalone KDS needs this on first paint, before login,
+    // and lives on a different origin than the main API.
+    app.get('/api/kds/info', (_req: Request, res: Response) => {
+      try {
+        const db = getDatabase();
+        const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+        const s: Record<string, string> = {};
+        for (const row of rows) s[row.key] = row.value;
+        res.json({
+          language: s.language || null,
+          country: s.country || null,
+          kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
+        });
+      } catch (error: any) {
+        res.status(500).json({ error: error.message });
+      }
+    });
+
     // KDS Auth - verify user has chef/manager/owner role
     app.post('/api/auth/login', (req: Request, res: Response) => {
       try {

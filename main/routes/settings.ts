@@ -225,6 +225,41 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
   }
 });
 
+// ─── KDS settings (must come BEFORE /:key wildcard) ─────────────────────────
+
+// The public `/api/kds/info` already exposes `kds_default_view`, but it lives
+// on the KDS server (different origin) and isn't reachable from the
+// dashboard's settings page. This is the dashboard-side mirror — read-only
+// from the client's perspective; the PUT below is the only mutator.
+router.get('/kds', (_req: Request, res: Response) => {
+  try {
+    const s = getAllSettings(getDatabase());
+    res.json({
+      kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/kds', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const { kds_default_view } = req.body;
+    if (kds_default_view !== undefined && !['tabs', 'kanban'].includes(kds_default_view)) {
+      return res.status(400).json({ error: 'kds_default_view must be "tabs" or "kanban"' });
+    }
+    if (kds_default_view !== undefined) {
+      upsertSettings(getDatabase(), { kds_default_view });
+    }
+    const s = getAllSettings(getDatabase());
+    res.json({
+      kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
+    });
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // ─── Cloud Sync settings (must come BEFORE /:key wildcard) ──────────────────
 
 router.get('/cloud', requireRole('owner', 'manager'), (req: Request, res: Response) => {
@@ -305,6 +340,8 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'bill_show_phone', 'bill_show_gstn',
   'tax_scheme',
   'loyalty_enabled',
+  'language',
+  'kds_default_view',
   'printer_method', 'paper_size', 'bill_template',
   'telemetry_enabled',
 ]);
