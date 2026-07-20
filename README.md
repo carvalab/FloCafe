@@ -157,6 +157,7 @@ FloCafe is actively evolving. This roadmap reflects the current public issue dis
 
 ### Longer-Term Direction
 
+- **Android/iOS tablet client:** A thin-client order-taking + billing surface for tablets on the same local network as the desktop install — same pattern KDS already uses (LAN, no install required), not an Electron port (not possible on mobile). No printer access on the tablet itself; printing and e-billing route through the existing desktop install ([#135](https://github.com/FreeOpenSourcePOS/FloCafe/issues/135)).
 - **Modular Plugin Architecture:** Support for custom plugins, third-party integrations, and UI themes without modifying core code.
 - **Advanced Inventory Management:** Low stock alerts, supplier purchase orders, and ingredient-level tracking.
 - **Enhanced Cloud Sync:** Opt-in multi-device synchronization across different branches or franchises.
