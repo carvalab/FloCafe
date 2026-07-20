@@ -6,6 +6,7 @@ import { Bonjour } from 'bonjour-service';
 import { initDatabase, closeDatabase } from './db';
 import { startServer, stopServer, getLocalIP, isServerRunning } from './server';
 import { cloudSync } from './services/cloud-sync';
+import { telemetry } from './services/telemetry';
 import { startKdsServer, stopKdsServer, getKdsPort, isKdsServerRunning } from './kds-server';
 import { initPrinter, printReceipt, printKOT } from './printers/thermal';
 import { registerIpcHandlers } from './ipc';
@@ -581,6 +582,7 @@ async function initialize(): Promise<void> {
     await startServer();
 
     cloudSync.start();
+    telemetry.start();
 
     console.log('[Flo] Starting KDS server on port 3002...');
     await startKdsServer();
@@ -669,6 +671,7 @@ function runCleanup(): void {
 
   // Tear down services — each wrapped so one failure doesn't block others
   try { cloudSync.stop(); } catch (e) { console.error('[Flo] cloudSync.stop error:', e); }
+  try { telemetry.stop(); } catch (e) { console.error('[Flo] telemetry.stop error:', e); }
   try { stopMdns(); } catch (e) { console.error('[Flo] stopMdns error:', e); }
   try { stopKdsServer(); } catch (e) { console.error('[Flo] stopKdsServer error:', e); }
   try { stopServer(); } catch (e) { console.error('[Flo] stopServer error:', e); }

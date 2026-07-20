@@ -137,6 +137,7 @@ async function main() {
         setup_profile: 'express',
         service_model: 'qsr',
         terms_accepted: true,
+        anonymous_data_consent: true,
       }),
     });
 
@@ -153,6 +154,9 @@ async function main() {
     assert.equal(setting('billing_type'), 'prepaid');
     assert.equal(setting('tables_required'), 'false');
     assert.equal(setting('onboarding_completed'), 'true');
+    assert.equal(setting('anonymous_data_consent'), 'true');
+    assert.equal(setting('telemetry_enabled'), 'true');
+    assert.equal(setting('telemetry_scope'), 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
     assert.equal(count('categories'), 2, 'express setup seeds minimal categories');
     assert.equal(count('products'), 4, 'express setup seeds minimal products');
     assert.equal(count('tables'), 0, 'qsr express setup does not seed dine-in tables');

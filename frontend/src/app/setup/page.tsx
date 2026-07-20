@@ -49,6 +49,7 @@ export default function SetupPage() {
     business_name: '',
   });
   const [termsAccepted, setTermsAccepted] = useState(false);
+  const [anonymousDataConsent, setAnonymousDataConsent] = useState(false);
   const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
   const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
@@ -156,6 +157,7 @@ export default function SetupPage() {
         setup_profile: profile,
         service_model: serviceModel,
         terms_accepted: termsAccepted,
+        anonymous_data_consent: anonymousDataConsent,
         master_pin: masterPinAvailable ? masterPin : undefined,
         ...countryPayload,
       });
@@ -486,6 +488,19 @@ export default function SetupPage() {
                         {t('setup.disclaimer')}
                       </a>
                       .
+                    </span>
+                  </label>
+
+                  <label className="flex items-start gap-2 text-sm text-muted-foreground">
+                    <input
+                      type="checkbox"
+                      checked={anonymousDataConsent}
+                      onChange={(e) => setAnonymousDataConsent(e.target.checked)}
+                      className="mt-0.5 h-4 w-4 rounded border-gray-300"
+                    />
+                    <span>
+                      <span className="font-medium text-foreground">{t('setup.anonymousDataTitle')}</span>
+                      <span className="block mt-1">{t('setup.anonymousDataDescription')}</span>
                     </span>
                   </label>
 

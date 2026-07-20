@@ -96,6 +96,31 @@ export function ensureCloudIdentity(): { posHash: string; deviceSecret: string }
   return { posHash, deviceSecret };
 }
 
+/** Random UUID, generated once and persisted — never derived from store/device identity. */
+export function ensureTelemetryAnonId(): string {
+  let anonId = getSettingValue('telemetry_anon_id');
+  if (!anonId) {
+    anonId = crypto.randomUUID();
+    upsertSetting('telemetry_anon_id', anonId);
+  }
+  return anonId;
+}
+
+/**
+ * Opt-in: consent is captured once at first-run setup (see
+ * routes/auth.ts `/setup/initialize`'s `anonymous_data_consent`), which sets
+ * this setting explicitly. Missing/anything but the literal 'true' means no
+ * consent was ever given (including pre-existing installs from before this
+ * setting existed) — never defaults to on.
+ */
+export function isTelemetryEnabled(): boolean {
+  return getSettingValue('telemetry_enabled') === 'true';
+}
+
+export function upsertTelemetryLastPing(): void {
+  upsertSetting('telemetry_last_ping_at', now());
+}
+
 /** Atomic multi-statement mutation. Use for anything touching >1 row or >1 table. */
 export function withTxn<T>(fn: () => T): T {
   return db.transaction(fn)();
@@ -1428,6 +1453,9 @@ function seedInstallDefaults(): void {
   insert('cloud_reports_enabled', '1');
   insert('cloud_command_polling_enabled', '1');
   insert('cloud_registration_status', 'unregistered');
+  insert('anonymous_data_consent', 'false');
+  insert('telemetry_enabled', 'false');
+  insert('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
 
   seedCloudSyncDefaults();
 

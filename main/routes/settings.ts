@@ -306,6 +306,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'tax_scheme',
   'loyalty_enabled',
   'printer_method', 'paper_size', 'bill_template',
+  'telemetry_enabled',
 ]);
 
 router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {

@@ -748,6 +748,9 @@ export default function SettingsPage() {
   const [showInitializeCloudConfirm, setShowInitializeCloudConfirm] = useState(false);
   const [registerEmail, setRegisterEmail] = useState('');
 
+  const [telemetryEnabled, setTelemetryEnabled] = useState(false);
+  const [savingTelemetry, setSavingTelemetry] = useState(false);
+
   const resetBusiness = async () => {
     try {
       const [businessRes, loyaltyRes, discountRes] = await Promise.all([
@@ -824,6 +827,14 @@ export default function SettingsPage() {
       if (res.data.discount_mode) { setDiscountMode(res.data.discount_mode); setSavedDiscountMode(res.data.discount_mode); }
       if (res.data.discount_requires_approval !== undefined) { setDiscountRequiresApproval(!!res.data.discount_requires_approval); setSavedDiscountRequiresApproval(!!res.data.discount_requires_approval); }
     }).catch(() => {});
+
+    api.get('/settings/telemetry_enabled').then((res) => {
+      setTelemetryEnabled(res.data.setting?.value === 'true');
+    }).catch(() => {
+      // No row yet = consent never given (setup predates this feature, or
+      // declined) = stays off until explicitly turned on here.
+      setTelemetryEnabled(false);
+    });
 
     api.get('/mobile/pairing-code').then((res) => {
       setPairingCode(res.data.pairing_code);
@@ -946,6 +957,20 @@ export default function SettingsPage() {
       toast.error(error.response?.data?.error || t('settings.cloudRegistrationFailed'));
     } finally {
       setRegisteringCloud(false);
+    }
+  };
+
+  const saveTelemetry = async (enabled: boolean) => {
+    const previous = telemetryEnabled;
+    setTelemetryEnabled(enabled);
+    setSavingTelemetry(true);
+    try {
+      await api.put('/settings/telemetry_enabled', { value: enabled ? 'true' : 'false' });
+    } catch {
+      setTelemetryEnabled(previous);
+      toast.error(t('settings.saveFailed'));
+    } finally {
+      setSavingTelemetry(false);
     }
   };
 
@@ -2496,6 +2521,28 @@ export default function SettingsPage() {
                   </div>
                 </>
               )}
+            </div>
+
+            {/* Privacy — anonymous telemetry */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <Lock size={20} className="text-gray-500" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">{t('settings.privacy')}</h2>
+                </div>
+              </div>
+
+              <label className="flex items-center gap-3 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={telemetryEnabled}
+                  disabled={savingTelemetry}
+                  onChange={(e) => saveTelemetry(e.target.checked)}
+                  className="rounded border-gray-300 text-brand focus:ring-brand"
+                />
+                <span className="text-sm text-gray-700">{t('settings.anonymousTelemetry')}</span>
+              </label>
+              <p className="text-xs text-gray-500">{t('settings.anonymousTelemetryHint')}</p>
             </div>
 
             {/* OrderFlow — online orders */}
