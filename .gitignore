@@ -4,6 +4,7 @@ release/
 *.db
 *.db-shm
 *.db-wal
+backups/
 .env
 .env.local
 .DS_Store

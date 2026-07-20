@@ -2,6 +2,14 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.7] - 2026-07-21
+
+### Added
+- Kitchen Stations: route order items to per-category prep stations (bar, dessert, pizza, etc.), each with its own printer and assigned staff logins. KOT printing now splits an order across stations automatically; orders with no stations configured print exactly as before (#134).
+
+### Fixed
+- Settings: creating a kitchen station now actually assigns it an id — it previously left the row unfetchable after creation.
+
 ## [1.9.4] - 2026-07-20
 
 ### Added
