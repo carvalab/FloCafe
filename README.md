@@ -19,7 +19,7 @@
 
 FloCafe runs entirely on your own machine — no internet, no subscriptions, no cloud dependency. Your data stays local, your business stays private.
 
-**FloCafe is donationware.** Every feature, in every app across the ecosystem — FloCafe, FloRetail, FloSalon, and RevFlo (our companion mobile reporting app, short for *Revenue Flow*) — is free, with no tiers, no subscriptions, and no paywalled features. There is no plan to ever change that. If FloCafe saves your business money, consider supporting development with a voluntary donation — links are being rolled out across the apps.
+**FloCafe is free.** Every feature, in every app across the ecosystem — FloCafe, FloRetail, FloSalon, and RevFlo (our companion mobile reporting app, short for *Revenue Flow*) — has no tiers, no subscriptions, and no paywalled features.
 
 ## Table of Contents
 
