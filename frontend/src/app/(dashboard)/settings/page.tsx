@@ -128,6 +128,92 @@ function SettingsNavItem({
   );
 }
 
+function KdsDefaultViewCard() {
+  const { t } = useI18n();
+  const [view, setView] = useState<'tabs' | 'kanban'>('tabs');
+  const [savedView, setSavedView] = useState<'tabs' | 'kanban'>('tabs');
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    api.get('/settings/kds').then((res) => {
+      const v = res.data?.kds_default_view === 'kanban' ? 'kanban' : 'tabs';
+      setView(v);
+      setSavedView(v);
+    }).catch(() => {});
+  }, []);
+
+  const dirty = view !== savedView;
+
+  async function save() {
+    setSaving(true);
+    try {
+      const { data } = await api.put('/settings/kds', { kds_default_view: view });
+      const next = data?.kds_default_view === 'kanban' ? 'kanban' : 'tabs';
+      setSavedView(next);
+      setView(next);
+      toast.success(t('settings.kdsViewSaved'));
+    } catch {
+      toast.error(t('settings.kdsViewSaveFailed'));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 p-6">
+      <div className="flex items-center gap-2 mb-4">
+        <Monitor size={20} className="text-gray-500" />
+        <h2 className="font-semibold text-gray-900">{t('settings.kdsDefaultView')}</h2>
+      </div>
+      <p className="text-sm text-gray-500 mb-5">{t('settings.kdsDefaultViewHint')}</p>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <button
+          type="button"
+          onClick={() => setView('tabs')}
+          className={`text-left rounded-lg border-2 px-4 py-3 transition ${
+            view === 'tabs'
+              ? 'border-brand bg-brand/5'
+              : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <input type="radio" readOnly checked={view === 'tabs'} className="text-brand" />
+            <span className="font-medium text-gray-900">{t('settings.kdsDefaultViewTabs')}</span>
+          </div>
+          <p className="text-xs text-gray-500 ml-6">{t('settings.kdsDefaultViewTabsHint')}</p>
+        </button>
+        <button
+          type="button"
+          onClick={() => setView('kanban')}
+          className={`text-left rounded-lg border-2 px-4 py-3 transition ${
+            view === 'kanban'
+              ? 'border-brand bg-brand/5'
+              : 'border-gray-200 hover:border-gray-300'
+          }`}
+        >
+          <div className="flex items-center gap-2 mb-1">
+            <input type="radio" readOnly checked={view === 'kanban'} className="text-brand" />
+            <span className="font-medium text-gray-900">{t('settings.kdsDefaultViewKanban')}</span>
+          </div>
+          <p className="text-xs text-gray-500 ml-6">{t('settings.kdsDefaultViewKanbanHint')}</p>
+        </button>
+      </div>
+
+      <div className="flex justify-end mt-5 pt-4 border-t border-gray-100">
+        <button
+          type="button"
+          onClick={save}
+          disabled={!dirty || saving}
+          className="px-4 py-2 bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium text-sm"
+        >
+          {saving ? t('common.saving') : t('common.save')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 
 export default function SettingsPage() {
   const { currentTenant, user, updateCurrentTenant } = useAuthStore();
@@ -1615,6 +1701,8 @@ export default function SettingsPage() {
                 </>
               )}
             </div>
+
+            <KdsDefaultViewCard />
 
             <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
               <strong>{t('settings.howItWorks')}</strong> {t('settings.howItWorksBody')}

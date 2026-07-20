@@ -96,6 +96,8 @@ export default function SetupPage() {
 
   const completeSetup = () => {
     usePosSettingsStore.getState().setLanguage(language);
+    // Persist language server-side so the standalone KDS inherits it.
+    api.put(`/settings/language`, { value: language }).catch(() => {});
     logout();
     toast.success(t('setup.completeSetupSuccess'));
     window.location.replace('/auth/login');

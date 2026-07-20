@@ -1052,6 +1052,15 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       console.log(`[MIGRATION v25] backfilled addons for ${backfilled} order items (${skipped} unparseable, skipped)`);
     },
   },
+  {
+    version: 26,
+    name: 'add_kds_default_view',
+    up: () => {
+      db.prepare(
+        `INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('kds_default_view', 'tabs', ?)`
+      ).run(now());
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
