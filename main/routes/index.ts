@@ -17,6 +17,7 @@ import { reportRoutes } from './reports';
 import { kdsRoutes } from './kds';
 import { kdsInfoRoutes } from './kds-info';
 import { moreAppsRoutes } from './more-apps';
+import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
 import { databaseToolsRoutes } from './database-tools';
@@ -215,9 +216,36 @@ export function registerRoutes(app: Express): void {
         const roundOff = Math.round(preRoundTotal) - preRoundTotal;
         const total = Math.round(preRoundTotal);
 
-        db.prepare(`
-          UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
-        `).run(subtotal, newTaxAmount, newDiscountAmount, total, roundOff, now(), orderId);
+        // #132 FIX: cancelling the last active item leaves nothing to serve or
+        // bill — treat it as the whole order being cancelled, the same way the
+        // explicit order-level cancel (routes/orders.ts) does: free the table,
+        // restore tracked inventory, and stamp cancelled_at/cancellation_reason.
+        // Without this the order silently stayed "active" with zero items,
+        // cluttering the Active list and permanently holding its table.
+        const orderCancelled = activeItems.length === 0 && order.status !== 'cancelled';
+
+        if (orderCancelled) {
+          const allItems = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId) as any[];
+          for (const i of allItems) {
+            const product = db.prepare('SELECT * FROM products WHERE id = ?').get(i.product_id) as any;
+            if (product?.track_inventory) {
+              db.prepare('UPDATE products SET stock_quantity = stock_quantity + ?, updated_at = ? WHERE id = ?')
+                .run(i.quantity, now(), product.id);
+            }
+          }
+          db.prepare(`
+            UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?,
+              status = 'cancelled', cancelled_at = ?, cancellation_reason = ?, updated_at = ? WHERE id = ?
+          `).run(subtotal, newTaxAmount, newDiscountAmount, total, roundOff, now(), 'All items cancelled', now(), orderId);
+          if (order.table_id) {
+            db.prepare("UPDATE tables SET status = 'available', updated_at = ? WHERE id = ?")
+              .run(now(), order.table_id);
+          }
+        } else {
+          db.prepare(`
+            UPDATE orders SET subtotal = ?, tax_amount = ?, discount_amount = ?, total = ?, round_off = ?, updated_at = ? WHERE id = ?
+          `).run(subtotal, newTaxAmount, newDiscountAmount, total, roundOff, now(), orderId);
+        }
 
         // Sync bill if it exists
         const existingBill = db.prepare("SELECT * FROM bills WHERE order_id = ? AND payment_status != 'paid'").get(orderId) as any;
@@ -229,10 +257,14 @@ export function registerRoutes(app: Express): void {
 
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
         const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
-        return { updatedOrder, items };
+        return { updatedOrder, items, orderCancelled };
       });
 
-      cloudSync.recordOrderChanged(orderId, 'order.item_cancelled');
+      cloudSync.recordOrderChanged(orderId, result.orderCancelled ? 'order.cancelled' : 'order.item_cancelled');
+      if (result.orderCancelled) {
+        notifyKdsUpdate();
+        notifyOrderUpdated();
+      }
       res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Cancel item error:', error);
