@@ -1,28 +1,14 @@
 import { Router, Request, Response } from 'express';
-import jwt from 'jsonwebtoken';
 import { getDatabase, now, parseItemJson } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
-import { getJWTSecret } from './auth';
 
 const router = Router();
-
-/** Decode the Bearer token and return the role, or null if missing/invalid. */
-function getRoleFromToken(req: Request): string | null {
-  const authHeader = req.headers.authorization;
-  if (!authHeader?.startsWith('Bearer ')) return null;
-  try {
-    const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as { role?: string };
-    return decoded.role ?? null;
-  } catch {
-    return null;
-  }
-}
 
 // PATCH /api/order-items/:id/status — update a single item's kitchen status
 // Only chef, manager, or owner can update item status
 router.patch('/:id/status', (req: Request, res: Response) => {
   try {
-    const role = getRoleFromToken(req);
+    const role = (req as any).user?.role;
     if (!role || !['chef', 'manager', 'owner'].includes(role)) {
       return res.status(403).json({ error: 'Only chef, manager, or owner can update item status' });
     }

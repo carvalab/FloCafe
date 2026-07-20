@@ -152,15 +152,9 @@ export function registerRoutes(app: Express): void {
     try {
       const { orderId, itemId } = req.params;
 
-      // Verify JWT token and check role
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-      const jwt = require('jsonwebtoken');
-      const { getJWTSecret } = require('./auth');
-      const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as { role?: string };
-      const userRole = decoded.role;
+      // requireAuth (main/server.ts) already verified the token and attached
+      // the user's current DB role to req.user — use that, not the JWT claim.
+      const userRole = (req as any).user?.role;
       if (!userRole || !['owner', 'manager'].includes(userRole)) {
         return res.status(403).json({ error: 'Only owner or manager can cancel items' });
       }
@@ -251,15 +245,9 @@ export function registerRoutes(app: Express): void {
     try {
       const { orderId, itemId } = req.params;
 
-      // Verify JWT token and check role
-      const authHeader = req.headers.authorization;
-      if (!authHeader?.startsWith('Bearer ')) {
-        return res.status(401).json({ error: 'Authentication required' });
-      }
-      const jwt = require('jsonwebtoken');
-      const { getJWTSecret } = require('./auth');
-      const decoded = jwt.verify(authHeader.split(' ')[1], getJWTSecret()) as { role?: string };
-      const userRole = decoded.role;
+      // requireAuth (main/server.ts) already verified the token and attached
+      // the user's current DB role to req.user — use that, not the JWT claim.
+      const userRole = (req as any).user?.role;
       if (!userRole || !['owner', 'manager'].includes(userRole)) {
         return res.status(403).json({ error: 'Only owner or manager can restore items' });
       }

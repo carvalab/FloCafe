@@ -23,11 +23,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   getDailySummary: () => ipcRenderer.invoke('get-daily-summary'),
 
-  getUsers: () => ipcRenderer.invoke('get-users'),
-  createUser: (userData: any) => ipcRenderer.invoke('create-user', userData),
-  updateUser: (id: number, userData: any) => ipcRenderer.invoke('update-user', id, userData),
-  deleteUser: (id: number) => ipcRenderer.invoke('delete-user', id),
-
   getUpdateStatus: () => ipcRenderer.invoke('get-update-status'),
   checkForUpdates: () => ipcRenderer.invoke('check-for-updates'),
   onUpdateStatus: (callback: (status: any) => void) => {
