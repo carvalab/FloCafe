@@ -13,6 +13,11 @@
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform">
   <img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node.js">
+  <br>
+  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/stargazers"><img src="https://img.shields.io/github/stars/FreeOpenSourcePOS/FloCafe?style=social" alt="GitHub stars"></a>
+  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/network/members"><img src="https://img.shields.io/github/forks/FreeOpenSourcePOS/FloCafe?style=social" alt="GitHub forks"></a>
+  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/issues"><img src="https://img.shields.io/github/issues/FreeOpenSourcePOS/FloCafe" alt="Open issues"></a>
+  <a href="https://github.com/FreeOpenSourcePOS/FloCafe/pulls"><img src="https://img.shields.io/github/issues-pr/FreeOpenSourcePOS/FloCafe" alt="Open pull requests"></a>
 </p>
 
 ---
@@ -26,6 +31,8 @@ FloCafe runs entirely on your own machine — no internet, no subscriptions, no 
 - [Why FloCafe](#why-flocafe)
 - [Downloads](#downloads)
 - [Features](#features)
+- [Project Stats](#project-stats)
+- [Public Roadmap](#public-roadmap)
 - [Tech Stack](#tech-stack)
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
@@ -121,13 +128,43 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 - "NEW" badge for items added after initial order
 - Table name always visible
 
+## Project Stats
+
+FloCafe's public GitHub activity is visible through live badges and GitHub Insights:
+
+| Signal | Live status |
+|--------|-------------|
+| Latest release | [![Latest release](https://img.shields.io/github/v/release/FreeOpenSourcePOS/FloCafe?label=release)](https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest) |
+| Total release downloads | [![Downloads](https://img.shields.io/github/downloads/FreeOpenSourcePOS/FloCafe/total?label=release%20downloads)](https://github.com/FreeOpenSourcePOS/FloCafe/releases) |
+| Stars | [![Stars](https://img.shields.io/github/stars/FreeOpenSourcePOS/FloCafe?label=stars)](https://github.com/FreeOpenSourcePOS/FloCafe/stargazers) |
+| Forks | [![Forks](https://img.shields.io/github/forks/FreeOpenSourcePOS/FloCafe?label=forks)](https://github.com/FreeOpenSourcePOS/FloCafe/network/members) |
+| Open issues | [![Open issues](https://img.shields.io/github/issues/FreeOpenSourcePOS/FloCafe?label=open%20issues)](https://github.com/FreeOpenSourcePOS/FloCafe/issues) |
+| Open pull requests | [![Open PRs](https://img.shields.io/github/issues-pr/FreeOpenSourcePOS/FloCafe?label=open%20PRs)](https://github.com/FreeOpenSourcePOS/FloCafe/pulls) |
+| Commit activity | [![Commit activity](https://img.shields.io/github/commit-activity/m/FreeOpenSourcePOS/FloCafe?label=commits%2Fmonth)](https://github.com/FreeOpenSourcePOS/FloCafe/pulse) |
+| Last commit | [![Last commit](https://img.shields.io/github/last-commit/FreeOpenSourcePOS/FloCafe)](https://github.com/FreeOpenSourcePOS/FloCafe/commits/main) |
+
+For deeper repository analytics, see [Pulse](https://github.com/FreeOpenSourcePOS/FloCafe/pulse), [Contributors](https://github.com/FreeOpenSourcePOS/FloCafe/graphs/contributors), [Traffic](https://github.com/FreeOpenSourcePOS/FloCafe/graphs/traffic), and [Community Standards](https://github.com/FreeOpenSourcePOS/FloCafe/community). GitHub traffic, clones, and referrers require repository access, so they are linked instead of embedded.
+
 ## 🗺️ Public Roadmap
 
-FloCafe is actively evolving. Here are some of the major milestones we're working towards:
+FloCafe is actively evolving. This roadmap reflects the current public issue discussions as of July 20, 2026.
+
+### Active Priorities
+
+- **Order workflow reliability:** Fix the edge case where cancelling the last order item can leave an empty active order ([#132](https://github.com/FreeOpenSourcePOS/FloCafe/issues/132)) and normalize selected add-ons into transaction history for better reporting and auditability ([#125](https://github.com/FreeOpenSourcePOS/FloCafe/issues/125)).
+- **KDS and KOT workflow controls:** Add a settings toggle so operators can choose KDS-first or printer/KOT-first kitchen workflows ([#133](https://github.com/FreeOpenSourcePOS/FloCafe/issues/133)).
+- **Backup, recovery, and restore confidence:** Add automated Google Drive database backups ([#129](https://github.com/FreeOpenSourcePOS/FloCafe/issues/129)), backup history management ([#120](https://github.com/FreeOpenSourcePOS/FloCafe/issues/120)), clearer signup recovery guidance ([#128](https://github.com/FreeOpenSourcePOS/FloCafe/issues/128)), and a secure password recovery/database reinitialization flow ([#127](https://github.com/FreeOpenSourcePOS/FloCafe/issues/127)).
+- **Customer messaging:** Explore WhatsApp messaging support through `whatsapp-web.js` for order and customer communication workflows ([#126](https://github.com/FreeOpenSourcePOS/FloCafe/issues/126)).
+- **Menu and add-on experience:** Improve add-on configuration UX and support multi-quantity add-ons ([#83](https://github.com/FreeOpenSourcePOS/FloCafe/issues/83)).
+- **Loyalty program polish:** Refine loyalty onboarding and labels so staff understand earn/redeem behavior faster ([#81](https://github.com/FreeOpenSourcePOS/FloCafe/issues/81)).
+- **Desktop update experience:** Add in-app auto-update support with a notification badge ([#58](https://github.com/FreeOpenSourcePOS/FloCafe/issues/58)).
+
+### Longer-Term Direction
+
 - **Modular Plugin Architecture:** Support for custom plugins, third-party integrations, and UI themes without modifying core code.
 - **Advanced Inventory Management:** Low stock alerts, supplier purchase orders, and ingredient-level tracking.
 - **Enhanced Cloud Sync:** Opt-in multi-device synchronization across different branches or franchises.
-- **Expanded Translations (i18n):** Adding more community-contributed languages to our native English and Spanish support.
+- **Expanded Translations (i18n):** Add more community-contributed languages to the native English and Spanish support.
 
 ## Tech Stack
 
