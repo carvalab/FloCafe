@@ -1,9 +1,10 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import toast from 'react-hot-toast';
 import type { AxiosInstance } from 'axios';
 import { useI18n } from '@/hooks/useI18n';
+import { useConfirm } from '@/hooks/use-confirm';
 
 export type KitchenStatus = 'pending' | 'preparing' | 'ready' | 'served';
 export type ConnectionMode = 'websocket' | 'rest' | null;
@@ -112,8 +113,9 @@ export interface UseKdsConnectionResult {
   setLoginEmail: (v: string) => void;
   setLoginPassword: (v: string) => void;
   handleLogin: (e: React.FormEvent) => Promise<void>;
-  handleLogout: () => void;
+  handleLogout: () => Promise<void>;
   updateItemStatus: (itemId: number, status: KitchenStatus, opts?: { silent?: boolean }) => Promise<void>;
+  ConfirmDialog: ReactNode;
 }
 
 const LOGIN_ENDPOINT = '/auth/login';
@@ -122,6 +124,7 @@ const ORDERS_ENDPOINT = '/kitchen/orders';
 export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnectionResult {
   const { api } = options;
   const { t } = useI18n();
+  const { confirm, ConfirmDialog } = useConfirm();
 
   const statusLabel = (s: KitchenStatus) => t(STATUS_CONFIG[s].labelKey);
 
@@ -304,7 +307,8 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     [api, loginEmail, loginPassword, t, tryWebSocket],
   );
 
-  const handleLogout = useCallback(() => {
+  const handleLogout = useCallback(async () => {
+    if (!await confirm(t('nav.confirmLogout', { defaultValue: 'Are you sure you want to log out?' }))) return;
     if (wsRef.current) {
       wsRef.current.close();
     }
@@ -314,7 +318,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     setConnected(false);
     setConnectionMode(null);
     window.localStorage.removeItem('token');
-  }, [stopRestPolling]);
+  }, [confirm, stopRestPolling, t]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -371,5 +375,6 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     handleLogin,
     handleLogout,
     updateItemStatus,
+    ConfirmDialog,
   };
 }

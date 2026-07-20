@@ -31,6 +31,7 @@ export function KdsWorkspace({ conn, serverDefault }: { conn: UseKdsConnectionRe
           />
         )}
       </div>
+      {conn.ConfirmDialog}
     </div>
   );
 }
