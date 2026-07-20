@@ -17,6 +17,13 @@ interface DailyStats {
   tablesOccupied: number;
 }
 
+interface DaySummary {
+  date: string;
+  orders: { count: number; total: number };
+  bills: { count: number; total: number; collected: number };
+  customers: { new: number };
+}
+
 interface TopProduct {
   product_id: number;
   product_name: string;
@@ -72,6 +79,13 @@ interface Insights {
   idlestDayOfWeek: DayBucket | null;
 }
 
+/** Today's date as YYYY-MM-DD in a given IANA timezone (not UTC — avoids an
+ *  off-by-one-day default near midnight relative to the tenant's locale). */
+function getLocalDateString(date: Date, timeZone: string): string {
+  // en-CA formats as YYYY-MM-DD by convention — a convenient built-in shortcut.
+  return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(date);
+}
+
 /** Formats a 0-23 local hour index as a locale-appropriate time label (e.g. "2 PM"). */
 function formatHourLabel(hour: number, locale: string): string {
   const reference = new Date(Date.UTC(2000, 0, 1, hour));
@@ -105,6 +119,7 @@ export default function DashboardPage() {
   const { t } = useI18n();
   const router = useRouter();
   const [stats, setStats] = useState<DailyStats | null>(null);
+  const [daySummary, setDaySummary] = useState<DaySummary | null>(null);
   const [topProducts, setTopProducts] = useState<TopProduct[]>([]);
   const [recentOrders, setRecentOrders] = useState<RecentOrder[]>([]);
   const [insights, setInsights] = useState<Insights | null>(null);
@@ -113,6 +128,10 @@ export default function DashboardPage() {
   const isOwner = currentTenant?.role === 'owner';
   const fmt = useFormatCurrency();
   const locale = currentTenant?.country ? (getCountryByCode(currentTenant.country)?.locale ?? 'en-US') : 'en-US';
+  const timeZone = currentTenant?.timezone || Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const todayLocal = getLocalDateString(new Date(), timeZone);
+  const [selectedDate, setSelectedDate] = useState(todayLocal);
+  const isToday = selectedDate === todayLocal;
 
   useEffect(() => {
     if (currentTenant && !isOwner) {
@@ -122,57 +141,87 @@ export default function DashboardPage() {
 
   useEffect(() => {
     if (!isOwner) return;
+    setLoading(true);
     Promise.all([
-      api.get('/reports/daily-stats'),
-      api.get('/reports/topProducts', { params: { limit: 5 } }),
-      api.get('/reports/recentOrders', { params: { limit: 6 } }),
+      isToday ? api.get('/reports/daily-stats') : api.get('/reports/summary', { params: { date: selectedDate } }),
+      api.get('/reports/topProducts', { params: { start_date: selectedDate, end_date: selectedDate, limit: 5 } }),
+      api.get('/reports/recentOrders', { params: { date: selectedDate, limit: 6 } }),
       api.get('/reports/insights', { params: { days: 30 } }),
     ])
       .then(([statsRes, topRes, recentRes, insightsRes]) => {
-        setStats(statsRes.data);
+        setStats(isToday ? statsRes.data : null);
+        setDaySummary(isToday ? null : statsRes.data.summary);
         setTopProducts(topRes.data.topProducts || []);
         setRecentOrders(recentRes.data.recentOrders || []);
         setInsights(insightsRes.data);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
-  }, [isOwner]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, selectedDate]);
 
   if (!isOwner) return null;
 
+  // Running/Pending Orders and Tables Occupied are live, "right now" concepts
+  // that don't retroactively apply to a past date (an order isn't "pending"
+  // in history — it has a final status). When viewing a past date, swap them
+  // for the day's actual totals from /reports/summary instead.
+  const dateScopedTiles = isToday
+    ? [
+        {
+          label: t('dashboard.runningOrders'),
+          value: stats?.runningOrders ?? 0,
+          icon: ChefHat,
+          color: 'bg-blue-50 border-blue-200',
+          iconColor: 'text-blue-600',
+          href: '/orders',
+        },
+        {
+          label: t('dashboard.pendingOrders'),
+          value: stats?.pendingOrders ?? 0,
+          icon: Clock,
+          color: 'bg-yellow-50 border-yellow-200',
+          iconColor: 'text-yellow-600',
+          href: '/orders',
+        },
+        {
+          label: t('dashboard.tablesOccupied'),
+          value: stats?.tablesOccupied ?? 0,
+          icon: LayoutGrid,
+          color: 'bg-purple-50 border-purple-200',
+          iconColor: 'text-purple-600',
+          href: '/tables',
+        },
+      ]
+    : [
+        {
+          label: t('dashboard.orders'),
+          value: daySummary?.orders.count ?? 0,
+          icon: ChefHat,
+          color: 'bg-blue-50 border-blue-200',
+          iconColor: 'text-blue-600',
+          href: '/orders',
+        },
+        {
+          label: t('dashboard.newCustomers'),
+          value: daySummary?.customers.new ?? 0,
+          icon: Clock,
+          color: 'bg-yellow-50 border-yellow-200',
+          iconColor: 'text-yellow-600',
+          href: '/customers',
+        },
+      ];
+
   const tiles = [
     {
-      label: t('dashboard.todaySales'),
-      value: fmt(stats?.sales ?? 0),
+      label: isToday ? t('dashboard.todaySales') : t('dashboard.sales'),
+      value: fmt(isToday ? (stats?.sales ?? 0) : (daySummary?.bills.collected ?? 0)),
       icon: Banknote,
       color: 'bg-green-50 border-green-200',
       iconColor: 'text-green-600',
       href: '/orders',
     },
-    {
-      label: t('dashboard.runningOrders'),
-      value: stats?.runningOrders ?? 0,
-      icon: ChefHat,
-      color: 'bg-blue-50 border-blue-200',
-      iconColor: 'text-blue-600',
-      href: '/orders',
-    },
-    {
-      label: t('dashboard.pendingOrders'),
-      value: stats?.pendingOrders ?? 0,
-      icon: Clock,
-      color: 'bg-yellow-50 border-yellow-200',
-      iconColor: 'text-yellow-600',
-      href: '/orders',
-    },
-    {
-      label: t('dashboard.tablesOccupied'),
-      value: stats?.tablesOccupied ?? 0,
-      icon: LayoutGrid,
-      color: 'bg-purple-50 border-purple-200',
-      iconColor: 'text-purple-600',
-      href: '/tables',
-    },
+    ...dateScopedTiles,
     {
       label: t('dashboard.aov'),
       value: fmt(insights?.aov ?? 0),
@@ -193,8 +242,16 @@ export default function DashboardPage() {
 
   return (
     <div className="p-6">
-      <div className="mb-6">
+      <div className="mb-6 flex items-center justify-between gap-4 flex-wrap">
         <h1 className="text-2xl font-bold text-gray-900">{t('dashboard.title')}</h1>
+        <input
+          type="date"
+          value={selectedDate}
+          max={todayLocal}
+          onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+          className="px-3 py-1.5 text-sm border border-gray-200 rounded-lg text-gray-700 focus:outline-none focus:ring-2 focus:ring-brand/30"
+          aria-label={t('dashboard.selectDate')}
+        />
       </div>
 
       {loading ? (
@@ -227,7 +284,7 @@ export default function DashboardPage() {
               <div className="flex items-center justify-between px-4 py-3 border-b border-gray-100">
                 <h2 className="flex items-center gap-2 font-semibold text-gray-900">
                   <ClipboardList size={16} className="text-gray-400" />
-                  {t('dashboard.recentOrders')}
+                  {isToday ? t('dashboard.recentOrders') : t('dashboard.orders')}
                 </h2>
                 <Link href="/orders" className="flex items-center gap-1 text-xs text-brand hover:text-brand-hover font-medium">
                   {t('dashboard.viewAll')} <ArrowRight size={12} />

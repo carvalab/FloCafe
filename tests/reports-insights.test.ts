@@ -249,6 +249,18 @@ async function main() {
     assertEqual(body.idlestDayOfWeek?.dayIndex, 2, 'idlest day is Tuesday (index 2), with zero orders — a real signal, unlike hour zeros');
     assertEqual(body.idlestDayOfWeek?.orderCount, 0, 'Tuesday has 0 orders in the fixture window');
 
+    console.log('\n9. GET /api/reports/recentOrders?date=X scopes to that day (dashboard date picker)');
+    {
+      const dated = await request(app).get('/api/reports/recentOrders?date=2026-06-01&limit=10').set('Authorization', `Bearer ${ownerToken}`);
+      assertEqual(dated.status, 200, `owner gets 200 (got ${dated.status})`);
+      const numbers = (dated.body.recentOrders ?? []).map((o: any) => o.order_number).sort();
+      assertEqual(JSON.stringify(numbers), JSON.stringify(['ORD-INS-1', 'ORD-INS-2', 'ORD-INS-3']), 'only the 3 orders created on 2026-06-01 are returned');
+
+      const undated = await request(app).get('/api/reports/recentOrders?limit=1').set('Authorization', `Bearer ${ownerToken}`);
+      assertEqual(undated.status, 200, `omitting date still works — most-recent-overall behavior preserved (got ${undated.status})`);
+      assert(Array.isArray(undated.body.recentOrders) && undated.body.recentOrders.length === 1, 'no date param still returns most-recent-overall, unaffected by the new filter');
+    }
+
   } finally {
     closeDatabase();
   }

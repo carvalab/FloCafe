@@ -196,15 +196,29 @@ router.get('/recentOrders', requireRole('owner', 'manager'), (req: Request, res:
   try {
     const db = getDatabase();
     const limit = parseInt(req.query.limit as string) || 20;
+    const date = req.query.date as string | undefined;
 
-    const recentOrders = db.prepare(`
-      SELECT o.*, t.number as table_name, c.name as customer_name
-      FROM orders o
-      LEFT JOIN tables t ON o.table_id = t.id
-      LEFT JOIN customers c ON o.customer_id = c.id
-      ORDER BY o.created_at DESC
-      LIMIT ?
-    `).all(limit);
+    // Without a date, "most recent overall" (dashboard live view). With one,
+    // scoped to that day — lets the dashboard show a past day's orders
+    // instead of always the latest regardless of which date is selected.
+    const recentOrders = date
+      ? db.prepare(`
+          SELECT o.*, t.number as table_name, c.name as customer_name
+          FROM orders o
+          LEFT JOIN tables t ON o.table_id = t.id
+          LEFT JOIN customers c ON o.customer_id = c.id
+          WHERE date(o.created_at) = date(?)
+          ORDER BY o.created_at DESC
+          LIMIT ?
+        `).all(date, limit)
+      : db.prepare(`
+          SELECT o.*, t.number as table_name, c.name as customer_name
+          FROM orders o
+          LEFT JOIN tables t ON o.table_id = t.id
+          LEFT JOIN customers c ON o.customer_id = c.id
+          ORDER BY o.created_at DESC
+          LIMIT ?
+        `).all(limit);
 
     const ordersWithItems = recentOrders.map((order: any) => {
       const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id);
