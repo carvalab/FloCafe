@@ -226,6 +226,12 @@ class CloudSyncService {
       const socket = this.relaySocket;
       this.relaySocket = null;
       socket.removeAllListeners();
+      // Terminating a still-CONNECTING socket makes `ws` synchronously emit
+      // 'error' ("closed before the connection was established"). The real
+      // listeners were just removed above, so with nothing left to catch it
+      // that throws and crashes the process — swallow it, we're intentionally
+      // discarding this socket.
+      socket.on('error', () => {});
       if (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING) {
         socket.terminate();
       }
