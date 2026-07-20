@@ -1061,6 +1061,29 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       ).run(now());
     },
   },
+  {
+    version: 27,
+    name: 'add_station_printer_link_and_user_stations',
+    up: () => {
+      // Links a kitchen station to a printer row instead of duplicating
+      // ip/port/name inline, and lets a staff login (or shared counter
+      // login) be assigned to one or more stations. See issue #134.
+      const stationColumns = getColumns(db, 'kitchen_stations');
+      if (!stationColumns.includes('printer_id')) {
+        db.exec(`ALTER TABLE kitchen_stations ADD COLUMN printer_id TEXT REFERENCES printers(id) ON DELETE SET NULL`);
+      }
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS station_users (
+          user_id TEXT NOT NULL,
+          station_id TEXT NOT NULL,
+          created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+          PRIMARY KEY (user_id, station_id),
+          FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+          FOREIGN KEY (station_id) REFERENCES kitchen_stations(id) ON DELETE CASCADE
+        );
+      `);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
@@ -1204,13 +1227,24 @@ function createSchema(): void {
       name TEXT NOT NULL,
       description TEXT,
       category_ids TEXT,
+      printer_id TEXT,
       printer_ip TEXT,
       printer_port INTEGER DEFAULT 9100,
       printer_name TEXT,
       is_active INTEGER DEFAULT 1,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (printer_id) REFERENCES printers(id) ON DELETE SET NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS station_users (
+      user_id TEXT NOT NULL,
+      station_id TEXT NOT NULL,
+      created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      PRIMARY KEY (user_id, station_id),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+      FOREIGN KEY (station_id) REFERENCES kitchen_stations(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS tables (

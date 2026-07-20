@@ -734,6 +734,122 @@ export default function SettingsPage() {
     }
   };
 
+  // ── Kitchen Stations ─────────────────────────────────────────────────────
+  type KitchenStation = {
+    id: string; name: string; description?: string; category_ids?: string;
+    printer_id?: string | null; is_active: number; sort_order: number;
+  };
+  type StaffOption = { id: string; name: string; role: string };
+  type CategoryOption = { id: string; name: string };
+
+  const [stations, setStations] = useState<KitchenStation[]>([]);
+  const [stationCategories, setStationCategories] = useState<CategoryOption[]>([]);
+  const [stationStaff, setStationStaff] = useState<StaffOption[]>([]);
+  const [stationUsersByStation, setStationUsersByStation] = useState<Record<string, StaffOption[]>>({});
+  const [showStationForm, setShowStationForm] = useState(false);
+  const [editingStationId, setEditingStationId] = useState<string | null>(null);
+  const [stationForm, setStationForm] = useState<{
+    name: string; category_ids: string[]; printer_id: string; user_ids: string[];
+  }>({ name: '', category_ids: [], printer_id: '', user_ids: [] });
+  const [savingStation, setSavingStation] = useState(false);
+
+  const fetchStations = () => {
+    api.get('/kitchen-stations').then((res) => setStations(res.data.kitchenStations || [])).catch(() => {});
+  };
+  const fetchStationCategories = () => {
+    api.get('/categories').then((res) => setStationCategories(res.data.categories || [])).catch(() => {});
+  };
+  const fetchStationStaff = () => {
+    api.get('/staff').then((res) => setStationStaff(res.data.staff || [])).catch(() => {});
+  };
+  const fetchStationUsers = async (stationId: string) => {
+    try {
+      const res = await api.get(`/kitchen-stations/${stationId}`);
+      setStationUsersByStation((prev) => ({ ...prev, [stationId]: res.data.kitchenStation.users || [] }));
+    } catch { /* ignore */ }
+  };
+
+  const openAddStation = () => {
+    setEditingStationId(null);
+    setStationForm({ name: '', category_ids: [], printer_id: '', user_ids: [] });
+    setShowStationForm(true);
+  };
+
+  const openEditStation = async (station: KitchenStation) => {
+    setEditingStationId(station.id);
+    let categoryIds: string[] = [];
+    try { categoryIds = station.category_ids ? JSON.parse(station.category_ids) : []; } catch { categoryIds = []; }
+    let userIds: string[] = stationUsersByStation[station.id]?.map((u) => u.id) || [];
+    if (!stationUsersByStation[station.id]) {
+      try {
+        const res = await api.get(`/kitchen-stations/${station.id}`);
+        const users = res.data.kitchenStation.users || [];
+        setStationUsersByStation((prev) => ({ ...prev, [station.id]: users }));
+        userIds = users.map((u: StaffOption) => u.id);
+      } catch { /* ignore */ }
+    }
+    setStationForm({ name: station.name, category_ids: categoryIds, printer_id: station.printer_id || '', user_ids: userIds });
+    setShowStationForm(true);
+  };
+
+  const toggleStationFormValue = (field: 'category_ids' | 'user_ids', value: string) => {
+    setStationForm((prev) => {
+      const set = new Set(prev[field]);
+      if (set.has(value)) set.delete(value); else set.add(value);
+      return { ...prev, [field]: Array.from(set) };
+    });
+  };
+
+  const saveStation = async () => {
+    if (!stationForm.name.trim()) { toast.error(t('settings.stationNameRequired')); return; }
+    setSavingStation(true);
+    try {
+      const payload = {
+        name: stationForm.name.trim(),
+        category_ids: stationForm.category_ids,
+        printer_id: stationForm.printer_id || null,
+      };
+      let stationId = editingStationId;
+      if (editingStationId) {
+        await api.put(`/kitchen-stations/${editingStationId}`, payload);
+      } else {
+        const res = await api.post('/kitchen-stations', payload);
+        stationId = res.data.kitchenStation.id;
+      }
+      if (stationId) {
+        await api.put(`/kitchen-stations/${stationId}/users`, { user_ids: stationForm.user_ids });
+        await fetchStationUsers(stationId);
+      }
+      toast.success(editingStationId ? t('settings.stationUpdated') : t('settings.stationSaved'));
+      setShowStationForm(false);
+      fetchStations();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error?.response?.data?.error || t('settings.stationSaveFailed'));
+    } finally {
+      setSavingStation(false);
+    }
+  };
+
+  const deleteStation = async (id: string) => {
+    if (!await confirm(t('settings.stationDeleteConfirm'), { destructive: true, confirmLabel: t('common.delete') })) return;
+    try {
+      await api.delete(`/kitchen-stations/${id}`);
+      toast.success(t('settings.stationDeleted'));
+      fetchStations();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error?.response?.data?.error || t('settings.stationDeleteFailed'));
+    }
+  };
+
+  useEffect(() => {
+    stations.forEach((s) => {
+      if (!stationUsersByStation[s.id]) fetchStationUsers(s.id);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stations]);
+
   // Mobile App Pairing
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
@@ -900,6 +1016,9 @@ export default function SettingsPage() {
     fetchPrinters();
     fetchDetectedPrinters();
     fetchKdsInfo();
+    fetchStations();
+    fetchStationCategories();
+    fetchStationStaff();
 
     api.get('/settings/loyalty').then((res) => {
       setLoyaltyEnabled(!!res.data.loyalty_enabled);
@@ -1699,6 +1818,134 @@ export default function SettingsPage() {
                     {t('settings.loadKdsInfo')}
                   </button>
                 </>
+              )}
+            </div>
+
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="flex items-center gap-2">
+                  <ChefHat size={20} className="text-gray-500" />
+                  <h2 className="font-semibold text-gray-900">{t('settings.kitchenStations')}</h2>
+                </div>
+                <button onClick={openAddStation}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-sm bg-brand text-white rounded-lg hover:opacity-90 font-medium">
+                  <Plus size={14} />
+                  {t('settings.addStation')}
+                </button>
+              </div>
+              <p className="text-sm text-gray-500 mb-5">{t('settings.kitchenStationsHint')}</p>
+
+              {stations.length === 0 ? (
+                <p className="text-sm text-gray-400 py-4 text-center">{t('settings.noStationsYet')}</p>
+              ) : (
+                <div className="space-y-2">
+                  {stations.map((station) => {
+                    let categoryIds: string[] = [];
+                    try { categoryIds = station.category_ids ? JSON.parse(station.category_ids) : []; } catch { categoryIds = []; }
+                    const categoryNames = categoryIds
+                      .map((id) => stationCategories.find((c) => c.id === id)?.name)
+                      .filter(Boolean);
+                    const printer = hwPrinters.find((p) => p.id === station.printer_id);
+                    const users = stationUsersByStation[station.id] || [];
+                    return (
+                      <div key={station.id} className="flex items-center justify-between p-3 border border-gray-100 rounded-lg">
+                        <div className="min-w-0">
+                          <p className="font-medium text-gray-900">{station.name}</p>
+                          <p className="text-xs text-gray-500 mt-0.5">
+                            {categoryNames.length > 0 ? categoryNames.join(', ') : t('settings.stationNoCategories')}
+                            {' · '}
+                            {printer ? printer.name : t('settings.stationNoPrinter')}
+                            {users.length > 0 && ` · ${users.map((u) => u.name).join(', ')}`}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => openEditStation(station)}
+                            className="px-2 py-1 text-xs text-gray-600 hover:text-gray-900 hover:bg-gray-50 rounded">
+                            {t('common.edit')}
+                          </button>
+                          <button onClick={() => deleteStation(station.id)}
+                            className="p-1.5 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded">
+                            <Trash2 size={14} />
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              {showStationForm && (
+                <Dialog open={showStationForm} onOpenChange={setShowStationForm}>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>{editingStationId ? t('settings.editStation') : t('settings.addStation')}</DialogTitle>
+                      <DialogDescription>{t('settings.stationFormHint')}</DialogDescription>
+                    </DialogHeader>
+                    <div className="space-y-4 py-2">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationName')}</label>
+                        <input type="text" value={stationForm.name}
+                          onChange={(e) => setStationForm((f) => ({ ...f, name: e.target.value }))}
+                          placeholder={t('settings.stationNamePlaceholder')}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm" />
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationCategories')}</label>
+                        {stationCategories.length === 0 ? (
+                          <p className="text-xs text-gray-400">{t('settings.noCategoriesYet')}</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                            {stationCategories.map((cat) => (
+                              <label key={cat.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-full text-xs cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" checked={stationForm.category_ids.includes(cat.id)}
+                                  onChange={() => toggleStationFormValue('category_ids', cat.id)}
+                                  className="rounded border-gray-300 text-brand focus:ring-brand" />
+                                {cat.name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationPrinter')}</label>
+                        <select value={stationForm.printer_id}
+                          onChange={(e) => setStationForm((f) => ({ ...f, printer_id: e.target.value }))}
+                          className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm bg-white">
+                          <option value="">{t('settings.stationUseDefaultPrinter')}</option>
+                          {hwPrinters.map((p) => (
+                            <option key={p.id} value={p.id}>{p.name}</option>
+                          ))}
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.stationStaff')}</label>
+                        {stationStaff.length === 0 ? (
+                          <p className="text-xs text-gray-400">{t('settings.noStaffYet')}</p>
+                        ) : (
+                          <div className="flex flex-wrap gap-2 max-h-32 overflow-y-auto">
+                            {stationStaff.map((u) => (
+                              <label key={u.id} className="flex items-center gap-1.5 px-2.5 py-1 border border-gray-200 rounded-full text-xs cursor-pointer hover:bg-gray-50">
+                                <input type="checkbox" checked={stationForm.user_ids.includes(u.id)}
+                                  onChange={() => toggleStationFormValue('user_ids', u.id)}
+                                  className="rounded border-gray-300 text-brand focus:ring-brand" />
+                                {u.name}
+                              </label>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setShowStationForm(false)}>{t('common.cancel')}</Button>
+                      <Button onClick={saveStation} disabled={savingStation}>
+                        {savingStation ? t('common.saving') : t('common.save')}
+                      </Button>
+                    </DialogFooter>
+                  </DialogContent>
+                </Dialog>
               )}
             </div>
 

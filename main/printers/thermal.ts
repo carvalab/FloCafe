@@ -464,10 +464,10 @@ export async function printReceipt(order: any, bill: any, business?: any, templa
   }
 }
 
-export async function printKOT(order: any, items: any[], stationName: string, useUnicode: boolean = false): Promise<boolean> {
+export async function printKOT(order: any, items: any[], stationName: string, useUnicode: boolean = false, targetPrinter?: any): Promise<boolean> {
   try {
-    console.log('[Printer] printKOT called, items count:', items?.length || 0, 'useUnicode:', useUnicode);
-    const printer = getPrinterConfig();
+    console.log('[Printer] printKOT called, items count:', items?.length || 0, 'useUnicode:', useUnicode, 'station:', stationName);
+    const printer = targetPrinter || getPrinterConfig();
     if (!printer) {
       console.log('[Printer] No printer configured');
       return false;
