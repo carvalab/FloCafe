@@ -129,7 +129,14 @@ router.get('/:id', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: R
 
 router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
-    const { table_id, customer_id, user_id, type, guest_count, special_instructions, packaging_charge, delivery_charge, items } = req.body;
+    const { table_id, customer_id, type, guest_count, special_instructions, packaging_charge, delivery_charge, items } = req.body;
+    // Always the authenticated caller, never client-supplied — trusting a
+    // client-sent user_id would let staff spoof order attribution, and the
+    // frontend has in fact never sent one, so every order got user_id=NULL.
+    // That silently broke waiters' own order visibility (GET /orders scopes
+    // waiters to `user_id = <their id>`, which NULL can never match) and any
+    // per-staff sales attribution.
+    const authenticatedUserId = (req as any).user.userId;
 
     if (!items || items.length === 0) {
       return res.status(400).json({ error: 'At least one item is required' });
@@ -169,7 +176,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
         INSERT INTO orders (order_number, table_id, customer_id, user_id, type, guest_count, special_instructions,
           packaging_charge, delivery_charge, status, created_at, updated_at)
         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
-      `).run(orderNumber, table_id || null, customer_id || null, user_id || null, type, guest_count || null,
+      `).run(orderNumber, table_id || null, customer_id || null, authenticatedUserId, type, guest_count || null,
         special_instructions || null, packaging_charge || 0, delivery_charge || 0, now(), now());
 
       const orderId = orderResult.lastInsertRowid;
