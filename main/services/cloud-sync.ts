@@ -268,7 +268,10 @@ class CloudSyncService {
     };
   }
 
-  async register(email?: string): Promise<Record<string, unknown>> {
+  // No owner/business email is ever sent here — FloAdmin doesn't store or
+  // use it yet (documented gap, specs/floadmin.md § POST /api/pos/register),
+  // and owners never log into FloAdmin, so there's nothing for it to do.
+  async register(): Promise<Record<string, unknown>> {
     const db = getDatabase();
     const settings = this.readSettings(db);
     const { posHash, deviceSecret } = ensureCloudIdentity();
@@ -284,7 +287,6 @@ class CloudSyncService {
       business: {
         name: settings.business_name || '',
         phone: settings.business_phone || settings.phone || '',
-        email: email || settings.email || '',
         country: settings.country || 'IN',
         timezone: settings.timezone || 'Asia/Kolkata',
       },
@@ -383,17 +385,39 @@ class CloudSyncService {
     return Array.isArray(data.devices) ? data.devices : [];
   }
 
-  pushBill(bill: Record<string, unknown>) {
-    this.enqueueEvent('bill.paid', 'bill', String(bill.id ?? bill.pos_bill_id ?? ''), bill);
-  }
-
+  // Bills, orders, and payment details are never pushed to the cloud — no
+  // bill.paid event, no synced_bills row, full stop. The only thing a paid
+  // bill still does for cloud sync is keep the *customer's own* record
+  // (name/phone/email) up to date via the dedicated customer-upsert
+  // endpoint below, so cross-store customer recognition keeps working
+  // without any transaction/financial data ever leaving the device.
   recordBillPaid(billId: number | string) {
     try {
-      const snapshot = this.buildBillSnapshot(billId);
-      if (snapshot) this.enqueueEvent('bill.paid', 'bill', String(billId), snapshot);
+      const db = getDatabase();
+      const bill = db.prepare('SELECT customer_id FROM bills WHERE id = ?').get(billId) as { customer_id: string | null } | undefined;
+      if (bill?.customer_id) this.upsertCloudCustomer(bill.customer_id);
     } catch (err) {
-      log.warn('[CloudSync] bill snapshot failed', (err as Error).message);
+      log.warn('[CloudSync] customer upsert lookup failed', (err as Error).message);
     }
+  }
+
+  /** Pushes one customer's own identity fields to FloAdmin's shared customer directory — see specs/floadmin.md § Customer endpoints. Never includes bill/order/payment data. */
+  private upsertCloudCustomer(customerId: string): void {
+    const db = getDatabase();
+    const customer = db.prepare('SELECT name, phone, email, notes FROM customers WHERE id = ?').get(customerId) as
+      { name: string; phone: string | null; email: string | null; notes: string | null } | undefined;
+    if (!customer?.phone) return;
+    this.signedFetch('/api/customers/upsert', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone: customer.phone,
+        name: customer.name,
+        email: customer.email || null,
+        notes: customer.notes || null,
+      }),
+    }).catch((err) => {
+      log.warn('[CloudSync] customer upsert failed', (err as Error).message);
+    });
   }
 
   recordOrderChanged(orderId: number | string, eventType = 'order.updated') {
@@ -954,23 +978,6 @@ class CloudSyncService {
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
     if (!order) return null;
     return this.decorateOrder(order);
-  }
-
-  private buildBillSnapshot(billId: number | string) {
-    const db = getDatabase();
-    const bill = db.prepare('SELECT * FROM bills WHERE id = ?').get(billId) as any;
-    if (!bill) return null;
-    const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(bill.order_id) as any;
-    const customer = bill.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(bill.customer_id) : null;
-    const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(bill.order_id).map(parseItemJson) as any[]);
-    return {
-      bill: {
-        ...bill,
-        payment_details: safeJsonParse(bill.payment_details),
-      },
-      order: order ? this.decorateOrder(order, items) : null,
-      customer,
-    };
   }
 
   private decorateOrder(order: any, itemsOverride?: any[]) {

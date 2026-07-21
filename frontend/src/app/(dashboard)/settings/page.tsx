@@ -958,9 +958,7 @@ export default function SettingsPage() {
   const [testingCloud, setTestingCloud] = useState(false);
   const [registeringCloud, setRegisteringCloud] = useState(false);
   const [cloudTestResult, setCloudTestResult] = useState<'ok' | 'fail' | null>(null);
-  const [showRegisterConfirm, setShowRegisterConfirm] = useState(false);
   const [showInitializeCloudConfirm, setShowInitializeCloudConfirm] = useState(false);
-  const [registerEmail, setRegisterEmail] = useState('');
 
   const [telemetryEnabled, setTelemetryEnabled] = useState(false);
   const [savingTelemetry, setSavingTelemetry] = useState(false);
@@ -3104,7 +3102,7 @@ export default function SettingsPage() {
                 </div>
                 {cloudStatus.cloud_registration_status !== 'registered' && (
                   <button
-                    onClick={() => { setRegisterEmail(user?.email || ''); setShowRegisterConfirm(true); }}
+                    onClick={() => registerCloud('')}
                     disabled={registeringCloud}
                     className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium shrink-0"
                   >
@@ -3549,37 +3547,6 @@ export default function SettingsPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setTableInfoOpen(false)}>{t('settings.close')}</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Register with FloAdmin — confirmation Dialog */}
-      <Dialog open={showRegisterConfirm} onOpenChange={setShowRegisterConfirm}>
-        <DialogContent className="sm:max-w-md">
-          <DialogHeader>
-            <DialogTitle>{t('settings.registerWithFloadmin')}</DialogTitle>
-            <DialogDescription>
-              {t('settings.registrationRegisterHelp')}
-            </DialogDescription>
-          </DialogHeader>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.email')}</label>
-            <input
-              type="email"
-              value={registerEmail}
-              onChange={(e) => setRegisterEmail(e.target.value)}
-              placeholder={t('settings.registrationEmailPlaceholder')}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none"
-            />
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRegisterConfirm(false)}>{t('settings.cancel')}</Button>
-            <Button
-              disabled={!registerEmail.trim() || registeringCloud}
-              onClick={() => { setShowRegisterConfirm(false); registerCloud(registerEmail.trim()); }}
-            >
-              {registeringCloud ? t('settings.registering') : t('settings.registerWithFloadmin')}
-            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

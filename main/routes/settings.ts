@@ -313,8 +313,12 @@ router.post('/cloud/register', requireRole('owner', 'manager'), async (req: Requ
         cloud_server_url: normalizeCloudServerUrl(req.body.cloud_server_url || DEFAULT_CLOUD_SERVER_URL),
       });
     }
-    const email = typeof req.body?.email === 'string' ? req.body.email.trim() : undefined;
-    const result = await cloudSync.register(email);
+    // Registration never sends an owner email to FloAdmin — the "email the
+    // API key" promise this used to support isn't implemented on the
+    // FloAdmin side (documented gap in specs/floadmin.md § POST /api/pos/
+    // register), and owners never actually log into FloAdmin anyway, so
+    // there's no reason to collect or transmit it here.
+    const result = await cloudSync.register();
     res.json(result);
   } catch (error: any) {
     res.status(502).json({ error: error.message });
