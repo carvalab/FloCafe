@@ -1048,15 +1048,6 @@ export default function SettingsPage() {
       setTelemetryEnabled(false);
     });
 
-    api.get('/mobile/pairing-code').then((res) => {
-      setPairingCode(res.data.pairing_code);
-      setPairingExpiresAt(res.data.expires_at);
-      setPairingUnavailable(false);
-    }).catch(() => {
-      setPairingUnavailable(true);
-    });
-
-    loadPairedDevices();
 
     api.get('/settings/cloud').then((res) => {
       const settings = {
@@ -1076,6 +1067,21 @@ export default function SettingsPage() {
         cloud_last_heartbeat: res.data.cloud_last_heartbeat || null,
         cloud_last_error: res.data.cloud_last_error || null,
       });
+
+      // Mobile pairing requires cloud registration — skip the requests entirely
+      // for unregistered stores to avoid 502 noise in the console.
+      if (res.data.cloud_registration_status === 'registered') {
+        api.get('/mobile/pairing-code').then((pcRes) => {
+          setPairingCode(pcRes.data.pairing_code);
+          setPairingExpiresAt(pcRes.data.expires_at);
+          setPairingUnavailable(false);
+        }).catch(() => {
+          setPairingUnavailable(true);
+        });
+        loadPairedDevices();
+      } else {
+        setPairingUnavailable(true);
+      }
     }).catch(() => {});
 
     api.get('/settings/business').then((res) => {

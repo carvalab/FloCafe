@@ -232,7 +232,7 @@ async function main() {
     // addons column, so it must stay runnable as-is for any real install
     // upgrading from that era — even though a fresh/current install's
     // order_items no longer has the column by the time this test runs
-    // (migration v28 already dropped it during initDatabase() above). To
+    // (migration v30 already dropped it during initDatabase() above). To
     // exercise v25's own backfill logic in isolation, re-add the column it
     // expects, exactly as it would still exist on an old, not-yet-upgraded
     // database.

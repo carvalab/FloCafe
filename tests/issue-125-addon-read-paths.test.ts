@@ -3,7 +3,7 @@
  * truth for selected addons
  *
  * order_items.addons (the old JSON column) has been fully removed —
- * migration v28 backfills any remaining legacy rows and drops the column
+ * migration v30 backfills any remaining legacy rows and drops the column
  * (see tests/order-item-addons.test.ts Test 4, and the migration itself in
  * main/db.ts). This covers every read path that resolves addons via
  * attachEffectiveAddons(), across every route file that touches order

@@ -1097,6 +1097,20 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
   },
   {
     version: 28,
+    name: 'seed_telemetry_settings',
+    up: () => {
+      // Installs that ran first-run setup before telemetry was added (v1.9.4)
+      // never had these rows written — loadInstallDefaults() only runs on a
+      // fresh DB. INSERT OR IGNORE is safe: fresh installs already have them.
+      // All default to off so existing installs stay opted-out.
+      const t = now();
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('anonymous_data_consent', 'false', ?)`).run(t);
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_enabled', 'false', ?)`).run(t);
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics', ?)`).run(t);
+    },
+  },
+  {
+    version: 30,
     name: 'drop_order_items_addons_json_column',
     up: () => {
       // order_item_addons (v25) has been the sole write target for selected
@@ -1130,10 +1144,10 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
         insertOrderItemAddons(db, row.id, parsed, row.created_at || now());
         backfilled++;
       }
-      console.log(`[MIGRATION v28] backfilled ${backfilled} order_item(s) still missing a normalized addons snapshot`);
+      console.log(`[MIGRATION v30] backfilled ${backfilled} order_item(s) still missing a normalized addons snapshot`);
 
       if (unrecoverable.length > 0) {
-        console.warn(`[MIGRATION v28] ${unrecoverable.length} order_item row(s) have unparseable legacy addons JSON (ids: ${unrecoverable.join(', ')}) and could not be migrated. Leaving the addons column in place so this data isn't lost — please review these rows manually.`);
+        console.warn(`[MIGRATION v30] ${unrecoverable.length} order_item row(s) have unparseable legacy addons JSON (ids: ${unrecoverable.join(', ')}) and could not be migrated. Leaving the addons column in place so this data isn't lost — please review these rows manually.`);
         return;
       }
 
@@ -1144,16 +1158,16 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `).get() as { count: number }).count;
 
       if (remaining > 0) {
-        console.warn(`[MIGRATION v28] ${remaining} order_item row(s) still lack a normalized addons snapshot after backfill — skipping the column drop this run.`);
+        console.warn(`[MIGRATION v30] ${remaining} order_item row(s) still lack a normalized addons snapshot after backfill — skipping the column drop this run.`);
         return;
       }
 
       db.exec('ALTER TABLE order_items DROP COLUMN addons');
-      console.log('[MIGRATION v28] Dropped order_items.addons — order_item_addons is now the only place selected addons live.');
+      console.log('[MIGRATION v30] Dropped order_items.addons — order_item_addons is now the only place selected addons live.');
     },
   },
   {
-    version: 29,
+    version: 31,
     name: 'add_customers_tag_counts_column',
     up: () => {
       // tag_counts, like country_code (fixed in v23's guard above), only
@@ -1221,9 +1235,9 @@ function runMigrations(): void {
       syncBackupBeforeMigration(23);
     }
 
-    if (migration.version === 28) {
-      console.log(`[DB] Triggering auto-backup before v28 (drops order_items.addons)...`);
-      syncBackupBeforeMigration(28);
+    if (migration.version === 30) {
+      console.log(`[DB] Triggering auto-backup before v30 (drops order_items.addons)...`);
+      syncBackupBeforeMigration(30);
     }
 
     console.log(`[DB] Applying migration v${migration.version}: ${migration.name}`);
