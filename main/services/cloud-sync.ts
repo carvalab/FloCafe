@@ -10,7 +10,7 @@ import * as crypto from 'crypto';
 import * as os from 'os';
 import log from 'electron-log';
 import { WebSocket, type RawData } from 'ws';
-import { getDatabase, now, parseItemJson, ensureCloudIdentity } from '../db';
+import { getDatabase, now, parseItemJson, attachEffectiveAddons, ensureCloudIdentity } from '../db';
 
 export const DEFAULT_CLOUD_SERVER_URL = 'https://blue.flopos.com/';
 
@@ -962,7 +962,7 @@ class CloudSyncService {
     if (!bill) return null;
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(bill.order_id) as any;
     const customer = bill.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(bill.customer_id) : null;
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(bill.order_id).map(parseItemJson);
+    const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(bill.order_id).map(parseItemJson) as any[]);
     return {
       bill: {
         ...bill,
@@ -975,7 +975,7 @@ class CloudSyncService {
 
   private decorateOrder(order: any, itemsOverride?: any[]) {
     const db = getDatabase();
-    const items = itemsOverride ?? db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson);
+    const items = itemsOverride ?? attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson) as any[]);
     const tableRow = order.table_id ? db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id) as any : null;
     const customer = order.customer_id ? db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) : null;
     const bill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order.id) as any;

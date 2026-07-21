@@ -191,9 +191,8 @@ async function main() {
       assertEqual(rows[1]?.addon_name, 'Lemon Slice', 'second addon name matches (name/price preserved even without a catalog link)');
       assertEqual(rows[1]?.addon_id, null, 'addon with no matching catalog row falls back to NULL addon_id instead of failing the FK');
 
-      const item = db.prepare('SELECT addons FROM order_items WHERE id = ?').get(itemId) as any;
-      const jsonAddons = JSON.parse(item.addons);
-      assertEqual(jsonAddons.length, 2, 'the addons JSON column is still written exactly as before (read-path unaffected)');
+      const columns = db.prepare("PRAGMA table_info(order_items)").all().map((c: any) => c.name);
+      assert(!columns.includes('addons'), 'order_items.addons column no longer exists — order_item_addons is the only store (issue #125)');
     }
 
     // ── Test 2: add-items also dual-writes ────────────────────────────────
@@ -229,8 +228,18 @@ async function main() {
     }
 
     // ── Test 4: v25 migration backfills legacy JSON-only rows ─────────────
+    // v25 already shipped (1.9.4) and its .up() unconditionally assumes an
+    // addons column, so it must stay runnable as-is for any real install
+    // upgrading from that era — even though a fresh/current install's
+    // order_items no longer has the column by the time this test runs
+    // (migration v28 already dropped it during initDatabase() above). To
+    // exercise v25's own backfill logic in isolation, re-add the column it
+    // expects, exactly as it would still exist on an old, not-yet-upgraded
+    // database.
     console.log('\n4. Migration v25 backfills pre-existing order_items.addons JSON');
     {
+      db.exec('ALTER TABLE order_items ADD COLUMN addons TEXT');
+
       db.prepare(
         `INSERT INTO orders (order_number, table_id, type, status, subtotal, total, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
@@ -256,6 +265,10 @@ async function main() {
       const afterRows = db.prepare('SELECT * FROM order_item_addons WHERE order_item_id = ?').all(legacyItemId) as any[];
       assertEqual(afterRows.length, 1, 'backfill created the missing order_item_addons row');
       assertEqual(afterRows[0]?.addon_name, 'Extra Sugar', 'backfilled row has the correct addon name');
+
+      // Clean up the column we re-added for this isolated test, so it
+      // doesn't leak into whatever runs after this test in the same process.
+      db.exec('ALTER TABLE order_items DROP COLUMN addons');
     }
 
   } finally {

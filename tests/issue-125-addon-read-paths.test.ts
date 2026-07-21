@@ -1,16 +1,15 @@
 /**
- * Integration Test: Issue #125 — read paths prefer normalized order_item_addons
+ * Integration Test: Issue #125 — order_item_addons is the sole source of
+ * truth for selected addons
  *
- * Migration v25 (order_item_addons table + backfill) and the order-creation
- * dual-write were already done (see tests/order-item-addons.test.ts). This
- * covers the remaining piece: read paths must PREFER the normalized table
- * over the addons JSON column, falling back to JSON only when no normalized
- * rows exist (legacy pre-dual-write data).
- *
- * "Prefer" is proven, not assumed: after creating an order (which dual-writes
- * both), the JSON column is deliberately overwritten with different data —
- * if a read path still returns the *original* normalized values, it's
- * genuinely reading order_item_addons, not just happening to agree with JSON.
+ * order_items.addons (the old JSON column) has been fully removed —
+ * migration v28 backfills any remaining legacy rows and drops the column
+ * (see tests/order-item-addons.test.ts Test 4, and the migration itself in
+ * main/db.ts). This covers every read path that resolves addons via
+ * attachEffectiveAddons(), across every route file that touches order
+ * items: orders.ts (list/detail), kds.ts, kitchen.ts, order-items.ts — plus
+ * the item-discount route, which used to parse the JSON column directly to
+ * fold addon prices into the discount base.
  *
  * Usage: node tests/run-electron-node-test.cjs tests/issue-125-addon-read-paths.test.ts
  */
@@ -31,15 +30,17 @@ process.env.JWT_SECRET = 'test-secret-issue-125';
 const {
   initTestDb, createApp, startServer,
   seedOwnerUser, seedCategory, seedProduct,
-  api, assert, assertEqual, getResults, closeDatabase, getDatabase,
+  api, assert, assertEqual, getResults, closeDatabase,
 } = require('./helpers/test-setup');
 
 const { orderRoutes } = require('../main/routes/orders');
 const { kdsRoutes } = require('../main/routes/kds');
-const { attachEffectiveAddons, now } = require('../main/db');
+const { kitchenRoutes } = require('../main/routes/kitchen');
+const { orderItemRoutes } = require('../main/routes/order-items');
+const { attachEffectiveAddons } = require('../main/db');
 
 async function main() {
-  console.log('Integration Test: Issue #125 — addon read paths prefer normalized table');
+  console.log('Integration Test: Issue #125 — order_item_addons is the sole source of truth');
   console.log('='.repeat(60));
 
   const db = initTestDb();
@@ -49,100 +50,130 @@ async function main() {
   db.prepare(`INSERT INTO addon_groups (id, name) VALUES ('ag-125', 'Extras')`).run();
   db.prepare(`INSERT INTO addons (id, addon_group_id, name, price, is_active) VALUES ('addon-125-sugar', 'ag-125', 'Extra Sugar', 5, 1)`).run();
 
-  const app = createApp({ '/api/orders': orderRoutes, '/api/kds': kdsRoutes });
+  const app = createApp({
+    '/api/orders': orderRoutes,
+    '/api/kds': kdsRoutes,
+    '/api/kitchen': kitchenRoutes,
+    '/api/order-items': orderItemRoutes,
+  });
   const { baseUrl, server } = await startServer(app);
 
   try {
     let orderId: number;
     let itemId: number;
+    let bareOrderId: number;
+    let bareItemId: number;
 
-    console.log('\n─── Setup: create an order with an addon (dual-writes both places) ───');
+    console.log('\n─── Setup: create an order with an addon, and one without ───');
     {
       const res = await api(baseUrl, '/api/orders', {
         method: 'POST',
         body: { type: 'takeaway', items: [{ product_id: 'prod-125', quantity: 1, addons: [{ id: 'addon-125-sugar', name: 'Extra Sugar', price: 5 }] }] },
         headers: authHeader,
       });
-      assertEqual(res.status, 201, 'order created');
+      assertEqual(res.status, 201, 'order with addon created');
       orderId = res.data.order.id;
       itemId = (db.prepare('SELECT id FROM order_items WHERE order_id = ?').get(orderId) as any).id;
 
-      const normalizedRows = db.prepare('SELECT * FROM order_item_addons WHERE order_item_id = ?').all(itemId);
-      assertEqual(normalizedRows.length, 1, 'setup: normalized row exists (dual-write confirmed)');
+      const bareRes = await api(baseUrl, '/api/orders', {
+        method: 'POST',
+        body: { type: 'takeaway', items: [{ product_id: 'prod-125', quantity: 1 }] },
+        headers: authHeader,
+      });
+      bareOrderId = bareRes.data.order.id;
+      bareItemId = (db.prepare('SELECT id FROM order_items WHERE order_id = ?').get(bareOrderId) as any).id;
+
+      const columns = db.prepare("PRAGMA table_info(order_items)").all().map((c: any) => c.name);
+      assert(!columns.includes('addons'), 'setup: order_items.addons column does not exist');
     }
 
-    console.log('\n─── Scenario A: GET /:id genuinely prefers the normalized table over JSON ───');
+    console.log('\n─── Scenario A: GET /api/orders/:id resolves addons from order_item_addons ───');
     {
-      // Deliberately corrupt the JSON column to something different — if a
-      // read path still shows "Extra Sugar", it can only be reading
-      // order_item_addons, since the JSON now says something else entirely.
-      db.prepare('UPDATE order_items SET addons = ? WHERE id = ?').run(
-        JSON.stringify([{ id: 'stale-json-addon', name: 'STALE JSON VALUE', price: 999 }]),
-        itemId
-      );
-
       const res = await api(baseUrl, `/api/orders/${orderId}`, { headers: authHeader });
       assertEqual(res.status, 200, 'A: order detail fetched');
       const addons = res.data.order.items[0].addons;
-      assertEqual(addons.length, 1, 'A: exactly one addon returned');
-      assertEqual(addons[0].name, 'Extra Sugar', 'A: returns the NORMALIZED addon name, not the corrupted JSON value');
-      assertEqual(addons[0].price, 5, 'A: returns the normalized price, not the corrupted 999');
+      assertEqual(addons.length, 1, 'A: one addon returned');
+      assertEqual(addons[0].name, 'Extra Sugar', 'A: correct addon name');
+      assertEqual(addons[0].price, 5, 'A: correct addon price');
     }
 
-    console.log('\n─── Scenario B: GET / (list) also prefers the normalized table ───');
+    console.log('\n─── Scenario B: GET /api/orders (list) also resolves it ───');
     {
       const res = await api(baseUrl, '/api/orders', { headers: authHeader });
-      assertEqual(res.status, 200, 'B: order list fetched');
       const order = res.data.orders.find((o: any) => o.id === orderId);
       assert(!!order, 'B: order found in list');
-      assertEqual(order.items[0].addons[0].name, 'Extra Sugar', 'B: list view also shows the normalized value, not the stale JSON');
+      assertEqual(order.items[0].addons[0].name, 'Extra Sugar', 'B: list view shows the addon');
     }
 
-    console.log('\n─── Scenario C: KDS GET /orders also prefers the normalized table ───');
+    console.log('\n─── Scenario C: KDS GET /api/kds/orders resolves it ───');
     {
       const res = await api(baseUrl, '/api/kds/orders', { headers: authHeader });
-      assertEqual(res.status, 200, 'C: kds orders fetched');
       const order = res.data.orders.find((o: any) => o.id === orderId);
       assert(!!order, 'C: order found on KDS feed');
       const item = order.items.find((i: any) => i.id === itemId);
-      assert(!!item, 'C: item found on the order');
-      const addons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons;
-      assertEqual(addons[0].name, 'Extra Sugar', 'C: KDS /orders shows the normalized value, not stale JSON');
+      assert(Array.isArray(item.addons), 'C: addons is a real array (kds.ts never called parseItemJson before)');
+      assertEqual(item.addons[0].name, 'Extra Sugar', 'C: KDS /orders shows the addon');
     }
 
-    console.log('\n─── Scenario D: legacy item with no normalized rows falls back to JSON ───');
+    console.log('\n─── Scenario D: GET /api/kitchen/orders resolves it (separate route file) ───');
     {
-      db.prepare(
-        `INSERT INTO orders (order_number, type, status, subtotal, total, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?)`
-      ).run('ORD-125-LEGACY', 'takeaway', 'active', 55, 55, now(), now());
-      const legacyOrderId = (db.prepare('SELECT id FROM orders WHERE order_number = ?').get('ORD-125-LEGACY') as any).id;
-      db.prepare(
-        `INSERT INTO order_items (order_id, product_id, product_name, unit_price, quantity, subtotal, tax_amount, total, addons, status, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-      ).run(legacyOrderId, 'prod-125', 'Tea', 50, 1, 55, 0, 55, JSON.stringify([{ id: 'addon-125-sugar', name: 'Extra Sugar', price: 5 }]), 'active', now(), now());
-      // No order_item_addons rows inserted — simulates pre-dual-write data.
-
-      const res = await api(baseUrl, `/api/orders/${legacyOrderId}`, { headers: authHeader });
-      assertEqual(res.status, 200, 'D: legacy order detail fetched');
-      const addons = res.data.order.items[0].addons;
-      assert(Array.isArray(addons) && addons.length === 1, 'D: falls back to parsing the JSON column');
-      assertEqual(addons[0].name, 'Extra Sugar', 'D: legacy JSON-only addon still shows correctly');
+      const res = await api(baseUrl, '/api/kitchen/orders', { headers: authHeader });
+      assertEqual(res.status, 200, 'D: kitchen orders fetched');
+      const order = res.data.orders.find((o: any) => o.id === orderId);
+      assert(!!order, 'D: order found on the legacy /api/kitchen feed');
+      const item = order.items.find((i: any) => i.id === itemId);
+      assertEqual(item.addons[0].name, 'Extra Sugar', 'D: /api/kitchen/orders shows the addon too');
     }
 
-    console.log('\n─── Scenario E: attachEffectiveAddons unit behavior ───');
+    console.log('\n─── Scenario E: PATCH /api/order-items/:id/status response resolves it ───');
     {
-      const noNormalized = attachEffectiveAddons(db, [{ id: itemId + 99999, addons: JSON.stringify([{ name: 'X' }]) }]);
-      assertEqual(noNormalized[0].addons[0].name, 'X', 'E: item with zero normalized rows parses its JSON string');
+      const res = await api(baseUrl, `/api/order-items/${itemId}/status`, {
+        method: 'PATCH',
+        body: { status: 'preparing' },
+        headers: authHeader,
+      });
+      assertEqual(res.status, 200, 'E: item status updated');
+      const item = res.data.order.items.find((i: any) => i.id === itemId);
+      assertEqual(item.addons[0].name, 'Extra Sugar', 'E: order-items.ts response includes the addon');
+    }
 
-      const nullAddons = attachEffectiveAddons(db, [{ id: itemId + 99998, addons: null }]);
-      assertEqual(nullAddons[0].addons, null, 'E: item with null addons and no normalized rows stays null');
+    console.log('\n─── Scenario F: an item with no selected addons gets an empty array everywhere ───');
+    {
+      const detail = await api(baseUrl, `/api/orders/${bareOrderId}`, { headers: authHeader });
+      assert(Array.isArray(detail.data.order.items[0].addons), 'F: order detail — addons is an array');
+      assertEqual(detail.data.order.items[0].addons.length, 0, 'F: order detail — empty, not null');
 
-      const malformedJson = attachEffectiveAddons(db, [{ id: itemId + 99997, addons: '{not valid json' }]);
-      assertEqual(malformedJson[0].addons, null, 'E: malformed JSON with no normalized rows degrades to null, not a throw');
+      const kitchen = await api(baseUrl, '/api/kitchen/orders', { headers: authHeader });
+      const bareOrder = kitchen.data.orders.find((o: any) => o.id === bareOrderId);
+      assert(Array.isArray(bareOrder.items[0].addons), 'F: kitchen feed — addons is an array');
+      assertEqual(bareOrder.items[0].addons.length, 0, 'F: kitchen feed — empty, not null');
+    }
+
+    console.log('\n─── Scenario G: item-discount calculation includes addon price via order_item_addons ───');
+    {
+      // itemBaseTotal should be unit_price*qty + addon price = 50 + 5 = 55.
+      // A 10% discount on that base is 5.5.
+      const res = await api(baseUrl, `/api/orders/${orderId}/items/${itemId}/discount`, {
+        method: 'PATCH',
+        body: { discount_type: 'percentage', discount_value: 10 },
+        headers: authHeader,
+      });
+      assertEqual(res.status, 200, `G: discount applied (got ${res.status}, ${JSON.stringify(res.data)})`);
+      const updatedItem = db.prepare('SELECT discount_amount FROM order_items WHERE id = ?').get(itemId) as any;
+      assertEqual(updatedItem.discount_amount, 5.5, 'G: discount_amount correctly includes the addon price in its base (50+5=55, 10% = 5.5)');
+    }
+
+    console.log('\n─── Scenario H: attachEffectiveAddons unit behavior (no JSON fallback anymore) ───');
+    {
+      const withAddon = attachEffectiveAddons(db, [{ id: itemId }]);
+      assertEqual(withAddon[0].addons.length, 1, 'H: item with a normalized row returns it');
+
+      const withoutAddon = attachEffectiveAddons(db, [{ id: bareItemId }]);
+      assert(Array.isArray(withoutAddon[0].addons), 'H: item with no normalized rows still gets an array');
+      assertEqual(withoutAddon[0].addons.length, 0, 'H: ...and it is empty, not null');
 
       const empty = attachEffectiveAddons(db, []);
-      assertEqual(empty.length, 0, 'E: empty input array returns empty array without querying');
+      assertEqual(empty.length, 0, 'H: empty input returns empty output without querying');
     }
 
   } finally {

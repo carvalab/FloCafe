@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now, parseItemJson } from '../db';
+import { getDatabase, now, parseItemJson, attachEffectiveAddons } from '../db';
 import { notifyKdsUpdate } from '../services/kds';
 
 const router = Router();
@@ -30,7 +30,7 @@ router.patch('/:id/status', (req: Request, res: Response) => {
       .run(status, now(), req.params.id);
 
     const order = db.prepare('SELECT * FROM orders WHERE id = ?').get(item.order_id) as any;
-    const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(item.order_id).map(parseItemJson);
+    const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(item.order_id).map(parseItemJson) as any[]);
     const tableRow = order.table_id
       ? db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id) as any
       : null;

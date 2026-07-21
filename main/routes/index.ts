@@ -23,7 +23,7 @@ import { databaseRoutes } from './database';
 import { databaseToolsRoutes } from './database-tools';
 import { menuCsvRoutes } from './menu-csv';
 import { heldOrderRoutes } from './held-orders';
-import { getDatabase, now, parseItemJson, withTxn, getSettingValue, getCachedPairingCode, setCachedPairingCode } from '../db';
+import { getDatabase, now, parseItemJson, attachEffectiveAddons, withTxn, getSettingValue, getCachedPairingCode, setCachedPairingCode } from '../db';
 import { cloudSync } from '../services/cloud-sync';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 
@@ -256,7 +256,7 @@ export function registerRoutes(app: Express): void {
         }
 
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as any[]);
         return { updatedOrder, items, orderCancelled };
       });
 
@@ -361,7 +361,7 @@ export function registerRoutes(app: Express): void {
         }
 
         const updatedOrder = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId) as any;
-        const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson);
+        const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(orderId).map(parseItemJson) as any[]);
         return { updatedOrder, items };
       });
 

@@ -189,8 +189,8 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
       const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity,
           subtotal, tax_amount, tax_breakdown, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, addons, special_instructions, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          modifier_selection, special_instructions, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `);
 
       for (const item of items) {
@@ -247,11 +247,8 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
           product.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
-          JSON.stringify(item.addons || null),
           item.special_instructions || null, itemCreatedAt, itemCreatedAt
         );
-        // Also snapshot addons into the normalized table (issue #125).
-        // addons JSON column above remains the read-path source of truth.
         insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
         if (product.track_inventory) {
@@ -343,8 +340,8 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
       const insertItem = db.prepare(`
         INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity,
           subtotal, tax_amount, tax_breakdown, tax_type, discount_amount, total, variant_selection,
-          modifier_selection, addons, special_instructions, status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
+          modifier_selection, special_instructions, status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'pending', ?, ?)
       `);
 
       for (const item of items) {
@@ -389,11 +386,8 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
           product.tax_type, itemDiscount, itemTotal,
           JSON.stringify(item.variant_selection || null),
           JSON.stringify(item.modifier_selection || null),
-          JSON.stringify(item.addons || null),
           item.special_instructions || null, itemCreatedAt, itemCreatedAt
         );
-        // Also snapshot addons into the normalized table (issue #125).
-        // addons JSON column above remains the read-path source of truth.
         insertOrderItemAddons(db, insertItemResult.lastInsertRowid, item.addons, itemCreatedAt);
 
         if (product.track_inventory) {
@@ -904,17 +898,8 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
     }
 
     // Calculate item discount amount (include addon prices)
-    let addonTotal = 0;
-    if (item.addons) {
-      try {
-        const addons = typeof item.addons === 'string' ? JSON.parse(item.addons) : item.addons;
-        if (Array.isArray(addons)) {
-          for (const addon of addons) {
-            addonTotal += (addon.price || 0) * item.quantity;
-          }
-        }
-      } catch { }
-    }
+    const addonRows = db.prepare('SELECT price FROM order_item_addons WHERE order_item_id = ?').all(item.id) as { price: number }[];
+    const addonTotal = addonRows.reduce((sum, addon) => sum + (addon.price || 0) * item.quantity, 0);
     const itemBaseTotal = item.unit_price * item.quantity + addonTotal;
 
     let discountAmount: number;

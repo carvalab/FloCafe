@@ -841,13 +841,6 @@ function addonRow(addon: any, nameLen: number, amtLen: number, cols: number, pre
 }
 
 function parseAddons(addons: any): any[] {
-  if (!addons) return [];
-  if (typeof addons === 'string') {
-    try {
-      const parsed = JSON.parse(addons);
-      return Array.isArray(parsed) ? parsed : [];
-    } catch { return []; }
-  }
   return Array.isArray(addons) ? addons : [];
 }
 

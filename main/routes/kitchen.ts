@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, parseItemJson } from '../db';
+import { getDatabase, parseItemJson, attachEffectiveAddons } from '../db';
 import { requireRole } from '../middleware/security';
 
 const router = Router();
@@ -19,7 +19,7 @@ router.get('/orders', (req: Request, res: Response) => {
     `).all();
 
     const ordersWithItems = orders.map((order: any) => {
-      const items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson);
+      const items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson) as any[]);
       const tableRow = order.table_id
         ? db.prepare('SELECT * FROM tables WHERE id = ?').get(order.table_id) as any
         : null;

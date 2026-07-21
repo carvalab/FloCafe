@@ -6,7 +6,7 @@ import * as http from 'http';
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
-import { getDatabase, parseItemJson } from './db';
+import { getDatabase, parseItemJson, attachEffectiveAddons } from './db';
 import { setupKdsWebSocket } from './services/kds';
 import { getJWTSecret } from './routes/auth';
 import { rateLimit, corsOptions } from './middleware/security';
@@ -206,7 +206,7 @@ export function startKdsServer(): Promise<void> {
         const orders = db.prepare(query).all();
 
         const ordersWithItems = orders.map((order: any) => {
-          let items = db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson);
+          let items = attachEffectiveAddons(db, db.prepare('SELECT * FROM order_items WHERE order_id = ?').all(order.id).map(parseItemJson) as any[]);
 
           // Filter by category if provided
           if (categoryIds.length > 0) {

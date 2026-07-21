@@ -1084,6 +1084,63 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 28,
+    name: 'drop_order_items_addons_json_column',
+    up: () => {
+      // order_item_addons (v25) has been the sole write target for selected
+      // addons for a while now, and every read path was moved onto it in the
+      // same release this migration ships in — order_items.addons is no
+      // longer written or read anywhere in the app. This is the cleanup: one
+      // more backfill sweep (belt-and-braces — v25 already ran, but this
+      // catches anything created between then and the dual-write existing,
+      // or any hand-edited row), then drop the column outright rather than
+      // leave a dead, unused JSON copy sitting in the schema. See issue #125.
+      const columns = getColumns(db, 'order_items');
+      if (!columns.includes('addons')) return; // already dropped (idempotent re-run)
+
+      const rows = db.prepare(`
+        SELECT id, addons, created_at FROM order_items
+        WHERE addons IS NOT NULL AND addons != '' AND addons != 'null'
+          AND NOT EXISTS (SELECT 1 FROM order_item_addons WHERE order_item_id = order_items.id)
+      `).all() as { id: number; addons: string; created_at: string }[];
+
+      let backfilled = 0;
+      const unrecoverable: number[] = [];
+      for (const row of rows) {
+        let parsed: any;
+        try {
+          parsed = JSON.parse(row.addons);
+        } catch {
+          unrecoverable.push(row.id);
+          continue;
+        }
+        if (!Array.isArray(parsed) || parsed.length === 0) continue;
+        insertOrderItemAddons(db, row.id, parsed, row.created_at || now());
+        backfilled++;
+      }
+      console.log(`[MIGRATION v28] backfilled ${backfilled} order_item(s) still missing a normalized addons snapshot`);
+
+      if (unrecoverable.length > 0) {
+        console.warn(`[MIGRATION v28] ${unrecoverable.length} order_item row(s) have unparseable legacy addons JSON (ids: ${unrecoverable.join(', ')}) and could not be migrated. Leaving the addons column in place so this data isn't lost — please review these rows manually.`);
+        return;
+      }
+
+      const remaining = (db.prepare(`
+        SELECT COUNT(*) as count FROM order_items
+        WHERE addons IS NOT NULL AND addons != '' AND addons != 'null'
+          AND NOT EXISTS (SELECT 1 FROM order_item_addons WHERE order_item_id = order_items.id)
+      `).get() as { count: number }).count;
+
+      if (remaining > 0) {
+        console.warn(`[MIGRATION v28] ${remaining} order_item row(s) still lack a normalized addons snapshot after backfill — skipping the column drop this run.`);
+        return;
+      }
+
+      db.exec('ALTER TABLE order_items DROP COLUMN addons');
+      console.log('[MIGRATION v28] Dropped order_items.addons — order_item_addons is now the only place selected addons live.');
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
@@ -1135,6 +1192,11 @@ function runMigrations(): void {
     if (migration.version === 23) {
       console.log(`[DB] Triggering auto-backup before v23...`);
       syncBackupBeforeMigration(23);
+    }
+
+    if (migration.version === 28) {
+      console.log(`[DB] Triggering auto-backup before v28 (drops order_items.addons)...`);
+      syncBackupBeforeMigration(28);
     }
 
     console.log(`[DB] Applying migration v${migration.version}: ${migration.name}`);
@@ -1588,11 +1650,9 @@ export function verifyPin(storedHash: string | null | undefined, inputPin: strin
 
 /**
  * Snapshots an order item's selected addons into the normalized
- * order_item_addons table, in addition to the addons JSON column (which
- * remains the read-path source of truth). See issue #125 — this exists so
- * addon reporting can eventually query indexed SQL instead of parsing JSON
- * per row. Silently skips entries missing a name; malformed input can't
- * corrupt the JSON column since that write is separate and unaffected.
+ * order_item_addons table — the only place selected addons are stored (see
+ * issue #125; order_items.addons was dropped in migration v28). Silently
+ * skips entries missing a name.
  */
 export function insertOrderItemAddons(
   dbInstance: Database.Database,
@@ -1619,7 +1679,9 @@ export function insertOrderItemAddons(
 
 /** Parse JSON string fields on order_item rows returned from SQLite.
  *  Stored as JSON.stringify(value) — may be "null", "[...]", "{...}" etc.
- *  Returns actual JS value (array / object / null) so the frontend can map/iterate. */
+ *  Returns actual JS value (array / object / null) so the frontend can map/iterate.
+ *  addons is not handled here — see attachEffectiveAddons, which resolves it
+ *  from the normalized order_item_addons table instead. */
 export function parseItemJson(item: any): any {
   const tryParse = (val: any) => {
     if (typeof val !== 'string') return val;
@@ -1627,7 +1689,6 @@ export function parseItemJson(item: any): any {
   };
   return {
     ...item,
-    addons: tryParse(item.addons),
     variant_selection: tryParse(item.variant_selection),
     modifier_selection: tryParse(item.modifier_selection),
     tax_breakdown: tryParse(item.tax_breakdown),
@@ -1635,22 +1696,17 @@ export function parseItemJson(item: any): any {
 }
 
 /**
- * Resolves the "effective" selected addons for a batch of order_items rows,
- * preferring the normalized order_item_addons table and falling back to the
- * addons JSON column only for rows that have no normalized snapshot (e.g.
- * orders created before migration v25's dual-write went live). See issue
- * #125 — this is the read-path half of the normalization; the JSON column
- * is still written on every insert and is not being removed.
- *
- * `items` may be raw order_items rows (addons still a JSON string) or
- * already-parsed via parseItemJson (addons already an array/null) — both
- * are handled. Returns new objects; does not mutate the input.
+ * Resolves selected addons for a batch of order_items rows from the
+ * normalized order_item_addons table — the sole source of truth (see issue
+ * #125; order_items.addons was dropped in migration v28). Returns new
+ * objects with `addons` set to an array (empty if the item has none); does
+ * not mutate the input.
  */
-export function attachEffectiveAddons<T extends { id: number; addons: unknown }>(
+export function attachEffectiveAddons<T extends { id: number }>(
   dbInstance: Database.Database,
   items: T[]
-): T[] {
-  if (items.length === 0) return items;
+): (T & { addons: { id: string | null; name: string; price: number; quantity: number }[] })[] {
+  if (items.length === 0) return items as (T & { addons: { id: string | null; name: string; price: number; quantity: number }[] })[];
 
   const ids = items.map((item) => item.id);
   const placeholders = ids.map(() => '?').join(',');
@@ -1665,20 +1721,7 @@ export function attachEffectiveAddons<T extends { id: number; addons: unknown }>
     byItem.set(row.order_item_id, list);
   }
 
-  return items.map((item) => {
-    const normalized = byItem.get(item.id);
-    if (normalized && normalized.length > 0) {
-      return { ...item, addons: normalized };
-    }
-    const raw = item.addons;
-    if (typeof raw !== 'string') return item;
-    try {
-      const parsed = JSON.parse(raw);
-      return { ...item, addons: Array.isArray(parsed) ? parsed : null };
-    } catch {
-      return { ...item, addons: null };
-    }
-  });
+  return items.map((item) => ({ ...item, addons: byItem.get(item.id) || [] }));
 }
 
 /** Parse JSON text columns on bill/order rows returned from SQLite. */
