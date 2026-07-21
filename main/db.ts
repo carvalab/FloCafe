@@ -1249,6 +1249,12 @@ function runMigrations(): void {
   }
 }
 
+// createSchema() only runs for migration v1, i.e. brand-new installs — for
+// any existing install this is a no-op (CREATE TABLE IF NOT EXISTS). If you
+// add a column directly to a CREATE TABLE below, existing installs never
+// get it unless you also add a guarded ALTER migration for it (see v23/v29
+// in MIGRATIONS above for the pattern, and specs/DatabaseMigrations.md).
+// tests/upgrade-path.test.ts exists specifically to catch this class of bug.
 function createSchema(): void {
   db.exec(`
     -- ── Master data tables ──────────────────────────────────────────────

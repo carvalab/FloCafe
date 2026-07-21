@@ -245,7 +245,10 @@ npm run dev
 | `npm run build:win` | Windows NSIS installer |
 | `npm run build:linux` | Linux AppImage + deb |
 | `npm test` | Run all tests |
+| `npm run test:upgrade-path` | Migrate a real old-release DB fixture through today's schema — see [Database migrations](specs/DatabaseMigrations.md) |
 | `npm run clean` | Kill dev servers on ports 3001/3002 |
+
+> **Adding a column to the database?** If it goes into `createSchema()` in `main/db.ts`, it only reaches *new* installs automatically — existing installs need a paired, guarded migration in `MIGRATIONS`, or they'll crash on upgrade the first time something touches that column. This bit us for real (`customers.country_code`/`tag_counts`, fixed in `9c92409`). See [specs/DatabaseMigrations.md](specs/DatabaseMigrations.md) for the rule and the regression test (`npm run test:upgrade-path`) that guards against it.
 
 ### Environment Variables
 
