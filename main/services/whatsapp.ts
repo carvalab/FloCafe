@@ -3,7 +3,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { WASocket as BaileysSocket, WAMessageKey } from '@whiskeysockets/baileys';
 import { pino } from 'pino';
-import { getDatabase, now } from '../db';
+import { parsePhoneNumber } from 'libphonenumber-js';
+import { getDatabase, getSettingValue, now } from '../db';
 
 // Baileys is ESM-only; CommonJS `require()` blows up with ERR_REQUIRE_ESM.
 // Lazy-load via dynamic import() and cache the module reference for the
@@ -130,14 +131,41 @@ export function getStatus(): WhatsAppStatus {
   };
 }
 
-function jidFromE164(phoneE164: string): string {
-  const digits = phoneE164.replace(/\D/g, '');
-  return `${digits}@s.whatsapp.net`;
+/**
+ * Resolve a user-supplied phone number to the JID WhatsApp actually uses for
+ * it. Two-stage validation: libphonenumber-js normalizes the format (no
+ * country-specific code — handles AR `9`, BR `0`, MX `1`, etc. via Google's
+ * metadata), then socket.onWhatsApp() asks WhatsApp's own registry and
+ * returns the canonical JID (which may be a LID or a different form than
+ * the naive phone-JID). Only WhatsApp's server knows whether the number is
+ * registered and which JID format it accepts.
+ *
+ * Returns null when the number is either unparseable or not on WhatsApp —
+ * caller maps both to the `not_on_whatsapp` SendResult reason. Falls back
+ * to the naive phone-JID if onWhatsApp throws (network blip); better to
+ * attempt the send than block the cashier behind a transient error.
+ */
+async function resolveJid(phoneE164: string, sock: BaileysSocket): Promise<string | null> {
+  let normalized: string;
+  try {
+    const pn = parsePhoneNumber(phoneE164);
+    if (!pn?.isValid()) return null;
+    normalized = pn.number;
+  } catch {
+    return null;
+  }
+  const naive = `${normalized.replace('+', '')}@s.whatsapp.net`;
+  try {
+    const results = (await sock.onWhatsApp(naive)) ?? [];
+    return results[0]?.exists ? results[0].jid : null;
+  } catch {
+    return naive;
+  }
 }
 
 /** Strip the device id and domain from a Baileys JID, leaving just the user. */
 function userFromJid(jid: string): string {
-  return userFromJid(jid);
+  return jid.split('@')[0].split(':')[0];
 }
 
 /**
@@ -433,8 +461,15 @@ function attachSocketHandlers(socket: BaileysSocket): void {
   });
 
   socket.ev.on('messages.upsert', async ({ messages }: { messages: any[] }) => {
+    const filterGroups = getSettingValue('whatsapp_filter_groups') === 'true';
     for (const msg of messages) {
-      if (!msg.key?.fromMe) await persistIncoming(msg, socket);
+      if (msg.key?.fromMe) continue;
+      // No one asks Flo to deliver a paid bill into a group chat. When the
+      // operator enables the group filter, drop inbound @g.us messages
+      // before we persist them — the inbox stays clean and we never
+      // process (translateJid / store) what we don't intend to handle.
+      if (filterGroups && msg.key?.remoteJid?.endsWith('@g.us')) continue;
+      await persistIncoming(msg, socket);
     }
   });
 
@@ -447,9 +482,14 @@ function attachSocketHandlers(socket: BaileysSocket): void {
       const status = u.update?.status;
       if (status === undefined) continue;
       let field: 'sent_at' | 'delivered_at' | 'read_at' | null = null;
-      if (status === 1) field = 'sent_at';
-      else if (status === 2) field = 'delivered_at';
-      else if (status === 3) field = 'read_at';
+      // Baileys WAProto: PENDING=1, SERVER_ACK=2, DELIVERED=3, READ=4, PLAYED=5.
+      // SERVER_ACK is the first server-side confirmation that WhatsApp
+      // accepted the payload — that's the truthful 'sent' mark. Earlier
+      // versions mapped 1→sent which silently promoted rows to 'delivered'
+      // on the real confirmation and never marked anything 'sent' at all.
+      if (status === 2) field = 'sent_at';
+      else if (status === 3) field = 'delivered_at';
+      else if (status === 4) field = 'read_at';
       if (field) {
         updateMessageRow(stored.id, { status: field.replace('_at', ''), timestamp_field: field });
       }
@@ -539,10 +579,15 @@ export async function enable(userId: string): Promise<{ ok: boolean; error?: str
   writeSetting('whatsapp_disclosure_version_acknowledged', '1');
   state.lastError = null;
   state.lastErrorReason = null;
-  // Lazy: don't load Baileys here. The socket starts when the user actually
-  // connects (POST /connect -> connectWithQr / connectWithPairingCode).
-  // Loading the ESM-only Baileys on enable would also break unit tests that
-  // only exercise the early gates without a real socket.
+  // Restore from creds.json if present — re-pairing while creds are still
+  // valid is a WhatsApp ban risk. 401 from the server falls through to the
+  // QR flow as usual.
+  const credsPath = path.join(getAuthDir(), 'creds.json');
+  if (fs.existsSync(credsPath)) {
+    void startSocket().catch((err) => {
+      console.warn('[WhatsApp] Auto-restore on enable failed:', err?.message ?? err);
+    });
+  }
   return { ok: true };
 }
 
@@ -625,6 +670,7 @@ export interface SendResult {
     | 'rate_limited'
     | 'cooldown'
     | 'not_connected'
+    | 'not_on_whatsapp'
     | 'content_blocked'
     | 'send_failed';
 }
@@ -634,6 +680,11 @@ export async function sendMessage(req: QueuedSend): Promise<SendResult> {
   if (!req.phoneE164) return { ok: false, error: 'Phone number required.', reason: 'no_phone' };
   if (state.state !== 'connected' || !state.socket) {
     return { ok: false, error: 'Flo is not connected to WhatsApp.', reason: 'not_connected' };
+  }
+  const socket = state.socket;
+  const jid = await resolveJid(req.phoneE164, socket);
+  if (!jid) {
+    return { ok: false, error: 'This phone is not registered on WhatsApp.', reason: 'not_on_whatsapp' };
   }
   if (isInCooldown()) {
     return { ok: false, error: 'Send is temporarily paused.', reason: 'cooldown' };
@@ -690,8 +741,6 @@ export async function sendMessage(req: QueuedSend): Promise<SendResult> {
     return { ok: false, error: err.message ?? 'Failed to record message.', reason: 'send_failed' };
   }
 
-  const jid = jidFromE164(req.phoneE164);
-  const socket = state.socket;
   try {
     if (resolvedKind === 'manual_reply') {
       try {
@@ -705,10 +754,14 @@ export async function sendMessage(req: QueuedSend): Promise<SendResult> {
     await new Promise((r) => setTimeout(r, randomDelayMs(req.body)));
     await socket.sendPresenceUpdate('paused', jid).catch(() => {});
     const sent = await socket.sendMessage(jid, { text: req.body });
+    // sendMessage() only resolves when Baileys hands the payload to its
+    // local queue — not when WhatsApp's servers ACK it. Don't claim 'sent'
+    // yet; the messages.update handler sets status='sent' + sent_at when
+    // the server returns status=2 (SERVER_ACK). Without this guard, a
+    // silently-dropped message (bad JID, network blip, server reject)
+    // would mark the row 'sent' while the recipient never receives it.
     updateMessageRow(messageId, {
-      status: 'sent',
       external_message_id: sent?.key?.id ?? null,
-      timestamp_field: 'sent_at',
     });
     // Cache the message body so Baileys's getMessage() can serve re-encrypt
     // requests for it (common around session restarts). Without this,
@@ -829,6 +882,22 @@ export function removeFromBlocklist(phoneE164: string): boolean {
 }
 
 export function initFromDb(): void {
+  // creds.json is the source of truth for the paired phone; the DB setting
+  // is just a fallback when creds.json is missing (fresh install) or corrupt.
+  const credsPath = path.join(getAuthDir(), 'creds.json');
+  if (fs.existsSync(credsPath)) {
+    try {
+      const creds = JSON.parse(fs.readFileSync(credsPath, 'utf8')) as { me?: { id?: string } };
+      if (creds.me?.id) {
+        state.connectedPhone = '+' + userFromJid(creds.me.id);
+      }
+    } catch {
+      // corrupt creds — fall through to DB fallback
+    }
+  }
+  if (!state.connectedPhone) {
+    state.connectedPhone = getSettingValue('whatsapp_connected_phone') || null;
+  }
   const v = getDatabase().prepare("SELECT value FROM settings WHERE key = 'whatsapp_enabled'").get() as { value: string | null } | undefined;
   state.enabled = v?.value === 'true';
   if (state.enabled) {

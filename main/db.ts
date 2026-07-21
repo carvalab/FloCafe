@@ -26,6 +26,16 @@ export function getSettingValue(key: string): string | null {
   return row?.value ?? null;
 }
 
+export function upsertSettings(entries: Record<string, string | undefined | null>): void {
+  const stmt = db.prepare(`
+    INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
+    ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+  `);
+  for (const [key, val] of Object.entries(entries)) {
+    if (val !== undefined) stmt.run(key, val ?? '', now());
+  }
+}
+
 function upsertSetting(key: string, value: string): void {
   db.prepare(`
     INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
@@ -1678,6 +1688,9 @@ function seedWhatsAppDefaults(): void {
   insertSettingIfMissing('whatsapp_disclosure_version_acknowledged', '');
   insertSettingIfMissing('whatsapp_connected_phone', '');
   insertSettingIfMissing('whatsapp_disclosure_version', '1');
+  // On by default — no one asks Flo to send a paid bill into a group chat.
+  // Operators who do want group processing have to opt in explicitly.
+  insertSettingIfMissing('whatsapp_filter_groups', 'true');
 }
 
 function seedInstallDefaults(): void {

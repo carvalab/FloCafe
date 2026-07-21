@@ -9,12 +9,14 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
-  Loader2, AlertTriangle, CheckCircle2, XCircle, QrCode, Ban, Send, Inbox, Copy,
+  Loader2, AlertTriangle, CheckCircle2, XCircle, QrCode, Ban, Send, Inbox, Copy, KeyRound, Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useAuthStore } from '@/store/auth';
 import { useI18n } from '@/hooks/useI18n';
+import { useConfirm } from '@/hooks/use-confirm';
 import { formatDate, formatTime } from '@/lib/printer/format-date';
+import { dialCodeFor } from '@/lib/phone';
 
 interface WhatsAppStatus {
   enabled: boolean;
@@ -143,6 +145,7 @@ function translateLastError(
 
 export default function WhatsAppPage() {
   const { t, language } = useI18n();
+  const { confirm, ConfirmDialog } = useConfirm();
   const { currentTenant } = useAuthStore();
   const role = currentTenant?.role ?? '';
   const isAdmin = role === 'owner' || role === 'manager';
@@ -150,6 +153,9 @@ export default function WhatsAppPage() {
   const locale = language === 'es' ? 'es-AR' : 'en-US';
   const fmt = (iso: string | null | undefined) => formatDate(iso ?? undefined, locale);
   const fmtClock = (iso: string | null | undefined) => formatTime(iso ?? undefined, locale);
+
+  const tenantCountry = currentTenant?.country || '';
+  const dialCode = dialCodeFor(tenantCountry) || '';
 
   const copyToClipboard = async (value: string, label: string) => {
     try {
@@ -163,7 +169,7 @@ export default function WhatsAppPage() {
   const [status, setStatus] = useState<WhatsAppStatus | null>(null);
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
-  const [pairingPhone, setPairingPhone] = useState('');
+  const [pairingPhone, setPairingPhone] = useState(dialCode);
   const [ackRisk, setAckRisk] = useState(false);
 
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
@@ -172,28 +178,32 @@ export default function WhatsAppPage() {
   const [blockPhone, setBlockPhone] = useState('');
   const [blockReason, setBlockReason] = useState('');
 
-  const [tab, setTab] = useState<string>('connection');
-  const [tabInitialized, setTabInitialized] = useState(false);
+  // The user's chosen tab, or null if they have never clicked one. Persisted
+  // in localStorage so the choice survives remounts — previously this was two
+  // parallel useState + two localStorage keys (`tab` + `tabInitialized`) and
+  // a remount could reset the flag to false and bounce the user from Inbox
+  // back to Sent. Collapsed to one nullable string: null = never picked =
+  // fall through to the connection-state default below.
+  const [userTab, setUserTab] = useState<string | null>(() => {
+    if (typeof window === 'undefined') return null;
+    return window.localStorage.getItem('whatsapp.activeTab');
+  });
+  const [filterGroups, setFilterGroupsState] = useState(true);
 
   const refreshStatus = useCallback(async () => {
     try {
       const { data } = await api.get('/whatsapp/status');
       setStatus(data);
+      if (typeof data?.filterGroups === 'boolean') setFilterGroupsState(data.filterGroups);
     } catch {
       // ignore
     }
   }, []);
 
-  // First time we know the connection state, pick the default tab. After
-  // that, the user owns the tab — polling must not kick them off the QR.
-  const effectiveTab = tabInitialized
-    ? tab
-    : status?.state === 'connected'
-      ? 'sent'
-      : 'connection';
+  const effectiveTab = userTab ?? (status?.state === 'connected' ? 'sent' : 'connection');
   const onTabChange = (v: string) => {
-    setTab(v);
-    setTabInitialized(true);
+    setUserTab(v);
+    if (typeof window !== 'undefined') window.localStorage.setItem('whatsapp.activeTab', v);
   };
 
   const refreshQr = useCallback(async () => {
@@ -300,7 +310,11 @@ export default function WhatsAppPage() {
   };
 
   const disableFeature = async () => {
-    if (!window.confirm(t('whatsapp.active.disableConfirm'))) return;
+    if (!await confirm(t('whatsapp.active.disableConfirm'), {
+      title: t('whatsapp.active.disableTitle'),
+      confirmLabel: t('whatsapp.active.disableCta'),
+      destructive: true,
+    })) return;
     try {
       await api.post('/whatsapp/disable');
       toast.success(t('whatsapp.active.disabledSuccess'));
@@ -331,7 +345,11 @@ export default function WhatsAppPage() {
   };
 
   const disconnect = async () => {
-    if (!window.confirm(t('whatsapp.connect.disconnectConfirm'))) return;
+    if (!await confirm(t('whatsapp.connect.disconnectConfirm'), {
+      title: t('whatsapp.connect.disconnectTitle'),
+      confirmLabel: t('whatsapp.connect.disconnectCta'),
+      destructive: true,
+    })) return;
     try {
       await api.post('/whatsapp/disconnect');
       toast.success(t('whatsapp.connect.disconnectedSuccess'));
@@ -384,7 +402,9 @@ export default function WhatsAppPage() {
   };
 
   return (
-    <div className="space-y-4 p-2">
+    <>
+      {ConfirmDialog}
+      <div className="space-y-4 p-2">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">{t('nav.whatsapp')}</h1>
         {status && (
@@ -440,14 +460,52 @@ export default function WhatsAppPage() {
                   </CardHeader>
                   <CardContent className="space-y-4">
                     {status.state === 'disconnected' && (
-                      <div className="flex flex-wrap gap-2">
-                        <Button onClick={connectQr}>{t('whatsapp.connect.startQr')}</Button>
-                        <div className="flex gap-2 items-end">
-                          <div>
-                            <label className="text-xs text-muted-foreground">{t('whatsapp.connect.pairingPhoneLabel')}</label>
-                            <Input value={pairingPhone} onChange={(e) => setPairingPhone(e.target.value)} placeholder={t('whatsapp.connect.pairingPhonePlaceholder')} />
+                      <div className="grid gap-4 md:grid-cols-2">
+                        <div className="rounded-lg border bg-card p-4 flex flex-col gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center size-9 rounded-md bg-brand-light text-brand">
+                              <QrCode className="size-5" />
+                            </div>
+                            <h3 className="font-semibold text-sm">{t('whatsapp.connect.qrMethodTitle')}</h3>
                           </div>
-                          <Button onClick={connectPairing}>{t('whatsapp.connect.usePairing')}</Button>
+                          <p className="text-sm text-muted-foreground">{t('whatsapp.connect.qrMethodDescription')}</p>
+                          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                            <div className="flex items-start gap-1.5">
+                              <Info className="size-3.5 mt-0.5 shrink-0" />
+                              <span>{t('whatsapp.connect.qrMethodWhere')}</span>
+                            </div>
+                          </div>
+                          <Button onClick={connectQr} className="mt-auto w-full">
+                            <QrCode className="size-4" /> {t('whatsapp.connect.startQr')}
+                          </Button>
+                        </div>
+
+                        <div className="rounded-lg border bg-card p-4 flex flex-col gap-3">
+                          <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center size-9 rounded-md bg-brand-light text-brand">
+                              <KeyRound className="size-5" />
+                            </div>
+                            <h3 className="font-semibold text-sm">{t('whatsapp.connect.pairingMethodTitle')}</h3>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{t('whatsapp.connect.pairingMethodDescription')}</p>
+                          <div className="rounded-md bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
+                            <div className="flex items-start gap-1.5">
+                              <Info className="size-3.5 mt-0.5 shrink-0" />
+                              <span>{t('whatsapp.connect.pairingMethodWhere')}</span>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            <label className="text-xs text-muted-foreground">{t('whatsapp.connect.pairingPhoneLabel')}</label>
+                            <Input
+                              value={pairingPhone}
+                              onChange={(e) => setPairingPhone(e.target.value)}
+                              placeholder={t('whatsapp.connect.pairingPhonePlaceholder', { dialCode: dialCode || '+CC' })}
+                              inputMode="tel"
+                            />
+                          </div>
+                          <Button onClick={connectPairing} variant="outline" className="w-full">
+                            <KeyRound className="size-4" /> {t('whatsapp.connect.usePairing')}
+                          </Button>
                         </div>
                       </div>
                     )}
@@ -494,6 +552,22 @@ export default function WhatsAppPage() {
                         <div className="flex flex-wrap gap-2">
                           <Button variant="outline" onClick={disconnect}>{t('whatsapp.connect.disconnectCta')}</Button>
                         </div>
+                        <label className="flex items-start gap-3 text-sm cursor-pointer pt-2 border-t">
+                          <input
+                            type="checkbox"
+                            className="mt-1 size-4 accent-primary"
+                            checked={filterGroups}
+                            onChange={(e) => {
+                              const next = e.target.checked;
+                              setFilterGroupsState(next);
+                              void api.post('/whatsapp/settings', { filterGroups: next })
+                                .catch(() => { setFilterGroupsState(!next); toast.error(t('common.saveFailed')); });
+                            }}
+                          />
+                          <span className="text-muted-foreground">
+                            {t('whatsapp.connect.filterGroupsLabel')}
+                          </span>
+                        </label>
                       </div>
                     )}
 
@@ -512,7 +586,7 @@ export default function WhatsAppPage() {
                     )}
 
                     <div className="pt-2 border-t flex justify-end">
-                      <Button variant="ghost" size="sm" onClick={disableFeature}>{t('whatsapp.active.disableCta')}</Button>
+                      <Button variant="destructive" size="sm" onClick={disableFeature}>{t('whatsapp.active.disableCta')}</Button>
                     </div>
                   </CardContent>
                 </Card>
@@ -543,7 +617,12 @@ export default function WhatsAppPage() {
                     <div className="flex flex-wrap gap-2 items-end">
                       <div className="flex-1 min-w-[180px]">
                         <label className="text-xs text-gray-500">{t('whatsapp.blocklist.phoneLabel')}</label>
-                        <Input value={blockPhone} onChange={(e) => setBlockPhone(e.target.value)} placeholder={t('whatsapp.blocklist.phonePlaceholder')} />
+                        <Input
+                          value={blockPhone}
+                          onChange={(e) => setBlockPhone(e.target.value)}
+                          placeholder={t('whatsapp.blocklist.phonePlaceholder', { dialCode: dialCode || '+CC' })}
+                          inputMode="tel"
+                        />
                       </div>
                       <div className="flex-1 min-w-[180px]">
                         <label className="text-xs text-gray-500">{t('whatsapp.blocklist.reasonLabel')}</label>
@@ -714,6 +793,7 @@ export default function WhatsAppPage() {
           <XCircle className="size-4" /> {translateLastError(status.lastErrorReason, status.lastError, t)}
         </div>
       )}
-    </div>
+      </div>
+    </>
   );
 }

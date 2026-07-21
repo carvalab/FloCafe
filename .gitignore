@@ -16,6 +16,8 @@ backups/
 docs/superpowers/
 .superpowers
 .gstack
+# WhatsApp linked-device credentials (Baileys auth state) — never commit
+whatsapp-auth/
 
 # Local pentest reports/PoCs — never commit
 vuln/

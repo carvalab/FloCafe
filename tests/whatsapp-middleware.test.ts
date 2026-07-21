@@ -74,6 +74,21 @@ async function main(): Promise<void> {
   assert(r2.ok === false, 'no_phone: sendMessage returns ok=false');
   assert(r2.reason === 'no_phone', `no_phone: reason === 'no_phone' (got ${r2.reason})`);
 
+  // --- Gate 2b: malformed phone (libphonenumber-js rejects) ---
+  // Lives behind the connection check in sendMessage(), but we can verify
+  // the validation building block (parsePhoneNumber) directly. If the
+  // integration check ever drifts, this catches it without needing a real
+  // Baileys socket. parsePhoneNumber throws on garbage input, returns a
+  // PhoneNumber on valid E.164 — same behavior our resolveJid catches.
+  const { parsePhoneNumber } = require('libphonenumber-js');
+  const validAr = parsePhoneNumber('+5491155671028');
+  const validUs = parsePhoneNumber('+12133734253');
+  let bogus: unknown = 'sentinel';
+  try { parsePhoneNumber('abc'); } catch { bogus = undefined; }
+  assert(!!validAr && validAr.isValid(), `parsePhoneNumber accepts '+5491155671028' (got ${validAr})`);
+  assert(!!validUs && validUs.isValid(), `parsePhoneNumber accepts '+12133734253' (got ${validUs})`);
+  assert(bogus === undefined, `parsePhoneNumber rejects 'abc' (got ${bogus})`);
+
   // --- Gate 3: blocklist — add a number, then attempt to send ---
   whatsapp.addToBlocklist('+15555550199', 'Test block', 'test-user');
   // The send will short-circuit on not_connected before reaching the

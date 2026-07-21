@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { requireRole } from '../middleware/security';
 import { asyncHandler } from '../middleware/async-handler';
-import { getDatabase } from '../db';
+import { getDatabase, getSettingValue, upsertSettings } from '../db';
 import * as whatsapp from '../services/whatsapp';
 import * as QRCode from 'qrcode';
 
@@ -10,7 +10,24 @@ const router = Router();
 router.get('/status', requireRole('owner', 'manager', 'cashier'), (_req: Request, res: Response) => {
   const s = whatsapp.getStatus();
   // Don't expose the raw QR string via /status; the QR endpoint returns a rendered image.
-  res.json({ ...s, qr: undefined, pairingCode: undefined });
+  res.json({
+    ...s,
+    qr: undefined,
+    pairingCode: undefined,
+    // Default ON when the row hasn't been seeded yet (existing installs that
+    // were already at v29 before whatsapp_filter_groups was added).
+    filterGroups: getSettingValue('whatsapp_filter_groups') !== 'false',
+  });
+});
+
+router.post('/settings', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  const next = (req.body as { filterGroups?: boolean } | undefined)?.filterGroups;
+  if (typeof next !== 'boolean') {
+    res.status(400).json({ error: 'filterGroups must be a boolean' });
+    return;
+  }
+  upsertSettings({ whatsapp_filter_groups: next ? 'true' : 'false' });
+  res.json({ ok: true, filterGroups: next });
 });
 
 router.get('/qr', requireRole('owner', 'manager'), asyncHandler(async (_req, res) => {
