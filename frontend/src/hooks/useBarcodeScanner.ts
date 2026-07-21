@@ -34,7 +34,13 @@ export function useBarcodeScanner(onScan: (code: string) => void, enabled: boole
       if (e.key === 'Enter') {
         const code = bufferRef.current;
         bufferRef.current = '';
-        if (code.length >= MIN_CODE_LENGTH) {
+        // A focused text field handles its own Enter (e.g. a search/barcode
+        // box that does an exact-match lookup regardless of typing speed) —
+        // defer to it instead of also firing here, or a real scanner typing
+        // into a focused field would trigger both.
+        const target = e.target as HTMLElement | null;
+        const isTextInput = target?.tagName === 'INPUT' || target?.tagName === 'TEXTAREA';
+        if (!isTextInput && code.length >= MIN_CODE_LENGTH) {
           onScanRef.current(code);
         }
         return;
