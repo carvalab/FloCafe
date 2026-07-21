@@ -1,6 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, now } from '../db';
 import { cloudSync, DEFAULT_CLOUD_SERVER_URL, normalizeCloudServerUrl } from '../services/cloud-sync';
+import { googleDrive } from '../services/google-drive';
 import { requireRole } from '../middleware/security';
 
 const router = Router();
@@ -324,6 +325,55 @@ router.post('/cloud/test', requireRole('owner', 'manager'), async (_req: Request
   try {
     const result = await cloudSync.testConnection();
     res.json(result);
+  } catch (error: any) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+// ─── Google Drive backups (must come BEFORE /:key wildcard) ─────────────────
+// See #129. Off by default — connect/disconnect/backup-now are the only
+// actions that ever touch Google's API, and only owner can trigger them
+// (mirrors how database.ts gates the raw backup/restore actions).
+
+router.get('/google-drive', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    res.json(googleDrive.getStatus());
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.put('/google-drive', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+  try {
+    const { frequency, retention_count } = req.body;
+    res.json(googleDrive.updatePreferences({ frequency, retention_count }));
+  } catch (error: any) {
+    res.status(400).json({ error: error.message });
+  }
+});
+
+router.post('/google-drive/connect', requireRole('owner'), async (_req: Request, res: Response) => {
+  try {
+    const status = await googleDrive.connect();
+    res.json(status);
+  } catch (error: any) {
+    res.status(502).json({ error: error.message });
+  }
+});
+
+router.post('/google-drive/disconnect', requireRole('owner'), async (_req: Request, res: Response) => {
+  try {
+    const status = await googleDrive.disconnect();
+    res.json(status);
+  } catch (error: any) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+router.post('/google-drive/backup-now', requireRole('owner'), async (_req: Request, res: Response) => {
+  try {
+    const status = await googleDrive.backupNow();
+    res.json(status);
   } catch (error: any) {
     res.status(502).json({ error: error.message });
   }
