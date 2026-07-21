@@ -853,7 +853,12 @@ export default function SettingsPage() {
   // Mobile App Pairing
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingExpiresAt, setPairingExpiresAt] = useState<string | null>(null);
-  const [pairingUnavailable, setPairingUnavailable] = useState(false);
+  // Defaults to true (not false) so the "Generate Pairing Code" button can't
+  // render — and be clicked — before the /settings/cloud fetch below has told
+  // us whether this store is actually registered. Clicking it in that window
+  // used to hit the backend while registration status was still unknown and
+  // fail with a generic error even on stores that end up fully registered.
+  const [pairingUnavailable, setPairingUnavailable] = useState(true);
   const [rotatingCode, setRotatingCode] = useState(false);
   const [copiedCode, setCopiedCode] = useState(false);
   const [pairedDevices, setPairedDevices] = useState<Array<{
@@ -1483,8 +1488,12 @@ export default function SettingsPage() {
       setPairingUnavailable(false);
       toast.success(t('settings.pairingCodeRotated'));
       loadPairedDevices();
-    } catch {
-      toast.error(t('settings.pairingCodeFailed'));
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      // Surface the backend's actual reason (e.g. "this POS hasn't been
+      // claimed in FloAdmin yet") instead of a one-size-fits-all message —
+      // "not registered" and "FloAdmin unreachable" need different next steps.
+      toast.error(error.response?.data?.error || t('settings.pairingCodeFailed'));
     } finally {
       setRotatingCode(false);
     }
@@ -1504,7 +1513,7 @@ export default function SettingsPage() {
 
   const copyPairingCode = () => {
     if (!pairingCode) return;
-    navigator.clipboard.writeText(pairingCode).then(() => {
+    navigator.clipboard.writeText(pairingCode.toUpperCase()).then(() => {
       setCopiedCode(true);
       setTimeout(() => setCopiedCode(false), 2000);
     });
@@ -2301,7 +2310,7 @@ export default function SettingsPage() {
                   <div className="flex items-center gap-3">
                     <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
                       <span className="font-mono text-2xl font-bold tracking-[0.3em] text-gray-900">
-                        {pairingCode}
+                        {pairingCode.toUpperCase()}
                       </span>
                     </div>
                     <button

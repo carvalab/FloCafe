@@ -27,6 +27,27 @@ import { getDatabase, now, parseItemJson, attachEffectiveAddons, withTxn, getSet
 import { cloudSync } from '../services/cloud-sync';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 
+// "Cloud POS is not registered" (thrown synchronously by cloud-sync.ts's
+// signedFetch, no network call even attempted) means this store was never
+// claimed in FloAdmin — a distinct, actionable state from a genuine
+// connectivity failure reaching FloAdmin, and the two need different status
+// codes/messages so the frontend (and anyone reading server logs) doesn't
+// mistake "not claimed yet" for "FloAdmin is down".
+function isUnregisteredCloudError(error: any): boolean {
+  return typeof error?.message === 'string' && error.message.includes('is not registered');
+}
+
+function mobilePairingErrorStatus(error: any): number {
+  return isUnregisteredCloudError(error) ? 409 : 502;
+}
+
+function mobilePairingErrorMessage(error: any): string {
+  if (isUnregisteredCloudError(error)) {
+    return 'This POS hasn’t been claimed in FloAdmin yet. Complete registration in FloAdmin, then try generating a pairing code again.';
+  }
+  return error?.message || 'Could not reach FloAdmin';
+}
+
 export function registerRoutes(app: Express): void {
   // Auth routes
   app.use('/api/auth', authRoutes);
@@ -74,7 +95,7 @@ export function registerRoutes(app: Express): void {
       setCachedPairingCode(code, expires_at);
       res.json({ pairing_code: code, expires_at });
     } catch (error: any) {
-      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+      res.status(mobilePairingErrorStatus(error)).json({ error: mobilePairingErrorMessage(error) });
     }
   });
 
@@ -85,7 +106,7 @@ export function registerRoutes(app: Express): void {
       setCachedPairingCode(code, expires_at);
       res.json({ pairing_code: code, expires_at });
     } catch (error: any) {
-      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+      res.status(mobilePairingErrorStatus(error)).json({ error: mobilePairingErrorMessage(error) });
     }
   });
 
