@@ -1084,6 +1084,20 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       `);
     },
   },
+  {
+    version: 28,
+    name: 'seed_telemetry_settings',
+    up: () => {
+      // Installs that ran first-run setup before telemetry was added (v1.9.4)
+      // never had these rows written — loadInstallDefaults() only runs on a
+      // fresh DB. INSERT OR IGNORE is safe: fresh installs already have them.
+      // All default to off so existing installs stay opted-out.
+      const t = now();
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('anonymous_data_consent', 'false', ?)`).run(t);
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_enabled', 'false', ?)`).run(t);
+      db.prepare(`INSERT OR IGNORE INTO settings (key, value, updated_at) VALUES ('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics', ?)`).run(t);
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
