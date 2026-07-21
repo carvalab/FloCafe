@@ -887,6 +887,17 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     version: 23,
     name: 'normalize_customer_phones',
     up: () => {
+      // country_code only exists in createSchema()'s CREATE TABLE, which is
+      // a no-op (IF NOT EXISTS) for any install whose customers table
+      // predates that column being added — this migration is the first
+      // thing to actually read/write it, and was crashing with "no such
+      // column: country_code" on every such upgrade (reported on a fresh
+      // Windows install of v1.9.7). Guard it here instead of assuming it's
+      // there.
+      if (!getColumns(db, 'customers').includes('country_code')) {
+        db.exec(`ALTER TABLE customers ADD COLUMN country_code TEXT DEFAULT '+91'`);
+      }
+
       const tenantCountryRow = db.prepare("SELECT value FROM settings WHERE key = 'country'").get() as any;
       const tenantCountry = tenantCountryRow?.value || 'IN';
       
@@ -1139,6 +1150,22 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
 
       db.exec('ALTER TABLE order_items DROP COLUMN addons');
       console.log('[MIGRATION v28] Dropped order_items.addons — order_item_addons is now the only place selected addons live.');
+    },
+  },
+  {
+    version: 29,
+    name: 'add_customers_tag_counts_column',
+    up: () => {
+      // tag_counts, like country_code (fixed in v23's guard above), only
+      // ever existed in createSchema()'s CREATE TABLE — no migration added
+      // it for installs whose customers table predates it. Unlike
+      // country_code this isn't just a startup-migration crash: it's read
+      // and written on every order for a returning customer
+      // (routes/orders.ts), so any affected install would crash there
+      // instead, mid-use rather than at launch.
+      if (!getColumns(db, 'customers').includes('tag_counts')) {
+        db.exec(`ALTER TABLE customers ADD COLUMN tag_counts TEXT DEFAULT NULL`);
+      }
     },
   },
 ];
