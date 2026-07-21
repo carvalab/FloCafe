@@ -1,7 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { getDatabase, generateBillNumber, now, withTxn, getSettingValue, parseRowJson, verifyPin } from '../db';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
-import { cloudSync } from '../services/cloud-sync';
 import { printReceipt } from '../services/receipt';
 import { requireRole } from '../middleware/security';
 
@@ -395,9 +394,6 @@ router.post('/:id/payment', requireRole('owner', 'manager', 'cashier'), (req: Re
     const billStatus = (result.bill as any)?.payment_status;
     if (billStatus === 'paid') notifyKdsUpdate();
     notifyOrderUpdated();
-    if (billStatus === 'paid' && (result.bill as any)?.id) {
-      cloudSync.recordBillPaid((result.bill as any).id);
-    }
 
     res.json(result);
   } catch (error: any) {

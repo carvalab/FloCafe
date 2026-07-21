@@ -391,40 +391,11 @@ class CloudSyncService {
     return Array.isArray(data.devices) ? data.devices : [];
   }
 
-  // Bills, orders, and payment details are never pushed to the cloud — no
-  // bill.paid event, no synced_bills row, full stop. The only thing a paid
-  // bill still does for cloud sync is keep the *customer's own* record
-  // (name/phone/email) up to date via the dedicated customer-upsert
-  // endpoint below, so cross-store customer recognition keeps working
-  // without any transaction/financial data ever leaving the device.
-  recordBillPaid(billId: number | string) {
-    try {
-      const db = getDatabase();
-      const bill = db.prepare('SELECT customer_id FROM bills WHERE id = ?').get(billId) as { customer_id: string | null } | undefined;
-      if (bill?.customer_id) this.upsertCloudCustomer(bill.customer_id);
-    } catch (err) {
-      log.warn('[CloudSync] customer upsert lookup failed', (err as Error).message);
-    }
-  }
-
-  /** Pushes one customer's own identity fields to FloAdmin's shared customer directory — see specs/floadmin.md § Customer endpoints. Never includes bill/order/payment data. */
-  private upsertCloudCustomer(customerId: string): void {
-    const db = getDatabase();
-    const customer = db.prepare('SELECT name, phone, email, notes FROM customers WHERE id = ?').get(customerId) as
-      { name: string; phone: string | null; email: string | null; notes: string | null } | undefined;
-    if (!customer?.phone) return;
-    this.signedFetch('/api/customers/upsert', {
-      method: 'POST',
-      body: JSON.stringify({
-        phone: customer.phone,
-        name: customer.name,
-        email: customer.email || null,
-        notes: customer.notes || null,
-      }),
-    }).catch((err) => {
-      log.warn('[CloudSync] customer upsert failed', (err as Error).message);
-    });
-  }
+  // No customer data (name/phone/email) is ever sent to the cloud either —
+  // storing customer PII centrally is unnecessary liability with no upside
+  // for this business, on top of bills/orders/payments already never being
+  // pushed. There used to be a customer-upsert call here piggybacked on
+  // bill payment; removed entirely, not replaced with anything.
 
   recordOrderChanged(orderId: number | string, eventType = 'order.updated') {
     try {
