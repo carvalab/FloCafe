@@ -2,6 +2,11 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.11] - 2026-07-22
+
+### Changed
+- The POS no longer sends any customer data (name, phone, email) to the cloud under any circumstance. Cross-store customer recognition (introduced in 1.9.9 as the one thing kept when bill/order/payment sync was removed) is retired along with it — accepted tradeoff, not a bug.
+
 ## [1.9.10] - 2026-07-22
 
 ### Added
