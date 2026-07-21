@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://flopos.com"><img src="https://img.shields.io/badge/website-flopos.com-2ea44f" alt="Website"></a>
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/releases"><img src="https://img.shields.io/github/v/release/FreeOpenSourcePOS/FloCafe" alt="GitHub release"></a>
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-MIT-green.svg" alt="License"></a>
   <img src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-blue" alt="Platform">
@@ -14,6 +15,7 @@
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/network/members"><img src="https://img.shields.io/github/forks/FreeOpenSourcePOS/FloCafe?style=social" alt="GitHub forks"></a>
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/issues"><img src="https://img.shields.io/github/issues/FreeOpenSourcePOS/FloCafe" alt="Open issues"></a>
   <a href="https://github.com/FreeOpenSourcePOS/FloCafe/pulls"><img src="https://img.shields.io/github/issues-pr/FreeOpenSourcePOS/FloCafe" alt="Open pull requests"></a>
+  <a href="https://www.reddit.com/r/FloPOS/"><img src="https://img.shields.io/badge/Reddit-r%2FFloPOS-FF4500?logo=reddit&logoColor=white" alt="Reddit community"></a>
 </p>
 
 ---
@@ -356,6 +358,8 @@ Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for:
 - PR process and checklist
 - Database migration guidelines
 - Code style and testing expectations
+
+Discussion, questions, and feedback also happen over on [r/FloPOS](https://www.reddit.com/r/FloPOS/).
 
 ## License
 
