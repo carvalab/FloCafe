@@ -2,6 +2,12 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.8] - 2026-07-21
+
+### Fixed
+- **Critical**: fixed "Initialization error: Failed to start Flo: SQLite error: no such column: country_code" — any install upgrading from before that column existed on `customers` failed to start entirely. A second instance of the same bug (`customers.tag_counts`, missing the same way) would have crashed on the first order placed for a returning customer instead; fixed the same way.
+- Orders: selected addons are now read from a single normalized table everywhere (list, detail, KDS, kitchen display, printing, cloud sync) instead of a JSON column some paths trusted and others didn't; the JSON column itself has been removed (#125).
+
 ## [1.9.7] - 2026-07-21
 
 ### Added
