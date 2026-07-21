@@ -53,7 +53,7 @@ const ALL_NAV_ITEMS = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { user, currentTenant, logout } = useAuthStore();
-  const { tablesRequired, setTablesRequired } = usePosSettingsStore();
+  const { tablesRequired, kdsEnabled, setTablesRequired, setKdsEnabled } = usePosSettingsStore();
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const { t } = useI18n();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -63,6 +63,8 @@ export default function AppSidebar() {
   const businessType = currentTenant?.business_type || 'restaurant';
   const navItems = ALL_NAV_ITEMS.filter((item) => {
     if (item.href === '/tables' && !tablesRequired) return false;
+    // KDS disabled → hide the nav entry entirely (issue #133).
+    if (item.href === '/settings?tab=kds' && !kdsEnabled) return false;
     return item.roles.includes(role)
       && (item.businessTypes === null || item.businessTypes.includes(businessType));
   });
@@ -75,7 +77,10 @@ export default function AppSidebar() {
         setTablesRequired(typeof res.data.tables_required === 'boolean' ? res.data.tables_required : true);
       })
       .catch(() => { });
-  }, [currentTenant, setTablesRequired]);
+    api.get('/settings/kds_enabled')
+      .then((res) => setKdsEnabled(res.data.setting?.value !== 'false'))
+      .catch(() => { });
+  }, [currentTenant, setTablesRequired, setKdsEnabled]);
 
   return (
     <Sidebar collapsible="icon">

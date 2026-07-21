@@ -2,13 +2,18 @@ import { Router, Request, Response } from 'express';
 import { getDatabase, now, attachEffectiveAddons } from '../db';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
-import { requireRole } from '../middleware/security';
+import { requireRole, requireKdsEnabled, requireKdsEnabledOr404 } from '../middleware/security';
 
 const router = Router();
 
+// KDS disabled → 404 the pairing surface, checked before the role gate below
+// so a request from an authenticated-but-wrong-role user doesn't leak that
+// the route exists either (issue #133).
+router.use('/pairing', requireKdsEnabledOr404);
+
 router.use(requireRole('chef', 'manager', 'owner'));
 
-router.get('/orders', (req: Request, res: Response) => {
+router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const stationId = req.query.station_id as string;
@@ -100,7 +105,7 @@ router.post('/pairing', requireRole('owner', 'manager'), (req: Request, res: Res
   }
 });
 
-router.get('/display', (req: Request, res: Response) => {
+router.get('/display', requireKdsEnabled, (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const stationId = req.query.station_id as string;
@@ -174,7 +179,7 @@ router.get('/display', (req: Request, res: Response) => {
   }
 });
 
-router.patch('/items/:id/status', (req: Request, res: Response) => {
+router.patch('/items/:id/status', requireKdsEnabled, (req: Request, res: Response) => {
   try {
     const { status } = req.body;
 

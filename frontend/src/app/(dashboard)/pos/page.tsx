@@ -34,7 +34,7 @@ export default function POSPage() {
   const isRestaurant = (currentTenant?.business_type ?? 'restaurant') === 'restaurant';
   const cart = useCartStore();
   const heldOrders = useHeldOrdersStore();
-  const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, setBillingType, setTablesRequired } = usePosSettingsStore();
+  const { customerMandatory, autoPrintKot, autoPrintBill, billingType, tablesRequired, kotPrintingEnabled, setBillingType, setTablesRequired, setKotPrintingEnabled } = usePosSettingsStore();
   const { open: leftSidebarOpen } = useSidebar();
   const { t } = useI18n();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -62,6 +62,10 @@ export default function POSPage() {
   const shouldTakePaymentNow = billingIsPrepaid;
 
   const printKotIfEnabled = async (order: Order) => {
+    // kot_printing_enabled is coarser than auto_print_kot: when it's off, no
+    // KOT print command should go out at all, regardless of the auto-print
+    // preference (issue #133).
+    if (!kotPrintingEnabled) return;
     if (!autoPrintKot) return;
 
     try {
@@ -112,6 +116,10 @@ export default function POSPage() {
         const isTablesRequired = typeof d.tables_required === 'boolean' ? d.tables_required : true;
         setTablesRequired(isTablesRequired);
 
+        api.get('/settings/kot_printing_enabled')
+          .then((res) => setKotPrintingEnabled(res.data.setting?.value !== 'false'))
+          .catch(() => {});
+
         // 2. Fetch other menu data
         const requests: Promise<{ data: Record<string, unknown> }>[] = [
           api.get('/categories?active=1'),
@@ -142,7 +150,7 @@ export default function POSPage() {
     };
     fetchData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isRestaurant, setBillingType, setTablesRequired]);
+  }, [isRestaurant, setBillingType, setTablesRequired, setKotPrintingEnabled]);
 
   const handleProductClick = (product: Product) => {
     // Always open modal so user can add notes and adjust quantity

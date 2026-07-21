@@ -394,6 +394,7 @@ const ALLOWED_WILDCARD_KEYS = new Set([
   'kds_default_view',
   'printer_method', 'paper_size', 'bill_template',
   'telemetry_enabled',
+  'kds_enabled', 'kot_printing_enabled',
 ]);
 
 router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (req: Request, res: Response) => {
@@ -431,6 +432,18 @@ router.put('/:key', requireRole('owner', 'manager'), (req: Request, res: Respons
       return res.status(400).json({ error: 'Value is required' });
     }
     const db = getDatabase();
+
+    // KDS turning off → invalidate any outstanding pairing tokens. Without
+    // this, a token minted while KDS was on would still let a device pair
+    // in after it's been switched off (issue #133).
+    if (req.params.key === 'kds_enabled') {
+      const wasEnabled = getAllSettings(db).kds_enabled !== 'false';
+      const turningOff = boolFlag(value) === 'false';
+      if (wasEnabled && turningOff) {
+        db.prepare('DELETE FROM kds_pairing_tokens').run();
+      }
+    }
+
     db.prepare(`
       INSERT INTO settings (key, value, updated_at) VALUES (?, ?, ?)
       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at

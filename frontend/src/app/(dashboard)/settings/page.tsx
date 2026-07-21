@@ -989,6 +989,13 @@ export default function SettingsPage() {
   const [backingUpGoogleDrive, setBackingUpGoogleDrive] = useState(false);
   const [savingGoogleDrivePrefs, setSavingGoogleDrivePrefs] = useState(false);
 
+  // Kitchen workflow toggles (issue #133) — independent on/off switches,
+  // default true to match pre-toggle always-on behavior.
+  const [kdsEnabledSetting, setKdsEnabledSetting] = useState(true);
+  const [savingKdsEnabled, setSavingKdsEnabled] = useState(false);
+  const [kotPrintingEnabledSetting, setKotPrintingEnabledSetting] = useState(true);
+  const [savingKotPrintingEnabled, setSavingKotPrintingEnabled] = useState(false);
+
   const resetBusiness = async () => {
     try {
       const [businessRes, loyaltyRes, discountRes] = await Promise.all([
@@ -1078,6 +1085,18 @@ export default function SettingsPage() {
     });
 
     fetchGoogleDriveStatus();
+
+    api.get('/settings/kds_enabled').then((res) => {
+      const enabled = res.data.setting?.value !== 'false';
+      setKdsEnabledSetting(enabled);
+      posSettings.setKdsEnabled(enabled);
+    }).catch(() => {});
+
+    api.get('/settings/kot_printing_enabled').then((res) => {
+      const enabled = res.data.setting?.value !== 'false';
+      setKotPrintingEnabledSetting(enabled);
+      posSettings.setKotPrintingEnabled(enabled);
+    }).catch(() => {});
 
 
     api.get('/settings/cloud').then((res) => {
@@ -1312,6 +1331,44 @@ export default function SettingsPage() {
       toast.error(error.response?.data?.error || t('settings.googleDriveSavePreferencesFailed'));
     } finally {
       setSavingGoogleDrivePrefs(false);
+    }
+  };
+
+  // Kitchen workflow toggles (issue #133) — saved immediately on toggle
+  // (not batched with the rest of the form) since turning KDS off also
+  // invalidates outstanding pairing tokens server-side; a stale local
+  // "unsaved" toggle would be misleading about that security-relevant effect.
+  const saveKdsEnabled = async (enabled: boolean) => {
+    const previous = kdsEnabledSetting;
+    setKdsEnabledSetting(enabled);
+    posSettings.setKdsEnabled(enabled);
+    setSavingKdsEnabled(true);
+    try {
+      await api.put('/settings/kds_enabled', { value: enabled ? 'true' : 'false' });
+      toast.success(enabled ? t('settings.kdsEnabledOn', { defaultValue: 'Kitchen Display System enabled' }) : t('settings.kdsEnabledOff', { defaultValue: 'Kitchen Display System disabled' }));
+    } catch {
+      setKdsEnabledSetting(previous);
+      posSettings.setKdsEnabled(previous);
+      toast.error(t('settings.saveFailed'));
+    } finally {
+      setSavingKdsEnabled(false);
+    }
+  };
+
+  const saveKotPrintingEnabled = async (enabled: boolean) => {
+    const previous = kotPrintingEnabledSetting;
+    setKotPrintingEnabledSetting(enabled);
+    posSettings.setKotPrintingEnabled(enabled);
+    setSavingKotPrintingEnabled(true);
+    try {
+      await api.put('/settings/kot_printing_enabled', { value: enabled ? 'true' : 'false' });
+      toast.success(enabled ? t('settings.kotPrintingEnabledOn', { defaultValue: 'KOT printing enabled' }) : t('settings.kotPrintingEnabledOff', { defaultValue: 'KOT printing disabled' }));
+    } catch {
+      setKotPrintingEnabledSetting(previous);
+      posSettings.setKotPrintingEnabled(previous);
+      toast.error(t('settings.saveFailed'));
+    } finally {
+      setSavingKotPrintingEnabled(false);
     }
   };
 
@@ -1842,6 +1899,32 @@ export default function SettingsPage() {
         {/* Kitchen Display — own tab under Operations */}
         <TabsContent value="kds">
           <div className="pb-6 max-w-3xl space-y-6">
+            {/* KDS on/off (issue #133) — not every business runs a Kitchen Display. */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">{t('settings.kdsEnabledToggle', { defaultValue: 'Kitchen Display System' })}</p>
+                  <p className="text-sm text-gray-500">{t('settings.kdsEnabledToggleHint', { defaultValue: 'Show the Kitchen Display and allow devices to pair over your network. Turn this off if this business doesn’t use a KDS.' })}</p>
+                </div>
+                <Toggle value={kdsEnabledSetting} onChange={(v) => { if (!savingKdsEnabled) saveKdsEnabled(v); }} />
+              </div>
+              {!kdsEnabledSetting && !kotPrintingEnabledSetting && (
+                <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    {t('settings.kitchenWorkflowBothOffNote', { defaultValue: 'Both the Kitchen Display and KOT printing are off. Kitchen items won’t display or print anywhere — orders will need to be marked served directly at the counter.' })}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            {!kdsEnabledSetting && (
+              <p className="text-sm text-gray-400 italic">
+                {t('settings.kdsPairingHiddenHint', { defaultValue: 'Pairing is hidden while the Kitchen Display System is disabled.' })}
+              </p>
+            )}
+
+            {kdsEnabledSetting && (
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <ChefHat size={20} className="text-gray-500" />
@@ -1944,6 +2027,7 @@ export default function SettingsPage() {
                 </>
               )}
             </div>
+            )}
 
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center justify-between mb-4">
@@ -2526,6 +2610,26 @@ export default function SettingsPage() {
         <TabsContent value="receipts-printing">
           <div className="pb-6 max-w-3xl">
           <div className="space-y-6">
+            {/* KOT printing on/off (issue #133) — coarser than Auto-print KOT
+                below: when this is off, no KOT ever prints, automatic or manual. */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="font-medium text-gray-900">{t('settings.kotPrintingEnabledToggle', { defaultValue: 'KOT Ticket Printing' })}</p>
+                  <p className="text-sm text-gray-500">{t('settings.kotPrintingEnabledToggleHint', { defaultValue: 'Allow KOT tickets to print at all, automatically or manually. Turn this off if this business doesn’t use a KOT printer.' })}</p>
+                </div>
+                <Toggle value={kotPrintingEnabledSetting} onChange={(v) => { if (!savingKotPrintingEnabled) saveKotPrintingEnabled(v); }} />
+              </div>
+              {!kdsEnabledSetting && !kotPrintingEnabledSetting && (
+                <div className="mt-4 flex items-start gap-2 p-3 bg-amber-50 border border-amber-200 rounded-lg">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0 mt-0.5" />
+                  <p className="text-xs text-amber-800">
+                    {t('settings.kitchenWorkflowBothOffNote', { defaultValue: 'Both the Kitchen Display and KOT printing are off. Kitchen items won’t display or print anywhere — orders will need to be marked served directly at the counter.' })}
+                  </p>
+                </div>
+              )}
+            </div>
+
             <div className="bg-white rounded-xl border border-gray-100 p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Printer size={20} className="text-gray-500" />
@@ -2563,12 +2667,19 @@ export default function SettingsPage() {
                       : t('settings.printMethodBrowserHint')}
                   </p>
                 </div>
-                <div className="flex items-center justify-between">
+                <div className={`flex items-center justify-between ${!kotPrintingEnabledSetting ? 'opacity-50' : ''}`}>
                   <div>
                     <p className="font-medium text-gray-900">{t('settings.autoPrintKot')}</p>
-                    <p className="text-sm text-gray-500">{t('settings.autoPrintKotHint')}</p>
+                    <p className="text-sm text-gray-500">
+                      {kotPrintingEnabledSetting
+                        ? t('settings.autoPrintKotHint')
+                        : t('settings.autoPrintKotDisabledHint', { defaultValue: 'KOT printing is turned off above, so this has no effect.' })}
+                    </p>
                   </div>
-                  <Toggle value={printingForm.autoPrintKot} onChange={(v) => setPrintingForm((p) => ({ ...p, autoPrintKot: v }))} />
+                  <Toggle
+                    value={printingForm.autoPrintKot && kotPrintingEnabledSetting}
+                    onChange={(v) => { if (kotPrintingEnabledSetting) setPrintingForm((p) => ({ ...p, autoPrintKot: v })); }}
+                  />
                 </div>
                 <div className="flex items-center justify-between">
                   <div>

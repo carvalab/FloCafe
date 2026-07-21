@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now, attachEffectiveAddons } from '../db';
+import { getDatabase, now, attachEffectiveAddons, isKotPrintingEnabled } from '../db';
 import { v4 as uuidv4 } from 'uuid';
 import { printViaNetwork, printViaUSB, buildTestPage, printReceipt, printKOT, detectConnectedPrinters } from '../printers/thermal';
 import { getSupportedPrinterProfiles, resolvePrinterProfile } from '../printers/profiles';
@@ -397,6 +397,11 @@ export function routeItemsToStations(db: any, orderItems: any[]): { stationName:
 
 // POST /api/printers/print-kot — print KOT via backend (desktop app)
 router.post('/print-kot', requireRole('owner', 'manager'), async (req: Request, res: Response) => {
+  // Coarser than auto_print_kot — when this is off, no KOT print command
+  // should ever be sent, automatic or manual (issue #133).
+  if (!isKotPrintingEnabled()) {
+    return res.status(403).json({ error: 'KOT printing is disabled for this business' });
+  }
   try {
     const { orderId, stationName, items, useUnicode = false } = req.body;
 

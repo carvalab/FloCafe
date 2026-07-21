@@ -37,6 +37,10 @@ export interface PosSettingsState {
   billShowGstn: boolean;
   // Thermal printer unicode support
   printerUseUnicode: boolean;
+  // Kitchen workflow toggles (issue #133) — business-level settings, synced
+  // from the backend (default true, matching pre-toggle always-on behavior).
+  kdsEnabled: boolean;
+  kotPrintingEnabled: boolean;
   // Actions
   setShowProductImages: (show: boolean) => void;
   setCustomerMandatory: (mandatory: boolean) => void;
@@ -62,6 +66,8 @@ export interface PosSettingsState {
   setBillingType: (v: 'postpaid' | 'prepaid') => void;
   setTablesRequired: (v: boolean) => void;
   setPrinterUseUnicode: (v: boolean) => void;
+  setKdsEnabled: (v: boolean) => void;
+  setKotPrintingEnabled: (v: boolean) => void;
 }
 
 export const usePosSettingsStore = create<PosSettingsState>()(
@@ -94,6 +100,8 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       billShowPhone: true,
       billShowGstn: false,
       printerUseUnicode: false,
+      kdsEnabled: true,
+      kotPrintingEnabled: true,
       // Actions
       setShowProductImages: (show) => set({ showProductImages: show }),
       setCustomerMandatory: (mandatory) => set({ customerMandatory: mandatory }),
@@ -119,6 +127,8 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       setBillingType: (v) => set({ billingType: v }),
       setTablesRequired: (v) => set({ tablesRequired: v }),
       setPrinterUseUnicode: (v) => set({ printerUseUnicode: v }),
+      setKdsEnabled: (v) => set({ kdsEnabled: v }),
+      setKotPrintingEnabled: (v) => set({ kotPrintingEnabled: v }),
     }),
     { name: 'pos-settings' }
   )

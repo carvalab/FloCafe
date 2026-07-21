@@ -8,7 +8,7 @@ import * as fs from 'fs';
 import jwt from 'jsonwebtoken';
 import { registerRoutes } from './routes';
 import { getJWTSecret } from './routes/auth';
-import { getDbHealth } from './db';
+import { getDbHealth, isKdsEnabled } from './db';
 import { setupKdsWebSocket } from './services/kds';
 import { rateLimit, corsOptions, getUserAuthStatus } from './middleware/security';
 
@@ -207,8 +207,31 @@ export function startServer(): Promise<void> {
       console.log(`[Server] HTTP server running on http://localhost:${currentPort}`);
 
       if (server) {
-        wss = new WebSocketServer({ server, path: '/kds' });
+        // noServer + a manual 'upgrade' handler (rather than passing `server`
+        // straight to WebSocketServer) so a disabled KDS can 404 the upgrade
+        // instead of completing it — checked fresh on every request since
+        // kds_enabled can change at runtime without a restart (issue #133).
+        wss = new WebSocketServer({ noServer: true });
         setupKdsWebSocket(wss);
+
+        server.on('upgrade', (request, socket, head) => {
+          const pathname = (request.url || '').split('?')[0];
+          if (pathname !== '/kds') return;
+
+          if (!isKdsEnabled()) {
+            // Pretend the endpoint doesn't exist rather than confirming it's
+            // just disabled — less to probe from a stale/misconfigured KDS
+            // device on the LAN (issue #133).
+            socket.write('HTTP/1.1 404 Not Found\r\n\r\n');
+            socket.destroy();
+            return;
+          }
+
+          wss.handleUpgrade(request, socket, head, (ws) => {
+            wss.emit('connection', ws, request);
+          });
+        });
+
         console.log(`[Server] KDS WebSocket running on ws://localhost:${currentPort}/kds`);
       }
 

@@ -6,7 +6,25 @@ import { KdsWorkspace } from '@/components/kds/KdsWorkspace';
 import { useKdsConnection } from '@/hooks/useKdsConnection';
 import { useServerKdsInfo } from '@/hooks/useServerKdsInfo';
 import { useSyncServerLanguage } from '@/lib/i18n';
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+
+// `/api/kds/info` 404s when kds_enabled is off (issue #133) — that's the
+// signal this route uses to make itself unreachable. Distinguishes a real
+// 404 from a network error (offline/unreachable server), which should not
+// lock the device out — that's a connectivity problem, not a disabled
+// feature, and the login form below already surfaces connection failures.
+function useKdsDisabledCheck(baseUrl: string): boolean {
+  const [disabled, setDisabled] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let cancelled = false;
+    fetch(`${baseUrl}/api/kds/info`, { cache: 'no-store' })
+      .then((res) => { if (!cancelled && res.status === 404) setDisabled(true); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [baseUrl]);
+  return disabled;
+}
 
 // Standalone axios client — points at this KDS server's origin (e.g. :3002),
 // separate from the dashboard's `lib/api` which targets the main backend.
@@ -38,7 +56,20 @@ export default function KdsStandalonePage() {
   // Lazy-init the axios instance — must not run during SSR prerender.
   const api = useMemo(() => (typeof window !== 'undefined' ? createStandaloneApi() : null), []);
   const conn = useKdsConnection(api ? { api } : { api: axios.create() });
-  const { kdsDefaultView } = useServerKdsInfo(typeof window !== 'undefined' ? window.location.origin : '');
+  const origin = typeof window !== 'undefined' ? window.location.origin : '';
+  const { kdsDefaultView } = useServerKdsInfo(origin);
+  const kdsDisabled = useKdsDisabledCheck(origin);
+
+  if (kdsDisabled) {
+    return (
+      <div className="flex flex-col items-center justify-center h-screen gap-3 text-center px-6 bg-gray-900 text-white">
+        <h1 className="text-lg font-semibold">Kitchen Display is disabled</h1>
+        <p className="text-sm text-gray-400 max-w-sm">
+          This business has turned off the Kitchen Display System. Ask an owner or manager to re-enable it from Settings.
+        </p>
+      </div>
+    );
+  }
 
   if (conn.loading || !conn.user) return <KdsLoginForm conn={conn} />;
   return <KdsWorkspace conn={conn} serverDefault={kdsDefaultView} />;

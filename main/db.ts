@@ -131,6 +131,25 @@ export function isTelemetryEnabled(): boolean {
   return getSettingValue('telemetry_enabled') === 'true';
 }
 
+/**
+ * Kitchen Display System on/off switch (issue #133). Defaults to enabled
+ * (missing/anything but the literal 'false') so pre-existing installs that
+ * predate this setting keep their current always-on behavior.
+ */
+export function isKdsEnabled(): boolean {
+  return getSettingValue('kds_enabled') !== 'false';
+}
+
+/**
+ * KOT ticket printing on/off switch (issue #133) — coarser than
+ * `auto_print_kot` (which only gates *automatic* printing on order
+ * placement). When this is off, no KOT print command may be sent,
+ * automatic or manual. Defaults to enabled, same reasoning as isKdsEnabled.
+ */
+export function isKotPrintingEnabled(): boolean {
+  return getSettingValue('kot_printing_enabled') !== 'false';
+}
+
 export function upsertTelemetryLastPing(): void {
   upsertSetting('telemetry_last_ping_at', now());
 }
@@ -1182,6 +1201,18 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
       }
     },
   },
+  {
+    version: 32,
+    name: 'add_kds_and_kot_printing_toggles',
+    up: () => {
+      // Independent on/off switches for the Kitchen Display System and for
+      // KOT ticket printing (issue #133) — not every business runs both.
+      // Default 'true' on both to match the pre-toggle always-on behavior
+      // existing installs already have.
+      insertSettingIfMissing('kds_enabled', 'true');
+      insertSettingIfMissing('kot_printing_enabled', 'true');
+    },
+  },
 ];
 
 function syncBackupBeforeMigration(version: number): void {
@@ -1622,6 +1653,8 @@ function seedInstallDefaults(): void {
   insert('anonymous_data_consent', 'false');
   insert('telemetry_enabled', 'false');
   insert('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
+  insert('kds_enabled', 'true');
+  insert('kot_printing_enabled', 'true');
 
   seedCloudSyncDefaults();
 
