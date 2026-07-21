@@ -5,7 +5,7 @@ import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
 import { usePrinterStore, usePrinterStatusSync } from '@/hooks/usePrinter';
-import { Settings, Building2, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench } from 'lucide-react';
+import { Settings, Building2, CreditCard, Monitor, Users, Gift, Printer, Share2, FileText, Lock, Smartphone, RefreshCw, Copy, Check, Wifi, Usb, Trash2, Plus, Star, TestTube2, ChefHat, QrCode, CheckCircle2, Database, Cloud, CloudOff, Zap, Percent, KeyRound, AlertTriangle, Wrench, HardDrive, UploadCloud } from 'lucide-react';
 import { Tabs, TabsContent } from '@/components/ui/tabs';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -960,6 +960,35 @@ export default function SettingsPage() {
   const [telemetryEnabled, setTelemetryEnabled] = useState(false);
   const [savingTelemetry, setSavingTelemetry] = useState(false);
 
+  type GoogleDriveStatus = {
+    configured: boolean;
+    secure_storage_available: boolean;
+    connected: boolean;
+    account_email: string | null;
+    frequency: 'daily' | 'weekly';
+    retention_count: number;
+    last_backup_at: string | null;
+    last_backup_status: 'success' | 'error' | null;
+    last_backup_filename: string | null;
+    last_error: string | null;
+  };
+  const [googleDriveStatus, setGoogleDriveStatus] = useState<GoogleDriveStatus>({
+    configured: false,
+    secure_storage_available: true,
+    connected: false,
+    account_email: null,
+    frequency: 'daily',
+    retention_count: 10,
+    last_backup_at: null,
+    last_backup_status: null,
+    last_backup_filename: null,
+    last_error: null,
+  });
+  const [connectingGoogleDrive, setConnectingGoogleDrive] = useState(false);
+  const [disconnectingGoogleDrive, setDisconnectingGoogleDrive] = useState(false);
+  const [backingUpGoogleDrive, setBackingUpGoogleDrive] = useState(false);
+  const [savingGoogleDrivePrefs, setSavingGoogleDrivePrefs] = useState(false);
+
   const resetBusiness = async () => {
     try {
       const [businessRes, loyaltyRes, discountRes] = await Promise.all([
@@ -1047,6 +1076,8 @@ export default function SettingsPage() {
       // declined) = stays off until explicitly turned on here.
       setTelemetryEnabled(false);
     });
+
+    fetchGoogleDriveStatus();
 
 
     api.get('/settings/cloud').then((res) => {
@@ -1194,6 +1225,93 @@ export default function SettingsPage() {
       toast.error(t('settings.saveFailed'));
     } finally {
       setSavingTelemetry(false);
+    }
+  };
+
+  const fetchGoogleDriveStatus = async () => {
+    try {
+      const res = await api.get('/settings/google-drive');
+      setGoogleDriveStatus({
+        configured: !!res.data.configured,
+        secure_storage_available: res.data.secure_storage_available !== false,
+        connected: !!res.data.connected,
+        account_email: res.data.account_email || null,
+        frequency: res.data.frequency === 'weekly' ? 'weekly' : 'daily',
+        retention_count: Number(res.data.retention_count) || 10,
+        last_backup_at: res.data.last_backup_at || null,
+        last_backup_status: res.data.last_backup_status || null,
+        last_backup_filename: res.data.last_backup_filename || null,
+        last_error: res.data.last_error || null,
+      });
+    } catch {
+      // Leave defaults (not configured / not connected) — this section is
+      // optional and must never block the rest of Settings from loading.
+    }
+  };
+
+  const connectGoogleDrive = async () => {
+    setConnectingGoogleDrive(true);
+    try {
+      const res = await api.post('/settings/google-drive/connect');
+      setGoogleDriveStatus((prev) => ({ ...prev, ...res.data }));
+      toast.success(t('settings.googleDriveConnectedSuccess'));
+      fetchBackups();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || t('settings.googleDriveConnectFailed'));
+    } finally {
+      setConnectingGoogleDrive(false);
+    }
+  };
+
+  const disconnectGoogleDrive = async () => {
+    const ok = await confirm(t('settings.googleDriveDisconnectConfirm'), {
+      confirmLabel: t('settings.googleDriveDisconnect'),
+      destructive: true,
+    });
+    if (!ok) return;
+    setDisconnectingGoogleDrive(true);
+    try {
+      const res = await api.post('/settings/google-drive/disconnect');
+      setGoogleDriveStatus((prev) => ({ ...prev, ...res.data }));
+      toast.success(t('settings.googleDriveDisconnectedSuccess'));
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || t('settings.googleDriveDisconnectFailed'));
+    } finally {
+      setDisconnectingGoogleDrive(false);
+    }
+  };
+
+  const backupToGoogleDriveNow = async () => {
+    setBackingUpGoogleDrive(true);
+    try {
+      const res = await api.post('/settings/google-drive/backup-now');
+      setGoogleDriveStatus((prev) => ({ ...prev, ...res.data }));
+      toast.success(t('settings.googleDriveBackupSuccess'));
+      fetchBackups();
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      toast.error(error.response?.data?.error || t('settings.googleDriveBackupFailed'));
+      fetchGoogleDriveStatus();
+    } finally {
+      setBackingUpGoogleDrive(false);
+    }
+  };
+
+  const updateGoogleDrivePrefs = async (patch: { frequency?: 'daily' | 'weekly'; retention_count?: number }) => {
+    const previous = googleDriveStatus;
+    setGoogleDriveStatus((prev) => ({ ...prev, ...patch }));
+    setSavingGoogleDrivePrefs(true);
+    try {
+      const res = await api.put('/settings/google-drive', patch);
+      setGoogleDriveStatus((prev) => ({ ...prev, ...res.data }));
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: { error?: string } } };
+      setGoogleDriveStatus(previous);
+      toast.error(error.response?.data?.error || t('settings.googleDriveSavePreferencesFailed'));
+    } finally {
+      setSavingGoogleDrivePrefs(false);
     }
   };
 
@@ -2641,6 +2759,12 @@ export default function SettingsPage() {
                               {t('settings.backupKindAuto')}
                             </span>
                           )}
+                          {googleDriveStatus.last_backup_filename === backup.fileName && (
+                            <span className="flex items-center gap-1 text-xs px-1.5 py-0.5 rounded bg-blue-50 text-blue-700 border border-blue-100">
+                              <HardDrive size={11} />
+                              {t('settings.googleDriveUploadedBadge')}
+                            </span>
+                          )}
                         </div>
                         <p className="text-xs text-gray-400 truncate">{formatBackupSize(backup.sizeBytes)}</p>
                       </div>
@@ -2946,6 +3070,137 @@ export default function SettingsPage() {
                 <span className="text-sm text-gray-700">{t('settings.anonymousTelemetry')}</span>
               </label>
               <p className="text-xs text-gray-500">{t('settings.anonymousTelemetryHint')}</p>
+            </div>
+
+            {/* Google Drive — automated off-device backups (#129) */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-4">
+              <div className="flex items-center gap-2">
+                <HardDrive size={20} className="text-gray-500" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">{t('settings.googleDrive')}</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('settings.googleDriveHint')}</p>
+                </div>
+              </div>
+
+              {!googleDriveStatus.configured ? (
+                <div className="bg-gray-50 rounded-xl p-6 flex flex-col items-center justify-center text-center space-y-2">
+                  <div className="p-3 bg-white rounded-full shadow-sm">
+                    <HardDrive className="w-6 h-6 text-gray-400" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">{t('settings.googleDriveNotConfigured')}</p>
+                  <p className="text-xs text-gray-500 max-w-sm">{t('settings.googleDriveNotConfiguredHint')}</p>
+                </div>
+              ) : !googleDriveStatus.secure_storage_available ? (
+                <div className="flex items-center gap-2 bg-amber-50 border border-amber-100 rounded-lg px-4 py-3">
+                  <AlertTriangle size={16} className="text-amber-600 shrink-0" />
+                  <p className="text-sm text-amber-800">{t('settings.googleDriveSecureStorageUnavailable')}</p>
+                </div>
+              ) : (
+                <>
+                  <div className="rounded-lg border border-gray-100 px-4 py-3 flex items-center justify-between gap-3 flex-wrap">
+                    <div className="flex items-center gap-2">
+                      {googleDriveStatus.connected ? (
+                        <CheckCircle2 size={16} className="text-green-600 shrink-0" />
+                      ) : (
+                        <CloudOff size={16} className="text-gray-400 shrink-0" />
+                      )}
+                      <div>
+                        <p className="text-sm font-medium text-gray-900">
+                          {googleDriveStatus.connected ? t('settings.googleDriveConnected') : t('settings.googleDriveNotConnected')}
+                        </p>
+                        {googleDriveStatus.connected && googleDriveStatus.account_email && (
+                          <p className="text-xs text-gray-500">{t('settings.googleDriveAccount')}: {googleDriveStatus.account_email}</p>
+                        )}
+                      </div>
+                    </div>
+                    {(currentTenant?.role === 'owner') && (
+                      googleDriveStatus.connected ? (
+                        <button
+                          onClick={disconnectGoogleDrive}
+                          disabled={disconnectingGoogleDrive}
+                          className="px-4 py-2 text-sm border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 font-medium shrink-0"
+                        >
+                          {disconnectingGoogleDrive ? t('settings.googleDriveDisconnecting') : t('settings.googleDriveDisconnect')}
+                        </button>
+                      ) : (
+                        <button
+                          onClick={connectGoogleDrive}
+                          disabled={connectingGoogleDrive}
+                          className="px-4 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium shrink-0"
+                        >
+                          {connectingGoogleDrive ? t('settings.googleDriveConnecting') : t('settings.googleDriveConnect')}
+                        </button>
+                      )
+                    )}
+                  </div>
+
+                  {googleDriveStatus.connected && (
+                    <>
+                      <div className="grid sm:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.googleDriveFrequency')}</label>
+                          <select
+                            value={googleDriveStatus.frequency}
+                            disabled={savingGoogleDrivePrefs}
+                            onChange={(e) => updateGoogleDrivePrefs({ frequency: e.target.value as 'daily' | 'weekly' })}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
+                          >
+                            <option value="daily">{t('settings.googleDriveFrequencyDaily')}</option>
+                            <option value="weekly">{t('settings.googleDriveFrequencyWeekly')}</option>
+                          </select>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-1">{t('settings.googleDriveRetention')}</label>
+                          <input
+                            type="number"
+                            min={1}
+                            max={100}
+                            value={googleDriveStatus.retention_count}
+                            disabled={savingGoogleDrivePrefs}
+                            onChange={(e) => setGoogleDriveStatus((prev) => ({ ...prev, retention_count: Number(e.target.value) || prev.retention_count }))}
+                            onBlur={(e) => {
+                              const n = Number(e.target.value);
+                              if (Number.isInteger(n) && n >= 1 && n <= 100) updateGoogleDrivePrefs({ retention_count: n });
+                            }}
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-brand outline-none disabled:opacity-50"
+                          />
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-500">{t('settings.googleDriveRetentionHint')}</p>
+
+                      <div className="flex items-center justify-between gap-3 flex-wrap pt-1">
+                        <div className="text-xs text-gray-500">
+                          {googleDriveStatus.last_backup_at ? (
+                            googleDriveStatus.last_backup_status === 'error' ? (
+                              <span className="flex items-center gap-1 text-red-600">
+                                <AlertTriangle size={13} />
+                                {t('settings.googleDriveLastBackupErrorAt', { time: formatDateTime(googleDriveStatus.last_backup_at) })}
+                              </span>
+                            ) : (
+                              <span className="flex items-center gap-1 text-gray-500">
+                                <CheckCircle2 size={13} className="text-green-600" />
+                                {t('settings.googleDriveLastBackupSuccessAt', { time: formatDateTime(googleDriveStatus.last_backup_at) })}
+                              </span>
+                            )
+                          ) : (
+                            <span>{t('settings.googleDriveLastBackup')}: {t('settings.googleDriveLastBackupNever')}</span>
+                          )}
+                        </div>
+                        {(currentTenant?.role === 'owner') && (
+                          <button
+                            onClick={backupToGoogleDriveNow}
+                            disabled={backingUpGoogleDrive}
+                            className="flex items-center gap-1.5 px-4 py-2 text-sm bg-gray-600 text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium shrink-0"
+                          >
+                            <UploadCloud size={15} />
+                            {backingUpGoogleDrive ? t('settings.googleDriveBackingUp') : t('settings.googleDriveBackupNow')}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </>
+              )}
             </div>
 
             {/* OrderFlow — online orders */}

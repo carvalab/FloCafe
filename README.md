@@ -101,6 +101,9 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 - Customer database
 - Dashboard insights and owner-restricted analytics
 - Sales reports
+- Local database backups with history/restore, plus optional automated
+  off-device backups to Google Drive (opt-in — see
+  [`docs/google-drive-setup.md`](docs/google-drive-setup.md))
 
 ### Localization (i18n)
 - Native multi-language support (English and Spanish included)
@@ -256,9 +259,18 @@ KDS_PORT=3002                # KDS server port (default: 3002)
 # Authentication
 JWT_SECRET=your-secret-key   # JWT signing secret (default: built-in dev secret)
 ADMIN_PASSWORD=admin123      # Initial admin password (standalone server.js only)
+
+# Google Drive backups (optional — off unless both are set, see docs/google-drive-setup.md)
+GOOGLE_DRIVE_CLIENT_ID=your-client-id.apps.googleusercontent.com
+GOOGLE_DRIVE_CLIENT_SECRET=your-client-secret
 ```
 
 > **Security:** Never commit `.env` files. The default JWT secret is for development only — change it in production.
+
+> **Google Drive backups:** `GOOGLE_DRIVE_CLIENT_ID`/`GOOGLE_DRIVE_CLIENT_SECRET` are only needed if you want the optional
+> "back up to Google Drive" feature to be usable in your build. Without them, `Settings > Integrations > Google Drive`
+> simply shows "Google Drive integration is not configured for this build" — everything else works normally. See
+> [`docs/google-drive-setup.md`](docs/google-drive-setup.md) for how to create these credentials in Google Cloud Console.
 
 ## Architecture
 
