@@ -177,6 +177,11 @@ router.get('/', (req: Request, res: Response) => {
       const searchTerm = `%${req.query.search}%`;
       params.push(searchTerm, searchTerm);
     }
+    if (req.query.barcode) {
+      // Exact match — this is the scan-to-lookup path, not a fuzzy search.
+      query += ' AND p.barcode = ?';
+      params.push(req.query.barcode);
+    }
     if (req.query.low_stock === 'true') {
       query += ' AND p.track_inventory = 1 AND p.stock_quantity <= p.low_stock_threshold';
     }
@@ -424,7 +429,7 @@ router.post('/fetch-url', requireRole('owner', 'manager'), async (req: Request, 
 router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) => {
   try {
     const {
-      category_id, name, sku, description, price, cost_price,
+      category_id, name, sku, barcode, description, price, cost_price,
       tax_type, tax_rate, track_inventory, stock_quantity,
       low_stock_threshold, is_active, image_url, sort_order, cb_percent, tags, addon_group_ids
     } = req.body;
@@ -440,18 +445,30 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     }
 
     const db = getDatabase();
+
+    // A barcode scan must resolve to exactly one product — unlike sku, which
+    // is informational only, a duplicate barcode would make scanning ambiguous.
+    if (barcode) {
+      const clash = db.prepare(
+        'SELECT id FROM products WHERE barcode = ? AND deleted_at IS NULL'
+      ).get(barcode);
+      if (clash) {
+        return res.status(400).json({ error: 'Another product already uses this barcode' });
+      }
+    }
+
     const id = generateShortId('products');
 
     // Wrap product INSERT + addon_group INSERTs in a transaction
     // so a partial failure doesn't leave orphaned records
     const insertProduct = db.transaction(() => {
       db.prepare(`
-        INSERT INTO products (id, category_id, name, sku, description, price, cost,
+        INSERT INTO products (id, category_id, name, sku, barcode, description, price, cost,
           tax_type, tax_rate, track_inventory, stock_quantity, low_stock_threshold,
           is_active, image_url, sort_order, cb_percent, tags, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
       `).run(
-        id, category_id || null, name, sku || null, description || null, price, cost_price || 0,
+        id, category_id || null, name, sku || null, barcode || null, description || null, price, cost_price || 0,
         tax_type || 'none', tax_rate || 0,
         track_inventory ? 1 : 0, stock_quantity || 0, low_stock_threshold || 0,
         is_active !== false ? 1 : 0, image_url || null,
@@ -484,7 +501,7 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     }
 
     const {
-      category_id, name, sku, description, price, cost_price,
+      category_id, name, sku, barcode, description, price, cost_price,
       tax_type, tax_rate, track_inventory, stock_quantity,
       low_stock_threshold, is_active, image_url, sort_order, cb_percent, tags, addon_group_ids
     } = req.body;
@@ -497,22 +514,32 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
       }
     }
 
+    if (barcode) {
+      const clash = db.prepare(
+        'SELECT id FROM products WHERE barcode = ? AND deleted_at IS NULL AND id != ?'
+      ).get(barcode, req.params.id);
+      if (clash) {
+        return res.status(400).json({ error: 'Another product already uses this barcode' });
+      }
+    }
+
     // Detect whether client explicitly sent image_url (even as null/undefined)
     // so we can distinguish "don't touch image_url" from "clear image_url"
     const hasImageUrl = 'image_url' in req.body;
 
     db.prepare(`
-      UPDATE products SET 
-        category_id = COALESCE(@category_id, category_id), 
+      UPDATE products SET
+        category_id = COALESCE(@category_id, category_id),
         name = COALESCE(@name, name),
-        sku = COALESCE(@sku, sku), 
-        description = COALESCE(@description, description), 
+        sku = COALESCE(@sku, sku),
+        barcode = COALESCE(@barcode, barcode),
+        description = COALESCE(@description, description),
         price = COALESCE(@price, price),
         cost = COALESCE(@cost, cost),
-        tax_type = COALESCE(@tax_type, tax_type), 
+        tax_type = COALESCE(@tax_type, tax_type),
         tax_rate = COALESCE(@tax_rate, tax_rate),
         track_inventory = COALESCE(@track_inventory, track_inventory),
-        stock_quantity = COALESCE(@stock_quantity, stock_quantity), 
+        stock_quantity = COALESCE(@stock_quantity, stock_quantity),
         low_stock_threshold = COALESCE(@low_stock_threshold, low_stock_threshold),
         is_active = COALESCE(@is_active, is_active),
         image_url = CASE WHEN @has_image_url = 1 THEN @image_url ELSE image_url END,
@@ -522,12 +549,12 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
         updated_at = @updated_at
       WHERE id = @id
     `).run({
-      category_id, name, sku, description, price, cost: cost_price,
+      category_id, name, sku, barcode, description, price, cost: cost_price,
       tax_type, tax_rate,
       track_inventory: track_inventory ? 1 : track_inventory === 0 ? 0 : null,
       stock_quantity, low_stock_threshold,
       is_active: is_active !== undefined ? (is_active ? 1 : 0) : null,
-      has_image_url: hasImageUrl ? 1 : 0, 
+      has_image_url: hasImageUrl ? 1 : 0,
       image_url: hasImageUrl ? image_url : null,
       sort_order, cb_percent,
       tags: tags ? JSON.stringify(tags) : null,

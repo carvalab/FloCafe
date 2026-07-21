@@ -25,6 +25,7 @@ import PaymentModal from '@/components/pos/PaymentModal';
 import PrepaidCheckoutModal, { type PrepaidPayment, type PrepaidDiscount } from '@/components/pos/PrepaidCheckoutModal';
 import PosTopbar from '@/components/pos/PosTopbar';
 import { usePrinterStore } from '@/hooks/usePrinter';
+import { useBarcodeScanner } from '@/hooks/useBarcodeScanner';
 import { useI18n } from '@/hooks/useI18n';
 import { getCurrencySymbol, getCountryByCode } from '@/lib/countries';
 
@@ -151,6 +152,20 @@ export default function POSPage() {
   const handleAddonAdd = (product: Product, quantity: number, addons: Addon[], instructions: string) => {
     cart.addItem(product, quantity, addons, instructions);
   };
+
+  // A modal already open means the scan (if one lands) isn't meant for the
+  // product grid — e.g. it could be a barcode field inside that modal.
+  const anyModalOpen = showTablePicker || !!addonProduct || !!checkoutTable
+    || !!paymentBill || showCustomerPrompt || showPrepaidCheckout;
+
+  useBarcodeScanner((code) => {
+    const product = products.find((p) => p.barcode === code);
+    if (product) {
+      handleProductClick(product);
+    } else {
+      toast.error(t('pos.barcodeNotFound', { code }));
+    }
+  }, !anyModalOpen);
 
   const handlePlaceOrder = async () => {
     if (cart.items.length === 0) {
