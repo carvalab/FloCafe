@@ -2,6 +2,29 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [1.9.10] - 2026-07-22
+
+### Added
+- Password recovery: an owner locked out of their account can now reset their password from the login screen using their Master PIN, with no existing session required (#127). First-run setup now explains that the Master PIN doubles as recovery, and adds an optional Cloud Services opt-in step with clear guidance on what depends on it (#128).
+
+## [1.9.9] - 2026-07-22
+
+### Added
+- Kitchen Display System and KOT (kitchen ticket) printing now have independent on/off toggles, for businesses that only use one or neither (#133).
+- Barcode scanning for product lookup at the POS (#137).
+- Optional automated database backups to Google Drive, alongside the existing local backup history (#129).
+- WhatsApp-based e-billing: send bills to customers over WhatsApp, with ban-avoidance safeguards on the underlying connection.
+
+### Changed
+- Cloud registration no longer asks for an owner email — it was never actually stored or used on the receiving end, and owners don't log into the cloud admin panel. Registering is now a single click.
+- The POS no longer sends bill, order, or payment details to the cloud under any circumstance. Customer name/phone/email still sync for cross-store recognition, through a dedicated endpoint that never carries financial data.
+- Zero-touch cloud registration announces itself automatically again on startup for installs that have already opted into cloud sync (previously required a manual click every time).
+- Mobile pairing code (Settings → Mobile App): the code now displays in uppercase, and failure messages explain the actual reason (e.g. this install hasn't been claimed yet) instead of a generic error.
+
+### Fixed
+- Barcode search box didn't accept manual/typed entry, only actual scanner input (#137).
+- Mobile pairing code generation could fail if attempted in the brief moment before the app finished checking whether the store was cloud-registered.
+
 ## [1.9.8] - 2026-07-21
 
 ### Fixed
