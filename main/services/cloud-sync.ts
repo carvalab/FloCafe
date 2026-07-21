@@ -180,8 +180,14 @@ class CloudSyncService {
     // First-run zero-touch: if this install has never registered (and hasn't been
     // explicitly rejected), announce itself with no staff action required. Only
     // done once at boot, not on every reload(), so saving an unrelated cloud
-    // setting doesn't re-trigger it.
-    // this.maybeAutoRegister(); // [Bankim] Re-enable this to restore zero-touch registration at boot
+    // setting doesn't re-trigger it. Gated on cloud_sync_enabled inside
+    // maybeAutoRegister() itself — this never phones home for an install that
+    // hasn't opted into cloud sync, and registering only creates an inert
+    // pending row (no billing/syncing) until a human manually claims it in
+    // FloAdmin, so there's no trust/security cost to auto-announcing here.
+    // Re-enabled 2026-07-22 — see FreeOpenSourcePOS/FloAdmin@1dcbc8e (the
+    // pos.php idempotent-refresh fix that makes repeat registers safe).
+    this.maybeAutoRegister();
   }
 
   reload() {
