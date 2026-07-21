@@ -143,11 +143,10 @@ For deeper repository analytics, see [Pulse](https://github.com/FreeOpenSourcePO
 
 ## 🗺️ Public Roadmap
 
-FloCafe is actively evolving. This roadmap reflects the current public issue discussions as of July 20, 2026.
+FloCafe is actively evolving. This roadmap reflects the current public issue discussions as of July 21, 2026.
 
 ### Active Priorities
 
-- **Order workflow reliability:** Fix the edge case where cancelling the last order item can leave an empty active order ([#132](https://github.com/FreeOpenSourcePOS/FloCafe/issues/132)) and normalize selected add-ons into transaction history for better reporting and auditability ([#125](https://github.com/FreeOpenSourcePOS/FloCafe/issues/125)).
 - **KDS and KOT workflow controls:** Add a settings toggle so operators can choose KDS-first or printer/KOT-first kitchen workflows ([#133](https://github.com/FreeOpenSourcePOS/FloCafe/issues/133)).
 - **Backup, recovery, and restore confidence:** Add automated Google Drive database backups ([#129](https://github.com/FreeOpenSourcePOS/FloCafe/issues/129)), backup history management ([#120](https://github.com/FreeOpenSourcePOS/FloCafe/issues/120)), clearer signup recovery guidance ([#128](https://github.com/FreeOpenSourcePOS/FloCafe/issues/128)), and a secure password recovery/database reinitialization flow ([#127](https://github.com/FreeOpenSourcePOS/FloCafe/issues/127)).
 - **Menu and add-on experience:** Improve add-on configuration UX and support multi-quantity add-ons ([#83](https://github.com/FreeOpenSourcePOS/FloCafe/issues/83)).
@@ -157,6 +156,7 @@ FloCafe is actively evolving. This roadmap reflects the current public issue dis
 ### Longer-Term Direction
 
 - **Android/iOS tablet client + free e-billing:** A thin-client order-taking + billing surface for tablets on the same local network as the desktop install — same pattern KDS already uses (LAN, no install required), not an Electron port (not possible on mobile). No printer access on the tablet itself; printing routes through the existing desktop install. Bundled: how bills reach customers for free (the already-shipped `wa.me` share link today, richer automated WhatsApp messaging as a possible future step) ([#135](https://github.com/FreeOpenSourcePOS/FloCafe/issues/135)).
+- **Barcode scanning:** Scan a product's barcode at POS to look it up and add it to the cart, for packaged goods (bottled drinks, snacks) sold alongside prepared food. Built here first as a reusable pattern for two upcoming products in the same ecosystem that need it as a core capability — FloRetail and FloSalon (salons/spas also sell retail inventory) ([#137](https://github.com/FreeOpenSourcePOS/FloCafe/issues/137)).
 - **Modular Plugin Architecture:** Support for custom plugins, third-party integrations, and UI themes without modifying core code.
 - **Advanced Inventory Management:** Low stock alerts, supplier purchase orders, and ingredient-level tracking.
 - **Enhanced Cloud Sync:** Opt-in multi-device synchronization across different branches or franchises.
