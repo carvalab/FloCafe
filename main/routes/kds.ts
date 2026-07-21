@@ -1,5 +1,5 @@
 import { Router, Request, Response } from 'express';
-import { getDatabase, now } from '../db';
+import { getDatabase, now, attachEffectiveAddons } from '../db';
 import * as crypto from 'crypto';
 import { randomUUID } from 'crypto';
 import { requireRole } from '../middleware/security';
@@ -31,14 +31,14 @@ router.get('/orders', (req: Request, res: Response) => {
     const orders = db.prepare(query).all(...params);
 
     const ordersWithItems = orders.map((order: any) => {
-      const items = db.prepare(`
+      const items = attachEffectiveAddons(db, db.prepare(`
         SELECT oi.*, p.category_id, c.name as category_name
         FROM order_items oi
         LEFT JOIN products p ON oi.product_id = p.id
         LEFT JOIN categories c ON p.category_id = c.id
         WHERE oi.order_id = ?
         ORDER BY oi.created_at ASC
-      `).all(order.id);
+      `).all(order.id) as any[]);
 
       return { ...order, items };
     });
@@ -144,7 +144,7 @@ router.get('/display', (req: Request, res: Response) => {
 
     itemsQuery += ' ORDER BY oi.created_at ASC';
 
-    const items = db.prepare(itemsQuery).all(...params);
+    const items = attachEffectiveAddons(db, db.prepare(itemsQuery).all(...params) as any[]);
 
     const groupedByOrder: Record<number, any> = {};
     for (const item of items) {

@@ -1634,6 +1634,53 @@ export function parseItemJson(item: any): any {
   };
 }
 
+/**
+ * Resolves the "effective" selected addons for a batch of order_items rows,
+ * preferring the normalized order_item_addons table and falling back to the
+ * addons JSON column only for rows that have no normalized snapshot (e.g.
+ * orders created before migration v25's dual-write went live). See issue
+ * #125 — this is the read-path half of the normalization; the JSON column
+ * is still written on every insert and is not being removed.
+ *
+ * `items` may be raw order_items rows (addons still a JSON string) or
+ * already-parsed via parseItemJson (addons already an array/null) — both
+ * are handled. Returns new objects; does not mutate the input.
+ */
+export function attachEffectiveAddons<T extends { id: number; addons: unknown }>(
+  dbInstance: Database.Database,
+  items: T[]
+): T[] {
+  if (items.length === 0) return items;
+
+  const ids = items.map((item) => item.id);
+  const placeholders = ids.map(() => '?').join(',');
+  const rows = dbInstance.prepare(
+    `SELECT * FROM order_item_addons WHERE order_item_id IN (${placeholders}) ORDER BY id`
+  ).all(...ids) as { order_item_id: number; addon_id: string | null; addon_name: string; price: number; quantity: number }[];
+
+  const byItem = new Map<number, { id: string | null; name: string; price: number; quantity: number }[]>();
+  for (const row of rows) {
+    const list = byItem.get(row.order_item_id) || [];
+    list.push({ id: row.addon_id, name: row.addon_name, price: row.price, quantity: row.quantity });
+    byItem.set(row.order_item_id, list);
+  }
+
+  return items.map((item) => {
+    const normalized = byItem.get(item.id);
+    if (normalized && normalized.length > 0) {
+      return { ...item, addons: normalized };
+    }
+    const raw = item.addons;
+    if (typeof raw !== 'string') return item;
+    try {
+      const parsed = JSON.parse(raw);
+      return { ...item, addons: Array.isArray(parsed) ? parsed : null };
+    } catch {
+      return { ...item, addons: null };
+    }
+  });
+}
+
 /** Parse JSON text columns on bill/order rows returned from SQLite. */
 export function parseRowJson(row: any): any {
   if (!row) return row;
