@@ -25,6 +25,7 @@
   "auth.recoverPasswordMismatch": "Passwords do not match",
   "auth.recoverPasswordRequirements": "Password must be at least 8 characters long and contain at least one uppercase letter, one lowercase letter, and one number.",
   "auth.recoverPinFormat": "Enter the 4-digit Master PIN set up for this install.",
+  "auth.recoverChecking": "Checking recovery availability on this device...",
   "auth.recoverPinHint": "The 4-digit Master PIN set for this device during first-run setup.",
   "auth.recoverPinLabel": "Master PIN",
   "auth.recoverPinUnavailable": "Master PIN protection isn't available on this device (no OS keyring), so local password recovery isn't possible here. Contact support or use direct database access to recover this install.",

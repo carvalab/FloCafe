@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import api from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -23,6 +23,16 @@ export default function RecoverAccessPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+  // null = still checking, true/false = known. Checked proactively on load
+  // so "the PIN isn't available on this device" is told upfront, not only
+  // discovered after filling in the whole form and hitting submit.
+  const [pinAvailable, setPinAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    api.get('/auth/setup/status')
+      .then(({ data }) => setPinAvailable(!!data.masterPinAvailable))
+      .catch(() => setPinAvailable(true)); // unknown — don't block the form on a network hiccup, let submit surface the real error instead
+  }, []);
 
   const passwordsEntered = newPassword.length > 0 && confirmPassword.length > 0;
   const passwordsMatch = !passwordsEntered || newPassword === confirmPassword;
@@ -108,6 +118,13 @@ export default function RecoverAccessPage() {
 
         <Card>
           <CardContent className="pt-6">
+            {pinAvailable === null ? (
+              <p className="text-sm text-muted-foreground text-center py-6">{t('auth.recoverChecking')}</p>
+            ) : pinAvailable === false ? (
+              <div className="text-center py-4">
+                <p className="text-sm text-destructive font-medium">{t('auth.recoverPinUnavailable')}</p>
+              </div>
+            ) : (
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="recover-email">{t('auth.email')}</Label>
@@ -204,6 +221,7 @@ export default function RecoverAccessPage() {
                 {loading ? t('auth.recoverSubmitting') : t('auth.recoverSubmit')}
               </Button>
             </form>
+            )}
           </CardContent>
         </Card>
       </div>

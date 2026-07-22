@@ -25,6 +25,7 @@
   "auth.recoverPasswordMismatch": "Las contraseñas no coinciden",
   "auth.recoverPasswordRequirements": "La contraseña debe tener al menos 8 caracteres e incluir una mayúscula, una minúscula y un número.",
   "auth.recoverPinFormat": "Ingresá el PIN Maestro de 4 dígitos configurado para esta instalación.",
+  "auth.recoverChecking": "Comprobando la disponibilidad de recuperación en este dispositivo...",
   "auth.recoverPinHint": "El PIN Maestro de 4 dígitos configurado para este dispositivo durante la configuración inicial.",
   "auth.recoverPinLabel": "PIN Maestro",
   "auth.recoverPinUnavailable": "La protección con PIN Maestro no está disponible en este dispositivo (sin llavero del sistema operativo), por lo que la recuperación local no es posible acá. Contactá a soporte o accedé directamente a la base de datos para recuperar esta instalación.",
