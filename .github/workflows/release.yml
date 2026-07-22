@@ -113,6 +113,12 @@ jobs:
           CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTS_PASSWORD }}
           APPLE_TEAM_ID: BKDY677XJA
 
+      - name: Verify macOS release assets
+        run: |
+          test -f release/latest-mac.yml || { echo "::error::release/latest-mac.yml is missing — macOS auto-update would be broken for this release"; exit 1; }
+          ls release/*.zip >/dev/null 2>&1 || { echo "::error::no .zip in release/ — macOS auto-update would be broken for this release"; exit 1; }
+          ls release/*.zip.blockmap >/dev/null 2>&1 || { echo "::error::no .zip.blockmap in release/ — macOS auto-update would be broken for this release"; exit 1; }
+
       - name: Upload macOS assets to GitHub release
         # latest-mac.yml (+ the .zip/.blockmap it points at) is what
         # electron-updater's MacUpdater fetches to check for/apply updates —
@@ -146,9 +152,18 @@ jobs:
       - name: Build Windows
         run: npm run build:frontend && npm run build && npx electron-builder --win --publish never
 
+      - name: Verify Windows release assets
+        # Same class of bug as macOS's missing latest-mac.yml: electron-updater's
+        # NSIS updater needs latest.yml + the installer's .blockmap to check for
+        # and apply updates. Fail loudly here instead of silently shipping a
+        # release nothing can auto-update from.
+        run: |
+          if (-not (Test-Path release\latest.yml)) { Write-Error "release\latest.yml is missing — Windows auto-update would be broken for this release"; exit 1 }
+          if (-not (Get-ChildItem release\*.exe.blockmap -ErrorAction SilentlyContinue)) { Write-Error "no .exe.blockmap in release\ — Windows auto-update would be broken for this release"; exit 1 }
+
       - name: Upload Windows assets to GitHub release
         run: |
           $VERSION = node -p "require('./package.json').version"
-          gh release upload "v$VERSION" (Get-ChildItem release\*.exe | Select-Object -ExpandProperty FullName) --repo FreeOpenSourcePOS/FloCafe --clobber
+          gh release upload "v$VERSION" (Get-ChildItem release\*.exe, release\*.exe.blockmap, release\latest.yml | Select-Object -ExpandProperty FullName) --repo FreeOpenSourcePOS/FloCafe --clobber
         env:
           GH_TOKEN: ${{ github.token }}
