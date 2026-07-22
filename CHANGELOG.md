@@ -2,6 +2,16 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.2] - 2026-07-23
+
+### Security
+- Fixed stored XSS in bill printing: product/customer names, special instructions, and other database-sourced values are now HTML-entity-encoded before being written into the print window, closing a path for staff-injected script payloads to run when a bill is printed.
+- KDS server login (port 3002) is now rate-limited the same as the main server's login — it previously had no brute-force protection at all.
+- `GET /api/held-orders` now requires the same owner/manager/cashier/waiter role as its POST/DELETE siblings; any authenticated user (including chefs) could previously read held-order customer data and table assignments.
+- The legacy (pre-Base64) product image endpoint no longer redirects to arbitrary stored URLs — it now requires HTTPS and blocks private/internal/link-local addresses, closing an unauthenticated open-redirect path.
+- Global error handlers no longer echo raw exception messages (internal paths, DB schema details) back to API clients.
+- Bumped `sharp` to 0.35.3, resolving four libvips memory-corruption CVEs (CVE-2026-33327/33328/35590/35591).
+
 ## [2.0.1] - 2026-07-22
 
 ### Fixed
