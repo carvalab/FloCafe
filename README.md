@@ -350,8 +350,9 @@ or (once available) via the Mac App Store / Microsoft Store.
   start and shows a clear message asking you to update, instead of silently running
   queries against columns that no longer exist.
 - Startup failures — including that schema-mismatch case — are reported through the
-  existing anonymous, opt-in telemetry pipe with the relevant version numbers attached, so
-  installs stuck on a stale build can be caught proactively.
+  existing anonymous telemetry pipe (on by default, opt-out anytime in Settings →
+  Integrations → Privacy) with the relevant version numbers attached, so installs stuck on
+  a stale build can be caught proactively.
 - A built-in health check (Settings → Database Tools) diffs your live schema against what
   the current app version expects and can safely apply additive fixes.
 

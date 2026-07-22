@@ -1785,8 +1785,8 @@ function seedInstallDefaults(): void {
   insert('cloud_reports_enabled', '1');
   insert('cloud_command_polling_enabled', '1');
   insert('cloud_registration_status', 'unregistered');
-  insert('anonymous_data_consent', 'false');
-  insert('telemetry_enabled', 'false');
+  insert('anonymous_data_consent', 'true');
+  insert('telemetry_enabled', 'true');
   insert('telemetry_scope', 'usage_stats,country,app_version,platform,session_duration,feature_usage,error_diagnostics');
   insert('kds_enabled', 'true');
   insert('kot_printing_enabled', 'true');

@@ -53,7 +53,7 @@ export default function SetupPage() {
     business_name: '',
   });
   const [termsAccepted, setTermsAccepted] = useState(false);
-  const [anonymousDataConsent, setAnonymousDataConsent] = useState(false);
+  const [anonymousDataConsent, setAnonymousDataConsent] = useState(true);
   const passwordsEntered = form.password.length > 0 && form.confirmPassword.length > 0;
   const passwordsMatch = !passwordsEntered || form.password === form.confirmPassword;
 
