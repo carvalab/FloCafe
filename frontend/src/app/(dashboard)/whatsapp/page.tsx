@@ -12,9 +12,11 @@ import {
   Loader2, AlertTriangle, CheckCircle2, XCircle, QrCode, Ban, Send, Inbox, Copy, KeyRound, Info,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import Link from 'next/link';
 import { useAuthStore } from '@/store/auth';
 import { useI18n } from '@/hooks/useI18n';
 import { useConfirm } from '@/hooks/use-confirm';
+import { usePosSettingsStore } from '@/store/pos-settings';
 import { formatDate, formatTime } from '@/lib/printer/format-date';
 import { dialCodeFor } from '@/lib/phone';
 
@@ -146,6 +148,7 @@ function translateLastError(
 export default function WhatsAppPage() {
   const { t, language } = useI18n();
   const { confirm, ConfirmDialog } = useConfirm();
+  const setWhatsappEnabled = usePosSettingsStore((s) => s.setWhatsappEnabled);
   const { currentTenant } = useAuthStore();
   const role = currentTenant?.role ?? '';
   const isAdmin = role === 'owner' || role === 'manager';
@@ -170,7 +173,6 @@ export default function WhatsAppPage() {
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
   const [pairingPhone, setPairingPhone] = useState(dialCode);
-  const [ackRisk, setAckRisk] = useState(false);
 
   const [sentMessages, setSentMessages] = useState<SentMessage[]>([]);
   const [inbox, setInbox] = useState<InboxMessage[]>([]);
@@ -295,20 +297,6 @@ export default function WhatsAppPage() {
     void refreshBlocklist();
   }, [refreshBlocklist]);
 
-  const enableFeature = async () => {
-    if (!ackRisk) {
-      toast.error(t('whatsapp.enable.ackError'));
-      return;
-    }
-    try {
-      await api.post('/whatsapp/enable');
-      setAckRisk(false);
-      toast.success(t('whatsapp.enable.success'));
-      void refreshStatus();
-} catch (err) { toastApiError(err, t('whatsapp.enable.failed'), t);
-    }
-  };
-
   const disableFeature = async () => {
     if (!await confirm(t('whatsapp.active.disableConfirm'), {
       title: t('whatsapp.active.disableTitle'),
@@ -317,6 +305,7 @@ export default function WhatsAppPage() {
     })) return;
     try {
       await api.post('/whatsapp/disable');
+      setWhatsappEnabled(false);
       toast.success(t('whatsapp.active.disabledSuccess'));
       void refreshStatus();
 } catch (err) { toastApiError(err, t('whatsapp.active.disableFailed'), t);
@@ -425,27 +414,19 @@ export default function WhatsAppPage() {
         <TabsContent value="connection" className="space-y-4">
           {!status?.enabled && (
             <Card>
-              <CardHeader>
-                <CardTitle>{t('whatsapp.enable.title')}</CardTitle>
-                <CardDescription>{t('whatsapp.enable.description')}</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="rounded-md border bg-muted/40 p-4 text-sm space-y-3">
-                  <p>{t('whatsapp.enable.riskNote')}</p>
-                  <p className="text-muted-foreground">{t('whatsapp.enable.floHelps')}</p>
-                </div>
-                <label className="flex items-start gap-3 text-sm cursor-pointer">
-                  <input
-                    type="checkbox"
-                    className="mt-1 size-4 accent-primary"
-                    checked={ackRisk}
-                    onChange={(e) => setAckRisk(e.target.checked)}
-                  />
-                  <span>{t('whatsapp.enable.acknowledge')}</span>
-                </label>
-                <div className="flex gap-2">
-                  <Button onClick={enableFeature} disabled={!ackRisk}>{t('whatsapp.enable.cta')}</Button>
-                </div>
+              <CardContent className="text-sm text-muted-foreground flex items-center justify-between gap-4 py-4">
+                <span>
+                  {t('whatsapp.connection.notEnabled', {
+                    defaultValue: 'WhatsApp is not enabled on this tenant.',
+                  })}
+                </span>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/settings?tab=whatsapp">
+                    {t('whatsapp.connection.enableInSettings', {
+                      defaultValue: 'Enable in Settings',
+                    })}
+                  </Link>
+                </Button>
               </CardContent>
             </Card>
           )}

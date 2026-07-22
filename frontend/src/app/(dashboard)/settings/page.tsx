@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/store/auth';
 import { usePosSettingsStore, type PaperSize, type BillTemplate } from '@/store/pos-settings';
@@ -17,6 +18,7 @@ import { useConfirm } from '@/hooks/use-confirm';
 import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
 import { HealthCheckDialog } from '@/components/settings/HealthCheckDialog';
 import { InitializeDatabaseDialog } from '@/components/settings/InitializeDatabaseDialog';
+import { WhatsAppEnableCard } from '@/components/settings/WhatsAppEnableCard';
 import type { HealthCheckReport } from '@/types/electron';
 import { useI18n } from '@/hooks/useI18n';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -218,6 +220,7 @@ function KdsDefaultViewCard() {
 export default function SettingsPage() {
   const { currentTenant, user, updateCurrentTenant } = useAuthStore();
   const posSettings = usePosSettingsStore();
+  const whatsappEnabled = posSettings.whatsappEnabled;
   const { printMethod, setPrintMethod, refreshHardwarePrinter } = usePrinterStore();
   usePrinterStatusSync();
   const { t, language, setLanguage } = useI18n();
@@ -1574,7 +1577,7 @@ export default function SettingsPage() {
             <h1 className="text-2xl font-bold text-gray-900">{t('settings.title')}</h1>
           </div>
 
-          <nav className="flex md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-gray-200 pb-2 md:pb-0 md:pr-2">
+           <nav className="flex md:flex-col gap-0.5 overflow-x-auto md:overflow-x-visible border-b md:border-b-0 md:border-r border-gray-200 pb-2 md:pb-0 md:pr-2">
 
             {/* Store group */}
             <div className="hidden md:block px-3 pt-3 pb-2 mt-2 mb-1 border-b border-gray-100">
@@ -1590,6 +1593,9 @@ export default function SettingsPage() {
             </div>
             <SettingsNavItem label={t('settings.posWorkflow')} value="pos" active={activeTab} onClick={setActiveTab} />
             <SettingsNavItem label={t('settings.tabKds')} value="kds" active={activeTab} onClick={setActiveTab} />
+            {/* WhatsApp opt-in lives under Operations because the receive-bill
+                workflow is what the cashier touches every time a customer pays. */}
+            <SettingsNavItem label={t('settings.tabWhatsapp')} value="whatsapp" active={activeTab} onClick={setActiveTab} />
 
             {/* Customers group */}
             <div className="hidden md:block px-3 pt-4 pb-2 mt-3 mb-1 border-b border-gray-100">
@@ -3042,6 +3048,24 @@ export default function SettingsPage() {
         </TabsContent>
 
         {/* Integrations tab — cloud + OrderFlow + More Apps */}
+        <TabsContent value="whatsapp">
+          <div className="pb-6 max-w-3xl space-y-6">
+            {!whatsappEnabled ? (
+              <WhatsAppEnableCard />
+            ) : (
+              <div className="bg-white rounded-xl border border-gray-100 p-6 flex items-center justify-between gap-4">
+                <div>
+                  <p className="font-semibold text-gray-900">{t('whatsapp.settings.enabled')}</p>
+                  <p className="text-xs text-gray-500 mt-0.5">{t('whatsapp.settings.enabledHint')}</p>
+                </div>
+                <Button asChild variant="outline" size="sm">
+                  <Link href="/whatsapp">{t('whatsapp.settings.openConnection')}</Link>
+                </Button>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
         <TabsContent value="integrations">
           <div className="pb-6 max-w-3xl space-y-6">
             <div className="space-y-6">
