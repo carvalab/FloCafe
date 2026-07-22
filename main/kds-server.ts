@@ -9,7 +9,7 @@ import * as fs from 'fs';
 import { getDatabase, parseItemJson, attachEffectiveAddons, isKdsEnabled } from './db';
 import { setupKdsWebSocket } from './services/kds';
 import { getJWTSecret } from './routes/auth';
-import { rateLimit, corsOptions } from './middleware/security';
+import { rateLimit, authRateLimit, corsOptions } from './middleware/security';
 
 let kdsServer: http.Server | null = null;
 const KDS_PORT = parseInt(process.env.KDS_PORT || '3002', 10);
@@ -153,7 +153,7 @@ export function startKdsServer(): Promise<void> {
     });
 
     // KDS Auth - verify user has chef/manager/owner role
-    app.post('/api/auth/login', (req: Request, res: Response) => {
+    app.post('/api/auth/login', authRateLimit(), (req: Request, res: Response) => {
       try {
         const { email, password } = req.body;
         if (!email || !password) {
@@ -346,7 +346,7 @@ export function startKdsServer(): Promise<void> {
     // ── Error handler ────────────────────────────────────────────────
     app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       console.error('[KDS Server] Error:', err);
-      res.status(500).json({ error: err.message || 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error' });
     });
 
     let currentKdsPort = KDS_PORT;

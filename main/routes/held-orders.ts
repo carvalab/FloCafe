@@ -5,7 +5,7 @@ import { randomUUID } from 'crypto';
 
 const router = Router();
 
-router.get('/', (req: Request, res: Response) => {
+router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Request, res: Response) => {
   try {
     const db = getDatabase();
     const rows = db.prepare('SELECT * FROM held_orders ORDER BY updated_at DESC').all();

@@ -210,7 +210,7 @@ router.get('/', (req: Request, res: Response) => {
 });
 
 // ── GET /:id — single product with relations ───────────────────────────
-router.get('/:id/image', (req: Request, res: Response) => {
+router.get('/:id/image', async (req: Request, res: Response) => {
   // Image endpoint — must be defined BEFORE /:id to avoid route conflict
   try {
     const db = getDatabase();
@@ -230,6 +230,23 @@ router.get('/:id/image', (req: Request, res: Response) => {
     // would tell browsers to permanently cache the redirect, which would prevent
     // us from later serving the re-uploaded Base64 version at this same URL.
     if (!imageUrl.startsWith('data:')) {
+      // Only redirect to HTTPS URLs that don't resolve to a private/internal
+      // address — this endpoint is unauthenticated, so an unvalidated legacy
+      // URL is an open redirect (vuln-0004).
+      let parsedUrl: URL;
+      try {
+        parsedUrl = new URL(imageUrl);
+      } catch {
+        return res.status(404).json({ error: 'No image' });
+      }
+      if (parsedUrl.protocol !== 'https:') {
+        return res.status(404).json({ error: 'No image' });
+      }
+      try {
+        await assertPublicHostname(parsedUrl.hostname);
+      } catch {
+        return res.status(404).json({ error: 'No image' });
+      }
       return res.redirect(302, imageUrl);
     }
 

@@ -198,7 +198,7 @@ export function startServer(): Promise<void> {
     // ── Global error handler ───────────────────────────────────────────
     app.use((err: Error, _req: Request, res: Response, _next: NextFunction) => {
       console.error('[Server] Error:', err);
-      res.status(500).json({ error: err.message || 'Internal server error' });
+      res.status(500).json({ error: 'Internal server error' });
     });
 
     let currentPort = PORT;
