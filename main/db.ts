@@ -1269,7 +1269,20 @@ function runMigrations(): void {
   const current = getCurrentSchemaVersion();
   const target = MIGRATIONS.length > 0 ? MIGRATIONS[MIGRATIONS.length - 1].version : 0;
 
-  if (current >= target) {
+  if (current > target) {
+    // The database has already been migrated by a newer build than this one
+    // (shared/synced DB, or a stale install/shortcut still pointing at this
+    // binary). Proceeding would let old queries reference columns a later
+    // migration already dropped (e.g. order_items.addons, #133) — fail loudly
+    // at startup instead of mid-transaction during business hours.
+    throw new Error(
+      `Database schema (v${current}) is newer than this app version supports (v${target}). ` +
+      `This usually means another device or a previous update already upgraded this database. ` +
+      `Please update Flo Cafe to the latest version before continuing.`
+    );
+  }
+
+  if (current === target) {
     console.log(`[DB] Schema up to date (v${current})`);
     return;
   }
