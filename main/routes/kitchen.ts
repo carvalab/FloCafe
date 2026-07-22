@@ -42,7 +42,8 @@ router.get('/orders', (req: Request, res: Response) => {
     res.json({ orders: ordersWithItems, counts: countMap });
   } catch (error: any) {
     console.error('[Kitchen] Orders fetch error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -16,7 +16,8 @@ router.get('/', (req: Request, res: Response) => {
     const stations = db.prepare(query).all(...params);
     res.json({ kitchenStations: stations });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -39,7 +40,8 @@ router.get('/:id', (req: Request, res: Response) => {
       : null;
     res.json({ kitchenStation: { ...station, tables, users, printer } });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -73,7 +75,8 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     const station = db.prepare('SELECT * FROM kitchen_stations WHERE id = ?').get(id);
     res.status(201).json({ kitchenStation: station });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -115,7 +118,8 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     const updated = db.prepare('SELECT * FROM kitchen_stations WHERE id = ?').get(req.params.id);
     res.json({ kitchenStation: updated });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -157,7 +161,8 @@ router.put('/:id/users', requireRole('owner', 'manager'), (req: Request, res: Re
     `).all(req.params.id);
     res.json({ users });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -177,7 +182,8 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
     db.prepare('UPDATE kitchen_stations SET is_active = 0, updated_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Kitchen station deleted' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

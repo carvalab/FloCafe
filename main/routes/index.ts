@@ -118,7 +118,8 @@ export function registerRoutes(app: Express): void {
       const devices = await cloudSync.listPairedDevices();
       res.json({ devices });
     } catch (error: any) {
-      res.status(502).json({ error: error.message || 'Could not reach FloAdmin' });
+      console.error('[API] FloAdmin request failed:', error);
+      res.status(502).json({ error: 'Could not reach FloAdmin' });
     }
   });
 
@@ -141,7 +142,8 @@ export function registerRoutes(app: Express): void {
 
       res.json(customers);
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("[API] Internal error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -167,7 +169,8 @@ export function registerRoutes(app: Express): void {
         res.json({ found: false, customer: null });
       }
     } catch (error: any) {
-      res.status(500).json({ error: error.message });
+      console.error("[API] Internal error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -291,7 +294,8 @@ export function registerRoutes(app: Express): void {
       res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Cancel item error:', error);
-      res.status(500).json({ error: error.message });
+      console.error("[API] Internal error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 
@@ -392,7 +396,8 @@ export function registerRoutes(app: Express): void {
       res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Restore item error:', error);
-      res.status(500).json({ error: error.message });
+      console.error("[API] Internal error:", error);
+      res.status(500).json({ error: "Internal server error" });
     }
   });
 }

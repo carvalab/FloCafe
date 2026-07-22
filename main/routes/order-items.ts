@@ -41,7 +41,8 @@ router.patch('/:id/status', (req: Request, res: Response) => {
     res.json({ order: { ...order, items, table } });
   } catch (error: any) {
     console.error('[OrderItems] Status update error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

@@ -14,7 +14,7 @@ router.get('/health-check', requireRole('owner'), (_req: Request, res: Response)
     res.json(runHealthCheck());
   } catch (error: any) {
     console.error('[DB Tools] health-check error:', error);
-    res.status(500).json({ error: 'Health check failed: ' + error.message });
+    res.status(500).json({ error: 'Health check failed' });
   }
 });
 
@@ -24,7 +24,7 @@ router.post('/apply-safe-fixes', requireRole('owner'), (req: Request, res: Respo
     res.json(applySafeFixes(findingIds));
   } catch (error: any) {
     console.error('[DB Tools] apply-safe-fixes error:', error);
-    res.status(500).json({ error: 'Applying fixes failed: ' + error.message });
+    res.status(500).json({ error: 'Applying fixes failed' });
   }
 });
 
@@ -35,7 +35,7 @@ router.get('/backups', requireRole('owner'), (_req: Request, res: Response) => {
     res.json({ backups: listBackups() });
   } catch (error: any) {
     console.error('[DB Tools] list backups error:', error);
-    res.status(500).json({ error: 'Listing backups failed: ' + error.message });
+    res.status(500).json({ error: 'Listing backups failed' });
   }
 });
 
@@ -48,7 +48,7 @@ router.post('/backups/:fileName/delete', requireRole('owner'), requireMasterPin,
     res.json({ success: true });
   } catch (error: any) {
     console.error('[DB Tools] delete backup error:', error);
-    res.status(400).json({ error: error.message || 'Deleting backup failed' });
+    res.status(400).json({ error: 'Deleting backup failed' });
   }
 });
 
@@ -71,7 +71,8 @@ router.post('/master-pin/reset', requireRole('owner'), (req: Request, res: Respo
     resetMasterPin(pin!);
     res.json({ success: true });
   } catch (error: any) {
-    res.status(500).json({ error: 'Failed to set Master PIN: ' + error.message });
+    console.error('[DB Tools] set Master PIN error:', error);
+    res.status(500).json({ error: 'Failed to set Master PIN' });
   }
 });
 
@@ -96,7 +97,7 @@ router.post('/initialize', requireRole('owner'), requireMasterPin, async (req: R
     res.json({ success: true, backupPath });
   } catch (error: any) {
     console.error('[DB Tools] initialize error:', error);
-    res.status(500).json({ error: 'Initialize failed: ' + error.message });
+    res.status(500).json({ error: 'Initialize failed' });
   }
 });
 

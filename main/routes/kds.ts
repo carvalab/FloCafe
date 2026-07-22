@@ -50,7 +50,8 @@ router.get('/orders', requireKdsEnabled, (req: Request, res: Response) => {
 
     res.json({ orders: ordersWithItems });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -61,7 +62,8 @@ router.get('/pairing', (req: Request, res: Response) => {
 
     res.json({ stations });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -101,7 +103,8 @@ router.post('/pairing', requireRole('owner', 'manager'), (req: Request, res: Res
       }
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -175,7 +178,8 @@ router.get('/display', requireKdsEnabled, (req: Request, res: Response) => {
       orders: Object.values(groupedByOrder),
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -208,7 +212,8 @@ router.patch('/items/:id/status', requireKdsEnabled, (req: Request, res: Respons
     const updatedItem = db.prepare('SELECT * FROM order_items WHERE id = ?').get(req.params.id);
     res.json({ item: updatedItem });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

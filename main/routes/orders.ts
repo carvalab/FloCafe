@@ -98,7 +98,8 @@ router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Requ
 
     res.json({ orders: ordersWithRelations });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -123,7 +124,8 @@ router.get('/:id', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: R
 
     res.json({ order: { ...order, items, table, customer, bill } });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -290,7 +292,8 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
     res.status(201).json({ order: Object.assign({}, order, { items: orderItems }) });
   } catch (error: any) {
     console.error('[Orders] Create error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -469,7 +472,8 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
 
     res.json({ order: Object.assign({}, updatedOrder, { items: updatedItems }) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -586,7 +590,8 @@ router.patch('/:id/status', requireRole('owner', 'manager', 'chef', 'waiter'), (
 
     res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table }) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -630,7 +635,8 @@ router.patch('/:id/customer', requireRole('owner', 'manager'), (req: Request, re
 
     res.json({ order: { ...updatedOrder, customer } });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -669,7 +675,8 @@ router.patch('/:id/convert-to-takeaway', requireRole('owner', 'manager', 'cashie
 
     res.json({ order: Object.assign({}, updatedOrder, { items: orderItems, table: null }) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -821,7 +828,8 @@ router.patch('/:id/discount', requireRole('owner', 'manager'), (req: Request, re
     notifyOrderUpdated();
     res.json({ order: result });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -986,7 +994,8 @@ router.patch('/:id/items/:itemId/discount', requireRole('owner', 'manager'), (re
 
     res.json({ item: updatedItem });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

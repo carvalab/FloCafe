@@ -99,6 +99,7 @@ async function main(): Promise<void> {
   // Inserting a TEXT customer_id must not fail FK enforcement.
   const phone = '+15555550150';
   const nowIso = new Date().toISOString();
+  db.prepare(`DELETE FROM whatsapp_messages WHERE phone_e164 = ?`).run(phone);
   db.prepare(`
     INSERT INTO whatsapp_messages (phone_e164, direction, kind, status, body, queued_at)
     VALUES (?, 'outbound', 'manual_reply', 'sent', 'test body', ?)

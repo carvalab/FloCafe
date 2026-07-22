@@ -27,7 +27,8 @@ router.get('/', (_req: Request, res: Response) => {
     const printers = db.prepare('SELECT * FROM printers ORDER BY is_default DESC, name').all().map(printerShape);
     res.json({ printers });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -39,7 +40,8 @@ router.get('/detect', async (_req: Request, res: Response) => {
     res.json({ printers });
   } catch (error: any) {
     console.error('[Printer] Detection error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -56,7 +58,8 @@ router.get('/:id', (req: Request, res: Response) => {
     if (!printer) return res.status(404).json({ error: 'Printer not found' });
     res.json({ printer: printerShape(printer) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -105,7 +108,8 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(id);
     res.status(201).json({ printer: printerShape(printer) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -151,7 +155,8 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     const printer = db.prepare('SELECT * FROM printers WHERE id = ?').get(req.params.id);
     res.json({ printer: printerShape(printer) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -165,7 +170,8 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
     db.prepare('DELETE FROM printers WHERE id = ?').run(req.params.id);
     res.json({ message: 'Printer deleted' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -181,7 +187,8 @@ router.post('/:id/set-default', requireRole('owner', 'manager'), (req: Request, 
 
     res.json({ message: 'Default printer set' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -215,7 +222,8 @@ router.post('/:id/test', requireRole('owner', 'manager'), async (req: Request, r
       res.status(502).json({ error: 'Printer did not respond or print failed' });
     }
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -340,7 +348,8 @@ router.post('/print-bill', requireRole('owner', 'manager'), async (req: Request,
   } catch (error: any) {
     console.error('[Print Bill] Error:', error);
     console.error('[Print Bill] Error stack:', error.stack);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -455,7 +464,8 @@ router.post('/print-kot', requireRole('owner', 'manager'), async (req: Request, 
     }
   } catch (error: any) {
     console.error('[Print KOT] Error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

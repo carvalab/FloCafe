@@ -12,7 +12,10 @@ async function assertPublicHostname(hostname: string): Promise<void> {
   let addresses: dns.LookupAddress[];
   try {
     addresses = await dns.promises.lookup(hostname, { all: true, verbatim: true });
-  } catch {
+  } catch (error: any) {
+    if (error?.code === 'ENOTFOUND') {
+      throw error;
+    }
     throw new Error('Could not resolve hostname');
   }
   if (addresses.length === 0) {
@@ -205,7 +208,8 @@ router.get('/', (req: Request, res: Response) => {
 
     res.json({ products: productsWithRelations });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -224,30 +228,11 @@ router.get('/:id/image', async (req: Request, res: Response) => {
 
     const imageUrl = row.image_url as string;
 
-    // Handle legacy URL strings (not Base64 data URIs)
-    // 302 (not 301) because this is a temporary migration path — legacy URLs
-    // should eventually be re-uploaded as Base64 through the new UI. Using 301
-    // would tell browsers to permanently cache the redirect, which would prevent
-    // us from later serving the re-uploaded Base64 version at this same URL.
+    // Legacy external image URLs are not redirected. This endpoint is public
+    // for <img> tags, so redirecting database values would create an open
+    // redirect. Re-upload legacy images as validated Base64 data URIs.
     if (!imageUrl.startsWith('data:')) {
-      // Only redirect to HTTPS URLs that don't resolve to a private/internal
-      // address — this endpoint is unauthenticated, so an unvalidated legacy
-      // URL is an open redirect (vuln-0004).
-      let parsedUrl: URL;
-      try {
-        parsedUrl = new URL(imageUrl);
-      } catch {
-        return res.status(404).json({ error: 'No image' });
-      }
-      if (parsedUrl.protocol !== 'https:') {
-        return res.status(404).json({ error: 'No image' });
-      }
-      try {
-        await assertPublicHostname(parsedUrl.hostname);
-      } catch {
-        return res.status(404).json({ error: 'No image' });
-      }
-      return res.redirect(302, imageUrl);
+      return res.status(404).json({ error: 'No image' });
     }
 
     // Parse the data URI: "data:image/webp;base64,AAAA..."
@@ -285,7 +270,8 @@ router.get('/:id/image', async (req: Request, res: Response) => {
     });
     res.send(buffer);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -303,7 +289,8 @@ router.get('/:id', (req: Request, res: Response) => {
 
     res.json({ product: { ...(product as any), tags: parseTags((product as any).tags), category: rel.category, addonGroups: rel.addon_groups } });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -345,7 +332,10 @@ router.post('/fetch-url', requireRole('owner', 'manager'), async (req: Request, 
 
       try {
         await assertPublicHostname(parsedUrl.hostname);
-      } catch {
+      } catch (error: any) {
+        if (error?.code === 'ENOTFOUND') {
+          return res.status(502).json({ error: 'Could not resolve hostname' });
+        }
         return res.status(400).json({ error: 'URL is not allowed' });
       }
 
@@ -439,7 +429,8 @@ router.post('/fetch-url', requireRole('owner', 'manager'), async (req: Request, 
       return res.status(502).json({ error: 'Could not fetch the image' });
     }
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -505,7 +496,8 @@ router.post('/', requireRole('owner', 'manager'), (req: Request, res: Response) 
     const product = db.prepare('SELECT * FROM products WHERE id = ?').get(id);
     res.status(201).json({ product });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -596,7 +588,8 @@ router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     res.json({ product: updated });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -611,7 +604,8 @@ router.delete('/:id', requireRole('owner', 'manager'), (req: Request, res: Respo
     db.prepare('UPDATE products SET deleted_at = ? WHERE id = ?').run(now(), req.params.id);
     res.json({ message: 'Product deleted' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -653,7 +647,8 @@ router.post('/:id/stock', requireRole('owner', 'manager'), (req: Request, res: R
     const updated = db.prepare('SELECT * FROM products WHERE id = ?').get(req.params.id);
     res.json({ product: updated });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

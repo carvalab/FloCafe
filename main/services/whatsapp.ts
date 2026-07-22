@@ -11,7 +11,9 @@ import { getDatabase, getSettingValue, now } from '../db';
 let baileysModule: typeof import('@whiskeysockets/baileys') | null = null;
 async function loadBaileys(): Promise<typeof import('@whiskeysockets/baileys')> {
   if (!baileysModule) {
-    baileysModule = await import('@whiskeysockets/baileys');
+    // Prevent TypeScript from transpiling dynamic import() to require() in CJS mode
+    const dynamicImport = new Function('specifier', 'return import(specifier)');
+    baileysModule = (await dynamicImport('@whiskeysockets/baileys')) as typeof import('@whiskeysockets/baileys');
   }
   return baileysModule;
 }

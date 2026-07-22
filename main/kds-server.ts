@@ -148,7 +148,8 @@ export function startKdsServer(): Promise<void> {
           kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
         });
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        console.error("[API] Internal error:", error);
+        res.status(500).json({ error: "Internal server error" });
       }
     });
 
@@ -190,7 +191,8 @@ export function startKdsServer(): Promise<void> {
           },
         });
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        console.error("[API] Internal error:", error);
+        res.status(500).json({ error: "Internal server error" });
       }
     });
 
@@ -236,7 +238,8 @@ export function startKdsServer(): Promise<void> {
 
         res.json({ orders: ordersWithItems });
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        console.error("[API] Internal error:", error);
+        res.status(500).json({ error: "Internal server error" });
       }
     });
 
@@ -274,7 +277,8 @@ export function startKdsServer(): Promise<void> {
         res.json({ success: true });
       } catch (error: any) {
         console.error('[KDS Server] PATCH item status error:', error);
-        res.status(500).json({ error: error.message });
+        console.error("[API] Internal error:", error);
+        res.status(500).json({ error: "Internal server error" });
       }
     });
 
@@ -285,7 +289,8 @@ export function startKdsServer(): Promise<void> {
         const categories = db.prepare('SELECT * FROM categories WHERE is_active = 1 ORDER BY sort_order').all();
         res.json({ categories });
       } catch (error: any) {
-        res.status(500).json({ error: error.message });
+        console.error("[API] Internal error:", error);
+        res.status(500).json({ error: "Internal server error" });
       }
     });
 

@@ -347,7 +347,8 @@ router.post('/login', authRateLimit(), (req: Request, res: Response) => {
     });
   } catch (error: any) {
     console.error('[Auth] Login error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -481,7 +482,8 @@ router.post('/password/change', (req: Request, res: Response) => {
 
     res.json({ message: 'Password changed successfully' });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -554,7 +556,8 @@ router.post('/recover-password', authRateLimit(), (req: Request, res: Response) 
     res.json({ message: 'Password reset successfully. You can now log in with your new password.' });
   } catch (error: any) {
     console.error('[Auth] Password recovery error:', error);
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -574,7 +577,8 @@ router.get('/setup/status', (_req: Request, res: Response) => {
       masterPinAvailable: isMasterPinAvailable(),
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -758,7 +762,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
     const status = message.includes('already complete') ? 403
       : message.includes('already exists') ? 400
         : 500;
-    res.status(status).json({ error: message });
+    res.status(status).json({ error: status === 500 ? 'Setup failed' : message });
   }
 });
 

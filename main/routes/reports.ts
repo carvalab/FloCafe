@@ -74,7 +74,8 @@ router.get('/daily-stats', requireRole('owner', 'manager'), (req: Request, res: 
       tablesOccupied: tablesOccupied.count,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -118,7 +119,8 @@ router.get('/summary', requireRole('owner', 'manager'), (req: Request, res: Resp
       }
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -162,7 +164,8 @@ router.get('/sales', requireRole('owner', 'manager'), (req: Request, res: Respon
       }
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -188,7 +191,8 @@ router.get('/topProducts', requireRole('owner', 'manager'), (req: Request, res: 
 
     res.json({ topProducts });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -227,7 +231,8 @@ router.get('/recentOrders', requireRole('owner', 'manager'), (req: Request, res:
 
     res.json({ recentOrders: ordersWithItems });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -261,7 +266,8 @@ router.get('/tables', requireRole('owner', 'manager'), (req: Request, res: Respo
       tableUtilization
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -356,7 +362,8 @@ router.get('/insights', requireRole('owner', 'manager'), (req: Request, res: Res
       idlestDayOfWeek: idlestDay ? { dayIndex: idlestDay.index, orderCount: idlestDay.count } : null,
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 

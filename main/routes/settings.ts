@@ -95,7 +95,8 @@ router.get('/business', requireRole('owner', 'manager', 'cashier', 'waiter', 'ch
     const s = getAllSettings(getDatabase());
     res.json(businessShape(s));
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -116,7 +117,8 @@ router.put('/business', requireRole('owner', 'manager'), (req: Request, res: Res
 
     res.json(businessShape(getAllSettings(db)));
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -125,7 +127,8 @@ router.get('/tax', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'),
     const s = getAllSettings(getDatabase());
     res.json(taxShape(s));
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -136,7 +139,8 @@ router.put('/tax', requireRole('owner', 'manager'), (req: Request, res: Response
     upsertSettings(db, { tax_registered, gstin, state_code, tax_scheme, country });
     res.json(taxShape(getAllSettings(db)));
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -147,7 +151,8 @@ router.get('/loyalty', requireRole('owner', 'manager', 'cashier', 'waiter', 'che
       loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -161,7 +166,8 @@ router.put('/loyalty', requireRole('owner', 'manager'), (req: Request, res: Resp
       loyalty_enabled: s.loyalty_enabled === 'true' || s.loyalty_enabled === '1',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -177,7 +183,8 @@ router.get('/discount', requireRole('owner', 'manager', 'cashier', 'waiter', 'ch
       discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -222,7 +229,8 @@ router.put('/discount', requireRole('owner', 'manager'), (req: Request, res: Res
       discount_requires_approval: s.discount_requires_approval === 'true' || s.discount_requires_approval === '1',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -239,7 +247,8 @@ router.get('/kds', (_req: Request, res: Response) => {
       kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -257,7 +266,8 @@ router.put('/kds', requireRole('owner', 'manager'), (req: Request, res: Response
       kds_default_view: s.kds_default_view === 'kanban' ? 'kanban' : 'tabs',
     });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -267,7 +277,8 @@ router.get('/cloud', requireRole('owner', 'manager'), (req: Request, res: Respon
   try {
     res.json(cloudSync.getStatus());
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -302,7 +313,8 @@ router.put('/cloud', requireRole('owner', 'manager'), (req: Request, res: Respon
     cloudSync.reload();
     res.json(cloudSync.getStatus());
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    console.error('[API] Cloud settings update failed:', error);
+    res.status(400).json({ error: 'Invalid cloud settings' });
   }
 });
 
@@ -321,7 +333,8 @@ router.post('/cloud/register', requireRole('owner', 'manager'), async (req: Requ
     const result = await cloudSync.register();
     res.json(result);
   } catch (error: any) {
-    res.status(502).json({ error: error.message });
+    console.error('[API] Cloud registration failed:', error);
+    res.status(502).json({ error: 'Cloud registration failed' });
   }
 });
 
@@ -330,7 +343,8 @@ router.post('/cloud/test', requireRole('owner', 'manager'), async (_req: Request
     const result = await cloudSync.testConnection();
     res.json(result);
   } catch (error: any) {
-    res.status(502).json({ error: error.message });
+    console.error('[API] Cloud test failed:', error);
+    res.status(502).json({ error: 'Cloud test failed' });
   }
 });
 
@@ -343,7 +357,8 @@ router.get('/google-drive', requireRole('owner', 'manager'), (req: Request, res:
   try {
     res.json(googleDrive.getStatus());
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -352,7 +367,8 @@ router.put('/google-drive', requireRole('owner', 'manager'), (req: Request, res:
     const { frequency, retention_count } = req.body;
     res.json(googleDrive.updatePreferences({ frequency, retention_count }));
   } catch (error: any) {
-    res.status(400).json({ error: error.message });
+    console.error('[API] Google Drive preferences update failed:', error);
+    res.status(400).json({ error: 'Invalid Google Drive preferences' });
   }
 });
 
@@ -361,7 +377,8 @@ router.post('/google-drive/connect', requireRole('owner'), async (_req: Request,
     const status = await googleDrive.connect();
     res.json(status);
   } catch (error: any) {
-    res.status(502).json({ error: error.message });
+    console.error('[API] Google Drive connection failed:', error);
+    res.status(502).json({ error: 'Google Drive connection failed' });
   }
 });
 
@@ -370,7 +387,8 @@ router.post('/google-drive/disconnect', requireRole('owner'), async (_req: Reque
     const status = await googleDrive.disconnect();
     res.json(status);
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -379,7 +397,8 @@ router.post('/google-drive/backup-now', requireRole('owner'), async (_req: Reque
     const status = await googleDrive.backupNow();
     res.json(status);
   } catch (error: any) {
-    res.status(502).json({ error: error.message });
+    console.error('[API] Google Drive backup failed:', error);
+    res.status(502).json({ error: 'Google Drive backup failed' });
   }
 });
 
@@ -406,7 +425,8 @@ router.get('/', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef'), (r
     const s = getAllSettings(getDatabase());
     res.json({ settings: publicSettingsShape(s) });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -422,7 +442,8 @@ router.get('/:key', requireRole('owner', 'manager', 'cashier', 'waiter', 'chef')
     }
     res.json({ setting });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
@@ -456,7 +477,8 @@ router.put('/:key', requireRole('owner', 'manager'), (req: Request, res: Respons
     const setting = db.prepare('SELECT * FROM settings WHERE key = ?').get(req.params.key);
     res.json({ setting });
   } catch (error: any) {
-    res.status(500).json({ error: error.message });
+    console.error("[API] Internal error:", error);
+    res.status(500).json({ error: "Internal server error" });
   }
 });
 
