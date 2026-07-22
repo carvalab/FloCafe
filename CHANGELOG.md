@@ -2,6 +2,25 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.1] - 2026-07-22
+
+### Fixed
+- **Windows auto-update had the same silent-breakage bug as macOS in 2.0.0**: the release pipeline only uploaded the `.exe` installer, not the `latest.yml` manifest + `.exe.blockmap` electron-updater needs to find and apply updates. Both macOS and Windows release jobs now verify the auto-update assets actually got uploaded before a release is considered done, so this can't silently ship broken again.
+- Pre-migration auto-backup now runs before *every* upgrade, not just two specific hardcoded versions — an install that's been stuck for a long time and jumps through a dozen+ migrations at once is now just as protected as one applying a single routine update.
+- "Check for Updates" (Settings → Updates) did nothing when clicked on Linux — no error, no spinner, no message, because the button's handler never sent anything back to the screen for that platform. It now explains that Linux (AppImage/deb) isn't covered by auto-updates and points to GitHub Releases.
+- WhatsApp: a status could reach "read" while still showing blank "sent"/"delivered" timestamps, because Baileys sometimes skips straight from ack to read. Earlier timestamps now backfill together with the one that actually arrived (carvalab, #139).
+- WhatsApp: a packaging issue with the logging library (`pino`) could crash the app at startup — not just for WhatsApp, for every route, whether WhatsApp was enabled or not. It now falls back to a no-op logger instead of failing the whole process.
+
+### Added
+- WhatsApp e-billing is now opt-in: enable it from Settings → WhatsApp, and the sidebar entry stays hidden until you do, instead of being on and visible for every operator by default (carvalab, #139).
+- Backup History (Settings → Database Tools) now has a delete button per backup, and shows each backup's schema version (#120).
+
+### Changed
+- RevFlo was split across a generic "More Apps" card and a separate "Mobile App" pairing-code card. It's now one consolidated section in Settings → Integrations: download/QR, app (pairing) code, and paired devices together.
+- "Enable bill sync to FloAdmin" is renamed to "Enable sales sync to FloAdmin" — it was never syncing full bills, only live sales totals and order status for RevFlo's reports.
+- Anonymous telemetry is now on by default for new installs (still fully opt-out anytime in Settings → Integrations → Privacy).
+- Removed the OrderFlow "How it works" steps in Settings → Integrations — that flow hasn't actually been decided yet and the steps shown didn't reflect anything real.
+
 ## [2.0.0] - 2026-07-22
 
 ### Fixed
