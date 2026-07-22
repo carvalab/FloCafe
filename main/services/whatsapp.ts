@@ -2,7 +2,6 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { WASocket as BaileysSocket, WAMessageKey } from '@whiskeysockets/baileys';
-import { pino } from 'pino';
 import { parsePhoneNumber } from 'libphonenumber-js';
 import { getDatabase, getSettingValue, now } from '../db';
 
@@ -15,6 +14,31 @@ async function loadBaileys(): Promise<typeof import('@whiskeysockets/baileys')> 
     baileysModule = await import('@whiskeysockets/baileys');
   }
   return baileysModule;
+}
+
+// pino's default write path pulls in `thread-stream`, which spawns a real
+// Node worker_threads Worker pointed at a file path — inside an
+// electron-builder asar archive that path doesn't resolve the way plain
+// require()/fs calls do, so this can throw at load time in a *packaged*
+// build even though it's fine in dev (plain node_modules on disk). This is
+// a `require()`, not a static `import`, specifically so the failure is
+// catchable here — a static `import { pino } from 'pino'` at module scope
+// can't be wrapped in try/catch and would take the entire process down
+// before any route (including /api/auth/login) could ever respond, for
+// every user, WhatsApp on or off. Fall back to a no-op logger shaped like
+// pino's so callers (and Baileys, which uses .child()) don't need to care.
+type MinimalLogger = { level: string; trace: (...a: unknown[]) => void; debug: (...a: unknown[]) => void; info: (...a: unknown[]) => void; warn: (...a: unknown[]) => void; error: (...a: unknown[]) => void; fatal: (...a: unknown[]) => void; child: (obj: Record<string, unknown>) => MinimalLogger };
+function makeBaileysLogger(): MinimalLogger {
+  const noop = (): void => {};
+  const fallback: MinimalLogger = { level: 'silent', trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => fallback };
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    const pinoFactory = require('pino').pino ?? require('pino');
+    return pinoFactory({ level: 'silent' });
+  } catch (err) {
+    console.error('[WhatsApp] pino failed to load (packaging/ASAR issue?) — WhatsApp logging disabled, everything else unaffected:', (err as Error).message);
+    return fallback;
+  }
 }
 
 const AUTH_DIR_NAME = 'whatsapp-auth';
@@ -31,7 +55,7 @@ const RATE_LIMITED_STATUS_CODES = new Set([429]);
 
 // Baileys is extremely chatty at debug. Silence it so the Electron log
 // doesn't drown out the real signal from our service.
-const baileysLogger = pino({ level: 'silent' });
+const baileysLogger = makeBaileysLogger();
 
 const SHORTENER_HOSTS = new Set([
   'bit.ly', 'tinyurl.com', 't.co', 'goo.gl', 'ow.ly', 'is.gd',
