@@ -262,13 +262,14 @@ export default function SettingsPage() {
   // Unified PIN gate: 'set' opens the set/change-PIN dialog; 'backup'/'backup-custom'/
   // 'import'/'restore' open a verify prompt and, on success, run the pending action.
   type ImportPayload = { app: string; schema_version?: string; data: Record<string, unknown[]> };
-  type BackupInfo = { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto' };
+  type BackupInfo = { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto'; schemaVersion: number | null };
   type PinGate =
     | { mode: 'set' }
     | { mode: 'backup' }
     | { mode: 'backup-custom' }
     | { mode: 'import'; payload: { data: ImportPayload; overwrite: boolean } }
     | { mode: 'restore'; payload: { backupPath: string } }
+    | { mode: 'delete-backup'; payload: { fileName: string } }
     | null;
   const [pinGate, setPinGate] = useState<PinGate>(null);
   const [backups, setBackups] = useState<BackupInfo[]>([]);
@@ -416,6 +417,19 @@ export default function SettingsPage() {
       return { success: false, error: result.error || t('settings.restoreFailedGeneric') };
     }
 
+    if (pinGate.mode === 'delete-backup') {
+      try {
+        await api.post(`/db-tools/backups/${encodeURIComponent(pinGate.payload.fileName)}/delete`, { master_pin: pin });
+        toast.success(t('settings.backupDeleted'));
+        setPinGate(null);
+        fetchBackups();
+        return { success: true };
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        return { success: false, error: error.response?.data?.error || t('settings.backupDeleteFailed') };
+      }
+    }
+
     // mode === 'import'
     const result = await runImport(pinGate.payload.data, pinGate.payload.overwrite, pin);
     if (result.success) setPinGate(null);
@@ -494,6 +508,32 @@ export default function SettingsPage() {
     setPinGate({ mode: 'restore', payload: { backupPath: backup.path } });
   };
 
+  const handleDeleteBackup = async (backup: BackupInfo) => {
+    const ok = await confirm(t('settings.deleteBackupConfirm', { fileName: backup.fileName }), {
+      title: t('settings.confirmDeleteBackupTitle'),
+      confirmLabel: t('settings.deleteBackup'),
+      destructive: true,
+    });
+    if (!ok) return;
+
+    if (masterPinStatus.available && !masterPinStatus.isSet) {
+      toast.error(t('settings.setMasterPinFirst'));
+      return;
+    }
+    if (!masterPinStatus.available) {
+      try {
+        await api.post(`/db-tools/backups/${encodeURIComponent(backup.fileName)}/delete`, {});
+        toast.success(t('settings.backupDeleted'));
+        fetchBackups();
+      } catch (err: unknown) {
+        const error = err as { response?: { data?: { error?: string } } };
+        toast.error(error.response?.data?.error || t('settings.backupDeleteFailed'));
+      }
+      return;
+    }
+    setPinGate({ mode: 'delete-backup', payload: { fileName: backup.fileName } });
+  };
+
   const handleInitializeDatabase = async (pin: string) => {
     try {
       const { data } = await api.post('/db-tools/initialize', { master_pin: pin, confirmation_phrase: 'INITIALIZE' });
@@ -535,6 +575,7 @@ export default function SettingsPage() {
   };
   const [moreApps, setMoreApps] = useState<MoreApp[]>([]);
   const [moreAppsLoading, setMoreAppsLoading] = useState(false);
+  const [revflo, setRevflo] = useState<MoreApp | null>(null);
 
   useEffect(() => {
     setMoreAppsLoading(true);
@@ -543,11 +584,17 @@ export default function SettingsPage() {
     }).catch(() => {
       // Silent — this tab is informational, not critical
     }).finally(() => setMoreAppsLoading(false));
+
+    api.get('/more-apps/revflo').then((res) => {
+      setRevflo(res.data.app || null);
+    }).catch(() => {
+      // Silent — the card still shows the pairing code without the QR promo
+    });
   }, []);
 
   // ── Updates ─────────────────────────────────────────────────────────────────
   type UpdateStatus = {
-    status: 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready-to-install' | 'error' | 'dev-mode' | 'store';
+    status: 'checking' | 'available' | 'up-to-date' | 'downloading' | 'ready-to-install' | 'error' | 'dev-mode' | 'store' | 'unsupported';
     version?: string;
     percent?: number;
     error?: string;
@@ -2296,96 +2343,6 @@ export default function SettingsPage() {
                 </div>
               </div>
             </div>
-
-            
-            {/* Mobile App */}
-            <div className="bg-white rounded-xl border border-gray-100 p-6">
-              <div className="flex items-center gap-2 mb-4">
-                <Smartphone size={20} className="text-gray-500" />
-                <h2 className="font-semibold text-gray-900">{t('settings.mobileApp')}</h2>
-              </div>
-              <p className="text-sm text-gray-500 mb-4">
-                {t('settings.mobileAppHint')}
-              </p>
-              {pairingUnavailable ? (
-                <p className="text-sm text-gray-500">{t('settings.mobilePairingNeedsCloud')}</p>
-              ) : pairingCode ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
-                      <span className="font-mono text-2xl font-bold tracking-[0.3em] text-gray-900">
-                        {pairingCode.toUpperCase()}
-                      </span>
-                    </div>
-                    <button
-                      onClick={copyPairingCode}
-                      className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500"
-                      title={t('settings.copyCode')}
-                    >
-                      {copiedCode ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
-                    </button>
-                  </div>
-                  {pairingExpiresAt && (
-                    <p className="text-xs text-gray-400">
-                      {t('settings.codeExpires', { date: formatDate(pairingExpiresAt) })}
-                    </p>
-                  )}
-                  <button
-                    onClick={rotatePairingCode}
-                    disabled={rotatingCode}
-                    className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
-                  >
-                    <RefreshCw size={14} className={rotatingCode ? 'animate-spin' : ''} />
-                    {rotatingCode ? t('settings.generating') : t('settings.generateNewCode')}
-                  </button>
-                  <p className="text-xs text-amber-600">
-                    {t('settings.disconnectDevicesWarning')}
-                  </p>
-                </div>
-              ) : (
-                <button
-                  onClick={rotatePairingCode}
-                  disabled={rotatingCode}
-                  className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium"
-                >
-                  {rotatingCode ? t('settings.generating') : t('settings.generatePairingCode')}
-                </button>
-              )}
-
-              {!pairingUnavailable && (
-                <div className="mt-6 pt-6 border-t border-gray-100">
-                  <p className="text-sm font-medium text-gray-900 mb-3">{t('settings.pairedDevices')}</p>
-                  {devicesLoading ? (
-                    <p className="text-sm text-gray-400">{t('settings.loading')}</p>
-                  ) : pairedDevices.length === 0 ? (
-                    <p className="text-sm text-gray-500">{t('settings.noPairedDevices')}</p>
-                  ) : (
-                    <div className="space-y-2">
-                      {pairedDevices.map((d) => (
-                        <div key={d.id} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium text-gray-900 capitalize">
-                              {d.platform || t('settings.unknownPlatform')}
-                              {d.country ? ` · ${d.country}` : ''}
-                            </span>
-                            <span className="text-xs text-gray-400">
-                              {t('settings.lastActive', { date: formatDate(d.last_seen_at) })}
-                            </span>
-                          </div>
-                          <p className="text-xs text-gray-500 mt-1">
-                            {t('settings.firstPaired', { date: formatDate(d.first_seen_at) })}
-                            {d.app_version ? ` · v${d.app_version}` : ''}
-                          </p>
-                          {d.user_agent && (
-                            <p className="text-xs text-gray-400 mt-1 truncate" title={d.user_agent}>{d.user_agent}</p>
-                          )}
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
           </div>
         </TabsContent>
 
@@ -2890,14 +2847,26 @@ export default function SettingsPage() {
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-gray-400 truncate">{formatBackupSize(backup.sizeBytes)}</p>
+                        <p className="text-xs text-gray-400 truncate">
+                          {formatBackupSize(backup.sizeBytes)}
+                          {backup.schemaVersion != null && ` · ${t('settings.backupSchemaVersion', { version: backup.schemaVersion })}`}
+                        </p>
                       </div>
-                      <button
-                        onClick={() => handleRestoreFromHistory(backup)}
-                        className="shrink-0 px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
-                      >
-                        {t('settings.restoreBackup')}
-                      </button>
+                      <div className="shrink-0 flex items-center gap-2">
+                        <button
+                          onClick={() => handleRestoreFromHistory(backup)}
+                          className="px-3 py-1.5 text-xs bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 font-medium"
+                        >
+                          {t('settings.restoreBackup')}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteBackup(backup)}
+                          className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50"
+                          title={t('settings.deleteBackup')}
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3372,15 +3341,128 @@ export default function SettingsPage() {
                   <p className="font-mono text-gray-700">{t('settings.webhookSwiggy', { id: cloudSettings.cloud_store_id })}</p>
                 </div>
               )}
-
-              <div className="bg-gray-50 rounded-lg px-4 py-3 text-xs space-y-1">
-                <p className="text-gray-500 font-medium">{t('settings.orderflowHowItWorks')}</p>
-                <p className="text-gray-700">{t('settings.orderflowStep1')}</p>
-                <p className="text-gray-700">{t('settings.orderflowStep2')}</p>
-                <p className="text-gray-700">{t('settings.orderflowStep3')}</p>
-              </div>
             </div>
 
+            {/* RevFlo — consolidated: download/QR + app (pairing) code + paired devices */}
+            <div className="bg-white rounded-xl border border-gray-100 p-6 space-y-5">
+              <div className="flex items-center gap-2">
+                <Smartphone size={20} className="text-gray-500" />
+                <div>
+                  <h2 className="font-semibold text-gray-900">{revflo?.name || t('settings.revflo')}</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">{revflo?.tagline || t('settings.revfloHint')}</p>
+                </div>
+              </div>
+
+              {revflo?.available && (
+                <div className="flex flex-col sm:flex-row gap-5 items-start border border-gray-100 rounded-xl p-5">
+                  <div className="shrink-0">
+                    {revflo.qr_data_url ? (
+                      <img src={revflo.qr_data_url} alt={t('settings.appQrAlt', { name: revflo.name })}
+                        className="w-28 h-28 rounded-lg border border-gray-200" />
+                    ) : (
+                      <div className="w-28 h-28 rounded-lg border border-gray-200 flex items-center justify-center text-gray-400">
+                        <QrCode size={32} />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex gap-3 text-sm">
+                    {revflo.ios_url && (
+                      <a href={revflo.ios_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+                        {t('settings.downloadForIos')}
+                      </a>
+                    )}
+                    {revflo.android_url && (
+                      <a href={revflo.android_url} target="_blank" rel="noopener noreferrer" className="text-brand hover:underline">
+                        {t('settings.downloadForAndroid')}
+                      </a>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              <div>
+                <p className="text-sm font-medium text-gray-900 mb-1">{t('settings.mobileApp')}</p>
+                <p className="text-xs text-gray-500 mb-4">{t('settings.mobileAppHint')}</p>
+                {pairingUnavailable ? (
+                  <p className="text-sm text-gray-500">{t('settings.mobilePairingNeedsCloud')}</p>
+                ) : pairingCode ? (
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-center">
+                        <span className="font-mono text-2xl font-bold tracking-[0.3em] text-gray-900">
+                          {pairingCode.toUpperCase()}
+                        </span>
+                      </div>
+                      <button
+                        onClick={copyPairingCode}
+                        className="p-2.5 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-500"
+                        title={t('settings.copyCode')}
+                      >
+                        {copiedCode ? <Check size={18} className="text-green-600" /> : <Copy size={18} />}
+                      </button>
+                    </div>
+                    {pairingExpiresAt && (
+                      <p className="text-xs text-gray-400">
+                        {t('settings.codeExpires', { date: formatDate(pairingExpiresAt) })}
+                      </p>
+                    )}
+                    <button
+                      onClick={rotatePairingCode}
+                      disabled={rotatingCode}
+                      className="flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 disabled:opacity-50"
+                    >
+                      <RefreshCw size={14} className={rotatingCode ? 'animate-spin' : ''} />
+                      {rotatingCode ? t('settings.generating') : t('settings.generateNewCode')}
+                    </button>
+                    <p className="text-xs text-amber-600">
+                      {t('settings.disconnectDevicesWarning')}
+                    </p>
+                  </div>
+                ) : (
+                  <button
+                    onClick={rotatePairingCode}
+                    disabled={rotatingCode}
+                    className="px-5 py-2 text-sm bg-brand text-white rounded-lg hover:opacity-90 disabled:opacity-50 font-medium"
+                  >
+                    {rotatingCode ? t('settings.generating') : t('settings.generatePairingCode')}
+                  </button>
+                )}
+              </div>
+
+              {!pairingUnavailable && (
+                <div className="pt-5 border-t border-gray-100">
+                  <p className="text-sm font-medium text-gray-900 mb-3">{t('settings.pairedDevices')}</p>
+                  {devicesLoading ? (
+                    <p className="text-sm text-gray-400">{t('settings.loading')}</p>
+                  ) : pairedDevices.length === 0 ? (
+                    <p className="text-sm text-gray-500">{t('settings.noPairedDevices')}</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {pairedDevices.map((d) => (
+                        <div key={d.id} className="bg-gray-50 border border-gray-200 rounded-lg px-4 py-3 text-sm">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-gray-900 capitalize">
+                              {d.platform || t('settings.unknownPlatform')}
+                              {d.country ? ` · ${d.country}` : ''}
+                            </span>
+                            <span className="text-xs text-gray-400">
+                              {t('settings.lastActive', { date: formatDate(d.last_seen_at) })}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-500 mt-1">
+                            {t('settings.firstPaired', { date: formatDate(d.first_seen_at) })}
+                            {d.app_version ? ` · v${d.app_version}` : ''}
+                          </p>
+                          {d.user_agent && (
+                            <p className="text-xs text-gray-400 mt-1 truncate" title={d.user_agent}>{d.user_agent}</p>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
 
           </div>
             <div className="space-y-6">
@@ -3479,10 +3561,12 @@ export default function SettingsPage() {
             <p className="text-sm text-gray-500 mb-6">
               {updateStatus?.status === 'store'
                 ? t('settings.softwareUpdatesHintStore')
+                : updateStatus?.status === 'unsupported'
+                ? t('settings.softwareUpdatesHintUnsupported')
                 : t('settings.softwareUpdatesHintDefault')}
             </p>
 
-            {updateStatus && updateStatus.status !== 'store' && (
+            {updateStatus && updateStatus.status !== 'store' && updateStatus.status !== 'unsupported' && (
               <div className={`p-4 rounded-lg mb-4 ${
                 updateStatus.status === 'available' || updateStatus.status === 'ready-to-install'
                   ? 'bg-green-50 border border-green-200'
@@ -3536,7 +3620,7 @@ export default function SettingsPage() {
               </div>
             )}
 
-            {updateStatus?.status !== 'store' && (
+            {updateStatus?.status !== 'store' && updateStatus?.status !== 'unsupported' && (
               <button
                 onClick={handleCheckUpdates}
                 disabled={updateStatus?.status === 'checking' || updateStatus?.status === 'downloading'}

@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import * as fs from 'fs';
-import { getDbPath, createBackup, closeDatabase, initDatabase, listBackups } from '../db';
+import { getDbPath, createBackup, closeDatabase, initDatabase, listBackups, deleteBackup } from '../db';
 import { requireRole } from '../middleware/security';
 import { requireMasterPin } from '../middleware/master-pin';
 import { runHealthCheck, applySafeFixes } from '../services/schema-health';
@@ -36,6 +36,19 @@ router.get('/backups', requireRole('owner'), (_req: Request, res: Response) => {
   } catch (error: any) {
     console.error('[DB Tools] list backups error:', error);
     res.status(500).json({ error: 'Listing backups failed: ' + error.message });
+  }
+});
+
+// Deletes one backup from the managed backups/ directory (#120) — same
+// master-PIN gate as creating one, since a backup is the safety net a
+// restore/initialize depends on.
+router.post('/backups/:fileName/delete', requireRole('owner'), requireMasterPin, (req: Request, res: Response) => {
+  try {
+    deleteBackup(req.params.fileName);
+    res.json({ success: true });
+  } catch (error: any) {
+    console.error('[DB Tools] delete backup error:', error);
+    res.status(400).json({ error: error.message || 'Deleting backup failed' });
   }
 });
 

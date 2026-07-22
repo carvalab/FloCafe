@@ -400,6 +400,20 @@ export async function createBackup(targetPath?: string): Promise<{ path: string;
   return { path: finalPath, schemaVersion: currentVersion };
 }
 
+/** Reads the schema_version stamp createBackup() writes into _flo_meta. Older backups predating that stamp (or a file that fails to open) return null. */
+function readBackupSchemaVersion(fullPath: string): number | null {
+  let backupDb: Database.Database | undefined;
+  try {
+    backupDb = new Database(fullPath, { readonly: true, fileMustExist: true });
+    const row = backupDb.prepare(`SELECT value FROM _flo_meta WHERE key = 'schema_version'`).get() as { value: string } | undefined;
+    return row ? parseInt(row.value, 10) : null;
+  } catch {
+    return null;
+  } finally {
+    backupDb?.close();
+  }
+}
+
 /**
  * Lists backups in the managed backups/ directory, newest first. Only
  * backups written by createBackup()/syncBackupBeforeMigration() live here —
@@ -407,7 +421,7 @@ export async function createBackup(targetPath?: string): Promise<{ path: string;
  * "choose location" flow) intentionally does not appear here, same as it
  * never has for the existing File > Export Backup menu action. See #120.
  */
-export function listBackups(): { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto' }[] {
+export function listBackups(): { fileName: string; path: string; sizeBytes: number; createdAt: string; kind: 'manual' | 'auto'; schemaVersion: number | null }[] {
   const backupDir = getBackupDir();
   if (!fs.existsSync(backupDir)) return [];
 
@@ -422,9 +436,31 @@ export function listBackups(): { fileName: string; path: string; sizeBytes: numb
         sizeBytes: stat.size,
         createdAt: stat.mtime.toISOString(),
         kind: (fileName.includes('-pre-v') ? 'auto' : 'manual') as 'manual' | 'auto',
+        schemaVersion: readBackupSchemaVersion(fullPath),
       };
     })
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+}
+
+/**
+ * Deletes one backup from the managed backups/ directory by file name.
+ * fileName is validated against the exact naming scheme createBackup() uses
+ * and resolved only inside backupDir, so a path-traversal fileName (e.g.
+ * `../../flo.db`) can't escape the backups folder or delete the live DB.
+ */
+export function deleteBackup(fileName: string): void {
+  if (!/^flo-backup-[\w.-]+\.db$/.test(fileName)) {
+    throw new Error('Invalid backup file name');
+  }
+  const backupDir = getBackupDir();
+  const fullPath = path.join(backupDir, fileName);
+  if (path.dirname(fullPath) !== backupDir) {
+    throw new Error('Invalid backup file name');
+  }
+  if (!fs.existsSync(fullPath)) {
+    throw new Error('Backup not found');
+  }
+  fs.unlinkSync(fullPath);
 }
 
 function getColumns(dbInstance: Database.Database, tableName: string): string[] {

@@ -145,8 +145,12 @@ function checkForUpdates(): void {
   // Linux: auto-updater is not supported.
   // AppImage requires the APPIMAGE env var (not always set) and the deb
   // package is managed by apt — electron-updater cannot update either.
-  // Skip silently so no error is logged and no error status is sent to the UI.
-  if (process.platform === 'linux') return;
+  // Still tell the renderer so "Check for Updates" doesn't sit there doing
+  // nothing forever when clicked.
+  if (process.platform === 'linux') {
+    mainWindow?.webContents.send('update-status', { status: 'unsupported' });
+    return;
+  }
 
   if (isStoreBuild) {
     log.debug('[Update] Store build — updates handled by the platform store');
@@ -632,9 +636,12 @@ async function initialize(): Promise<void> {
     createTray();
     createMenu();
     // Auto-updater: not supported on Linux (AppImage needs APPIMAGE env var;
-    // deb is managed by apt). Skip entirely on Linux to avoid error noise.
-    if (!isStoreBuild && process.platform !== 'linux') {
-      setupAutoUpdater();
+    // deb is managed by apt), so only wire up electron-updater's listeners
+    // there. checkForUpdates() itself already no-ops safely on Linux (with
+    // an 'unsupported' status sent to the renderer), so still run the
+    // initial check on Linux to surface that status without requiring a click.
+    if (!isStoreBuild) {
+      if (process.platform !== 'linux') setupAutoUpdater();
       setTimeout(() => checkForUpdates(), 5000);
     }
 
