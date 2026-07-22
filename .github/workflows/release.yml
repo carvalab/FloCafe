@@ -114,10 +114,18 @@ jobs:
           APPLE_TEAM_ID: BKDY677XJA
 
       - name: Upload macOS assets to GitHub release
+        # latest-mac.yml (+ the .zip/.blockmap it points at) is what
+        # electron-updater's MacUpdater fetches to check for/apply updates —
+        # DMG alone can't be used for silent background updates. Every
+        # release before this one shipped without it, so auto-update on Mac
+        # has 404'd since v1.6.7 (see main.log: "Cannot find latest-mac.yml").
         run: |
           VERSION=$(node -p "require('./package.json').version")
           gh release upload "v${VERSION}" \
             release/*.dmg \
+            release/*.zip \
+            release/*.zip.blockmap \
+            release/latest-mac.yml \
             --repo FreeOpenSourcePOS/FloCafe --clobber
         env:
           GH_TOKEN: ${{ github.token }}
