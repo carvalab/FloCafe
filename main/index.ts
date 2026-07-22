@@ -3,10 +3,10 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { Bonjour } from 'bonjour-service';
-import { initDatabase, closeDatabase } from './db';
+import { initDatabase, closeDatabase, SchemaVersionMismatchError } from './db';
 import { startServer, stopServer, getLocalIP, isServerRunning } from './server';
 import { cloudSync } from './services/cloud-sync';
-import { telemetry } from './services/telemetry';
+import { telemetry, sendEvent as sendTelemetryEvent } from './services/telemetry';
 import { googleDrive } from './services/google-drive';
 import { startKdsServer, stopKdsServer, getKdsPort, isKdsServerRunning } from './kds-server';
 import { initPrinter, printReceipt, printKOT } from './printers/thermal';
@@ -642,6 +642,24 @@ async function initialize(): Promise<void> {
   } catch (error) {
     console.error('[Flo] Initialization error:', error);
     dialog.showErrorBox('Initialization Error', `Failed to start Flo: ${error}`);
+
+    // Best-effort: report the fatal startup failure so support can see which
+    // installs are stuck on a stale build without waiting for a user to
+    // describe the error message themselves. Never let this delay/block the
+    // actual quit — db may not even be open yet depending on where init failed.
+    try {
+      const payload: Record<string, unknown> = {
+        error_message: String(error instanceof Error ? error.message : error).slice(0, 500),
+      };
+      if (error instanceof SchemaVersionMismatchError) {
+        payload.db_schema_version = error.dbVersion;
+        payload.app_schema_version = error.appVersion;
+      }
+      await sendTelemetryEvent('startup_failed', payload);
+    } catch (telemetryError) {
+      console.error('[Flo] Failed to report startup error via telemetry:', telemetryError);
+    }
+
     app.quit();
     process.exit(1);
   }

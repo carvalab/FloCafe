@@ -1265,6 +1265,17 @@ function syncBackupBeforeMigration(version: number): void {
   }
 }
 
+export class SchemaVersionMismatchError extends Error {
+  constructor(public readonly dbVersion: number, public readonly appVersion: number) {
+    super(
+      `Database schema (v${dbVersion}) is newer than this app version supports (v${appVersion}). ` +
+      `This usually means another device or a previous update already upgraded this database. ` +
+      `Please update Flo Cafe to the latest version before continuing.`
+    );
+    this.name = 'SchemaVersionMismatchError';
+  }
+}
+
 function runMigrations(): void {
   const current = getCurrentSchemaVersion();
   const target = MIGRATIONS.length > 0 ? MIGRATIONS[MIGRATIONS.length - 1].version : 0;
@@ -1275,11 +1286,7 @@ function runMigrations(): void {
     // binary). Proceeding would let old queries reference columns a later
     // migration already dropped (e.g. order_items.addons, #133) — fail loudly
     // at startup instead of mid-transaction during business hours.
-    throw new Error(
-      `Database schema (v${current}) is newer than this app version supports (v${target}). ` +
-      `This usually means another device or a previous update already upgraded this database. ` +
-      `Please update Flo Cafe to the latest version before continuing.`
-    );
+    throw new SchemaVersionMismatchError(current, target);
   }
 
   if (current === target) {

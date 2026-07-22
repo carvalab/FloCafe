@@ -24,7 +24,7 @@ const DAILY_PING_MIN_GAP_MS = 24 * 60 * 60_000;
 
 let dailyPingTimer: ReturnType<typeof setInterval> | null = null;
 
-async function sendEvent(eventType: string, payload?: Record<string, unknown>): Promise<void> {
+export async function sendEvent(eventType: string, payload?: Record<string, unknown>): Promise<void> {
   if (!isTelemetryEnabled()) return;
 
   try {
