@@ -2,6 +2,16 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.0] - 2026-07-22
+
+### Fixed
+- **Critical**: macOS auto-update has been silently broken since v1.6.7 — every install has been permanently stuck on whichever version it originally shipped with, and every "check for update" has failed with a 404 on `latest-mac.yml`. The mac build only produced a `.dmg`, but silent background updates require a `.zip` artifact plus that manifest file, and the release pipeline never uploaded either. All previous releases have been removed from GitHub (binaries only — the version history and changelog stay) and republished cleanly starting with this version, so every existing Mac install can finally update again.
+- Forgot-password recovery page was unreachable — a logged-out user clicking "Forgot password?" was bounced straight back to the login screen before the PIN form could render (missing route in the auth guard's public-path whitelist). Also now shows upfront whether recovery is available on this device, instead of only after filling in the whole form.
+
+### Added
+- If the database has already been migrated by a newer app version than the one currently running (e.g. a stale/un-updated install sharing a database with an updated one), the app now fails at startup with a clear "please update" message instead of crashing later mid-order on a column a later migration already dropped.
+- Startup failures — including the schema-version case above — are now reported through the existing anonymous telemetry pipe (opt-in only), with the app/DB schema version numbers attached, so installs stuck on a stale build can be spotted without waiting on a support ticket.
+
 ## [1.9.11] - 2026-07-22
 
 ### Changed
