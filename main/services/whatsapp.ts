@@ -32,7 +32,6 @@ function makeBaileysLogger(): MinimalLogger {
   const noop = (): void => {};
   const fallback: MinimalLogger = { level: 'silent', trace: noop, debug: noop, info: noop, warn: noop, error: noop, fatal: noop, child: () => fallback };
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
     const pinoFactory = require('pino').pino ?? require('pino');
     return pinoFactory({ level: 'silent' });
   } catch (err) {
