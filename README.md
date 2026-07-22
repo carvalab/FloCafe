@@ -36,6 +36,7 @@ FloCafe runs entirely on your own machine — no internet, no subscriptions, no 
 - [Quick Start](#quick-start)
 - [Development Setup](#development-setup)
 - [Architecture](#architecture)
+- [Updates & Database Integrity](#updates--database-integrity)
 - [Troubleshooting](#troubleshooting)
 - [Contributing](#contributing)
 - [License](#license)
@@ -320,6 +321,47 @@ FloCafe/
 ├── dev-server.js           # Headless backend for dev
 └── server.js               # Standalone Express server
 ```
+
+## Updates & Database Integrity
+
+FloCafe auto-updates in the background on macOS and Windows (checks a few seconds after
+launch, downloads silently, applies on quit). This relies on `electron-updater` fetching
+a manifest (`latest-mac.yml` / `latest.yml`) from the latest GitHub release — every
+release build verifies these files exist before publishing (see
+`.github/workflows/release.yml` and `tests/release-config.test.ts`), so a release can't
+silently ship without a working update path again.
+
+**Your data is never touched by an update.** The SQLite database, local backups, and
+Master PIN all live in the OS user-data directory (`app.getPath('userData')`) — a
+completely separate location from the application binary that gets replaced. This holds
+regardless of *how* you update: automatic background update, manually re-downloading and
+reinstalling from [GitHub Releases](https://github.com/FreeOpenSourcePOS/FloCafe/releases),
+or (once available) via the Mac App Store / Microsoft Store.
+
+**Schema migrations run automatically and safely on every startup:**
+- Pending migrations apply in order, wrapped in a transaction each, tracked via SQLite's
+  `user_version` pragma.
+- Before running *any* pending migration batch, the app takes a full timestamped backup
+  to the local `backups/` folder — not just for specific migrations, but for the whole
+  batch, so an install that's been offline or stuck for a long time and jumps through many
+  migrations at once is just as protected as one applying a single routine update.
+- If a database's schema is *newer* than the running app version understands (e.g. a
+  stale install sharing a database with an already-updated device), the app refuses to
+  start and shows a clear message asking you to update, instead of silently running
+  queries against columns that no longer exist.
+- Startup failures — including that schema-mismatch case — are reported through the
+  existing anonymous, opt-in telemetry pipe with the relevant version numbers attached, so
+  installs stuck on a stale build can be caught proactively.
+- A built-in health check (Settings → Database Tools) diffs your live schema against what
+  the current app version expects and can safely apply additive fixes.
+
+**Mac App Store / Microsoft Store note:** those channels are sandboxed and manage their
+own updates entirely outside `electron-updater` — Apple and Microsoft's store policies
+prohibit in-app auto-update mechanisms. Updates *within* a store channel are safe by
+construction. Switching *between* channels (e.g. a direct-download install to a future
+store install) does not carry data over automatically, since sandboxed apps use an
+OS-isolated storage location — use Settings → Database Tools → Backup/Restore to move
+data across a channel switch.
 
 ## Troubleshooting
 
