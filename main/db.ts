@@ -1233,7 +1233,7 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
   },
 ];
 
-function syncBackupBeforeMigration(version: number): void {
+function syncBackupBeforeMigration(fromVersion: number, toVersion: number): void {
   try {
     const dbPath = getDbPath();
     const backupDir = getBackupDir();
@@ -1241,7 +1241,7 @@ function syncBackupBeforeMigration(version: number): void {
       fs.mkdirSync(backupDir, { recursive: true });
     }
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const targetPath = path.join(backupDir, `flo-backup-${timestamp}-pre-v${version}.db`);
+    const targetPath = path.join(backupDir, `flo-backup-${timestamp}-pre-v${fromVersion}-to-v${toVersion}.db`);
 
     db.pragma('wal_checkpoint(TRUNCATE)');
     fs.copyFileSync(dbPath, targetPath);
@@ -1259,7 +1259,7 @@ function syncBackupBeforeMigration(version: number): void {
     backupDb.prepare(`INSERT OR REPLACE INTO _flo_meta (key, value) VALUES (?, ?)`).run('app_version', app.getVersion());
     backupDb.close();
 
-    console.log(`[DB] Auto-backup before migration v${version} created at ${targetPath}`);
+    console.log(`[DB] Auto-backup before migrating v${fromVersion} → v${toVersion} created at ${targetPath}`);
   } catch (err: any) {
     console.error(`[DB] Auto-backup before migration failed:`, err.message);
   }
@@ -1296,18 +1296,23 @@ function runMigrations(): void {
 
   console.log(`[DB] Schema: v${current} → v${target}`);
 
+  // Back up once, up front, before running the whole pending batch — not just
+  // before specific hand-picked versions. An install that's been stuck for a
+  // long time (broken auto-update, offline for months, etc.) can jump through
+  // a dozen+ migrations in a single run; every one of them deserves the same
+  // protection, not just the couple we happened to remember to flag by number.
+  //
+  // Deliberately unconditional, including current === 0: that's NOT a
+  // reliable signal for "nothing to protect" — real old installs can report
+  // user_version 0 if they predate this app's version-tracking pragma (see
+  // tests/fixtures/upgrade-snapshots/pre-migration-scheme-v1.5.0.db), and
+  // those are exactly the installs with the most pending migrations and the
+  // most at stake. A brand-new install just backs up an empty/tiny file.
+  console.log(`[DB] Triggering auto-backup before migrating v${current} → v${target}...`);
+  syncBackupBeforeMigration(current, target);
+
   for (const migration of MIGRATIONS) {
     if (migration.version <= current) continue;
-    
-    if (migration.version === 23) {
-      console.log(`[DB] Triggering auto-backup before v23...`);
-      syncBackupBeforeMigration(23);
-    }
-
-    if (migration.version === 30) {
-      console.log(`[DB] Triggering auto-backup before v30 (drops order_items.addons)...`);
-      syncBackupBeforeMigration(30);
-    }
 
     console.log(`[DB] Applying migration v${migration.version}: ${migration.name}`);
     db.transaction(() => {
