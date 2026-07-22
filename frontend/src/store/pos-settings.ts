@@ -41,6 +41,10 @@ export interface PosSettingsState {
   // from the backend (default true, matching pre-toggle always-on behavior).
   kdsEnabled: boolean;
   kotPrintingEnabled: boolean;
+  // Whether the WhatsApp integration is enabled on this tenant. Synced from
+  // the backend on auth load so the sidebar can hide the nav entry when the
+  // feature is off, and updated by the WhatsApp page after the user toggles.
+  whatsappEnabled: boolean;
   // Actions
   setShowProductImages: (show: boolean) => void;
   setCustomerMandatory: (mandatory: boolean) => void;
@@ -68,6 +72,7 @@ export interface PosSettingsState {
   setPrinterUseUnicode: (v: boolean) => void;
   setKdsEnabled: (v: boolean) => void;
   setKotPrintingEnabled: (v: boolean) => void;
+  setWhatsappEnabled: (v: boolean) => void;
 }
 
 export const usePosSettingsStore = create<PosSettingsState>()(
@@ -102,6 +107,11 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       printerUseUnicode: false,
       kdsEnabled: true,
       kotPrintingEnabled: true,
+      // Default false so the sidebar hides the WhatsApp nav entry until the
+      // tenant actually enables the integration. Synced from /api/whatsapp/status
+      // on auth load (see Sidebar.tsx) and updated by the WhatsApp page after
+      // a successful enable/disable toggle.
+      whatsappEnabled: false,
       // Actions
       setShowProductImages: (show) => set({ showProductImages: show }),
       setCustomerMandatory: (mandatory) => set({ customerMandatory: mandatory }),
@@ -129,7 +139,17 @@ export const usePosSettingsStore = create<PosSettingsState>()(
       setPrinterUseUnicode: (v) => set({ printerUseUnicode: v }),
       setKdsEnabled: (v) => set({ kdsEnabled: v }),
       setKotPrintingEnabled: (v) => set({ kotPrintingEnabled: v }),
+      setWhatsappEnabled: (v: boolean) => set({ whatsappEnabled: v }),
     }),
-    { name: 'pos-settings' }
+    {
+      name: 'pos-settings',
+      // Don't persist whatsappEnabled — it's always synced from the
+      // backend (Sidebar fetches /whatsapp/status on mount, WhatsApp page
+      // updates on toggle). Stale persisted values would mask the real
+      // state for tenants who enable/disable across devices.
+      partialize: (s) => Object.fromEntries(
+        Object.entries(s).filter(([k]) => k !== 'whatsappEnabled'),
+      ) as PosSettingsState,
+    }
   )
 );

@@ -354,6 +354,27 @@ function updateMessageRow(id: number, patch: {
   db.prepare(`UPDATE whatsapp_messages SET ${fields.join(', ')} WHERE id = ?`).run(...values);
 }
 
+/**
+ * Advance a message's status and backfill any earlier-stage timestamps that
+ * haven't fired yet (Baileys sometimes jumps straight to status=3 or 4
+ * without an intermediate update). Without the COALESCE guard, a row ends up
+ * with status='read' but only read_at populated — the stepper shows the row
+ * at the end of the pipeline while the timeline shows a single
+ * timestamp, which is what the operator sees as "the status didn't reach
+ * the end".
+ */
+function advanceStatus(id: number, latest: 'sent' | 'delivered' | 'read'): void {
+  const ts = now();
+  const stamps = new Set<string>([latest]);
+  if (latest === 'read') { stamps.add('delivered'); stamps.add('sent'); }
+  else if (latest === 'delivered') { stamps.add('sent'); }
+  const exprs = Array.from(stamps, (s) => `${s}_at = COALESCE(${s}_at, ?)`).join(', ');
+  const placeholders = Array(stamps.size).fill(ts);
+  getDatabase()
+    .prepare(`UPDATE whatsapp_messages SET status = ?, ${exprs} WHERE id = ?`)
+    .run(latest, ...placeholders, id);
+}
+
 function findMessageByExternalId(externalId: string): { id: number; phone_e164: string } | null {
   const row = getDatabase()
     .prepare('SELECT id, phone_e164 FROM whatsapp_messages WHERE external_message_id = ?')
@@ -487,12 +508,9 @@ function attachSocketHandlers(socket: BaileysSocket): void {
       // accepted the payload — that's the truthful 'sent' mark. Earlier
       // versions mapped 1→sent which silently promoted rows to 'delivered'
       // on the real confirmation and never marked anything 'sent' at all.
-      if (status === 2) field = 'sent_at';
-      else if (status === 3) field = 'delivered_at';
-      else if (status === 4) field = 'read_at';
-      if (field) {
-        updateMessageRow(stored.id, { status: field.replace('_at', ''), timestamp_field: field });
-      }
+      if (status === 2) advanceStatus(stored.id, 'sent');
+      else if (status === 3) advanceStatus(stored.id, 'delivered');
+      else if (status === 4) advanceStatus(stored.id, 'read');
     }
   });
 }

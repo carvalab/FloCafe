@@ -55,7 +55,7 @@ const ALL_NAV_ITEMS = [
 export default function AppSidebar() {
   const pathname = usePathname();
   const { user, currentTenant, logout } = useAuthStore();
-  const { tablesRequired, kdsEnabled, setTablesRequired, setKdsEnabled } = usePosSettingsStore();
+  const { tablesRequired, kdsEnabled, whatsappEnabled, setTablesRequired, setKdsEnabled, setWhatsappEnabled } = usePosSettingsStore();
   const { isMobile, setOpenMobile, toggleSidebar } = useSidebar();
   const { t } = useI18n();
   const { confirm, ConfirmDialog } = useConfirm();
@@ -67,6 +67,8 @@ export default function AppSidebar() {
     if (item.href === '/tables' && !tablesRequired) return false;
     // KDS disabled → hide the nav entry entirely (issue #133).
     if (item.href === '/settings?tab=kds' && !kdsEnabled) return false;
+    // WhatsApp integration not enabled on this tenant → hide the nav entry.
+    if (item.href === '/whatsapp' && !whatsappEnabled) return false;
     return item.roles.includes(role)
       && (item.businessTypes === null || item.businessTypes.includes(businessType));
   });
@@ -82,7 +84,14 @@ export default function AppSidebar() {
     api.get('/settings/kds_enabled')
       .then((res) => setKdsEnabled(res.data.setting?.value !== 'false'))
       .catch(() => { });
-  }, [currentTenant, setTablesRequired, setKdsEnabled]);
+    // Sync the WhatsApp enabled flag from the backend so the sidebar shows
+    // the nav entry only when the integration is actually enabled on this
+    // tenant. The WhatsApp page also writes the store on enable/disable so
+    // the sidebar updates without a refetch when the user toggles.
+    api.get('/whatsapp/status')
+      .then((res) => setWhatsappEnabled(!!res.data?.enabled))
+      .catch(() => { });
+  }, [currentTenant, setTablesRequired, setKdsEnabled, setWhatsappEnabled]);
 
   return (
     <Sidebar collapsible="icon">
