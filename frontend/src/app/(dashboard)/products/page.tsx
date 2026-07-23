@@ -5,7 +5,7 @@ import api from '@/lib/api';
 import { useAuthStore } from '@/store/auth';
 import { Button } from '@/components/ui/button';
 import toast from 'react-hot-toast';
-import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle } from 'lucide-react';
+import { Plus, Pencil, Trash2, X, Package, Folder, Puzzle, FileSpreadsheet, Download, Upload, CheckCircle, AlertCircle, AlertTriangle } from 'lucide-react';
 import type { Product, Category, AddonGroup } from '@/lib/types';
 import TagBadge, { tagLabel } from '@/components/pos/DietaryBadge';
 import ImageUploader from '@/components/products/ImageUploader';
@@ -68,17 +68,17 @@ export default function ProductsPage() {
   const { confirm, ConfirmDialog } = useConfirm();
   const [editingAddonGroup, setEditingAddonGroup] = useState<AddonGroup | null>(null);
   const [categoryForm, setCategoryForm] = useState({ name: '', description: '', color: '', is_active: true });
-  const [addonForm, setAddonForm] = useState({ name: '', description: '', is_required: false, min_selection: 0, max_selection: 10 });
+  const [addonForm, setAddonForm] = useState({ name: '', description: '', is_required: false, allow_multiple_quantities: false, min_selection: 0, max_selection: 10 });
   const [showAddonModal, setShowAddonModal] = useState(false);
 
-  const [addonList, setAddonList] = useState<{ id?: number; name: string; price: number; is_active?: boolean }[]>([]);
+  const [addonList, setAddonList] = useState<{ id?: number | string; name: string; price: number; is_active?: boolean }[]>([]);
   const [form, setForm] = useState({
     name: '', category_id: '', price: '', cost_price: '', cb_percent: '0', sku: '', barcode: '',
     tax_type: 'inclusive', tax_rate: '5', description: '',
     track_inventory: false, stock_quantity: '0', low_stock_threshold: '5', is_active: true,
     tags: [] as string[],
     customTag: '',
-    addon_group_ids: [] as number[],
+    addon_group_ids: [] as (number | string)[],
     image_url: null as string | null,
   });
   const [imageTouched, setImageTouched] = useState(false);
@@ -330,7 +330,7 @@ export default function ProductsPage() {
   };
 
   const resetAddonForm = () => {
-    setAddonForm({ name: '', description: '', is_required: false, min_selection: 0, max_selection: 10 });
+    setAddonForm({ name: '', description: '', is_required: false, allow_multiple_quantities: false, min_selection: 0, max_selection: 10 });
     setEditingAddonGroup(null);
     setShowAddonModal(false);
     setAddonList([]);
@@ -338,15 +338,15 @@ export default function ProductsPage() {
 
   const openEditAddonGroup = (group: AddonGroup) => {
     setEditingAddonGroup(group);
-    setAddonForm({ name: group.name, description: group.description || '', is_required: group.is_required, min_selection: group.min_selection, max_selection: group.max_selection });
-    setAddonList(group.addons?.map((a) => ({ id: a.id, name: a.name, price: a.price, is_active: a.is_active })) || []);
+    setAddonForm({ name: group.name, description: group.description || '', is_required: Boolean(group.is_required), allow_multiple_quantities: Boolean(group.allow_multiple_quantities), min_selection: group.min_selection, max_selection: group.max_selection });
+    setAddonList(group.addons?.map((a) => ({ id: a.id, name: a.name, price: a.price, is_active: Boolean(a.is_active) })) || []);
     setShowAddonModal(true);
   };
 
   const handleAddonGroupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      const payload = { name: addonForm.name, description: addonForm.description || null, is_required: addonForm.is_required, min_selection: addonForm.min_selection, max_selection: addonForm.max_selection, addons: addonList };
+      const payload = { name: addonForm.name, description: addonForm.description || null, is_required: addonForm.is_required, allow_multiple_quantities: addonForm.allow_multiple_quantities, min_selection: addonForm.min_selection, max_selection: addonForm.max_selection, addons: addonList };
       if (editingAddonGroup) {
         await api.put(`/addon-groups/${editingAddonGroup.id}`, payload);
         toast.success(t('products.addonGroupUpdated'));
@@ -359,7 +359,7 @@ export default function ProductsPage() {
     } catch { toast.error(t('products.failedToSaveAddonGroup')); }
   };
 
-  const handleAddonGroupDelete = async (id: number) => {
+  const handleAddonGroupDelete = async (id: number | string) => {
     if (!await confirm(t('products.deleteAddonGroupConfirm'), { destructive: true, confirmLabel: t('common.delete') })) return;
     try {
       await api.delete(`/addon-groups/${id}`);
@@ -418,6 +418,7 @@ export default function ProductsPage() {
             <tr>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnProduct')}</th>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnCategory')}</th>
+              <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">Add-ons</th>
               <th className="text-right p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnPrice')}</th>
               <th className="text-left p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnTax')}</th>
               <th className="text-center p-4 text-xs font-medium text-gray-500 uppercase">{t('products.columnStock')}</th>
@@ -427,6 +428,8 @@ export default function ProductsPage() {
           </thead>
           <tbody className="divide-y divide-gray-100">
             {products.map((product) => {
+              const parentCat = categories.find((c) => String(c.id) === String(product.category_id || product.category?.id));
+              const isCategoryInactive = Boolean(parentCat && !parentCat.is_active);
               const taxLabel = product.tax_type === 'none' || !product.tax_type
                 ? '—'
                 : `${product.tax_type === 'inclusive' ? t('products.taxInclusiveShort') : t('products.taxExclusiveShort')} ${product.tax_rate}%`;
@@ -464,7 +467,25 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 </td>
-                <td className="p-4 text-sm text-gray-600">{product.category?.name || '—'}</td>
+                <td className="p-4 text-sm text-gray-600">
+                  <div className="flex flex-col gap-0.5">
+                    <span>{product.category?.name || '—'}</span>
+                    {isCategoryInactive && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium text-amber-700 bg-amber-50 border border-amber-200 rounded px-1.5 py-0.5 w-fit" title="Parent category is inactive; product is hidden on POS">
+                        <AlertTriangle size={11} className="shrink-0" /> Category Inactive
+                      </span>
+                    )}
+                  </div>
+                </td>
+                <td className="p-4 text-center">
+                  {product.addon_groups && product.addon_groups.length > 0 ? (
+                    <span className="inline-flex px-2 py-0.5 rounded-full text-xs font-medium bg-indigo-50 text-indigo-700 border border-indigo-200">
+                      {product.addon_groups.length} {product.addon_groups.length === 1 ? 'group' : 'groups'}
+                    </span>
+                  ) : (
+                    <span className="text-gray-400 text-sm">—</span>
+                  )}
+                </td>
                 <td className="p-4 text-right">
                   <p className="font-medium">{fmt(Number(product.price))}</p>
                   {product.cost_price != null && product.cost_price > 0 && <p className="text-xs text-gray-400">Cost: {fmt(Number(product.cost_price))}</p>}
@@ -485,6 +506,9 @@ export default function ProductsPage() {
                   }`}>
                     {product.is_active ? t('common.active') : t('common.inactive')}
                   </span>
+                  {product.is_active && isCategoryInactive && (
+                    <span className="text-[10px] text-amber-600 font-medium block mt-1">(Hidden on POS)</span>
+                  )}
                 </td>
                 <td className="p-4 text-right">
                   <div className="flex gap-2 justify-end">
@@ -891,6 +915,10 @@ export default function ProductsPage() {
                   <label className="flex items-center gap-2">
                     <input type="checkbox" checked={addonForm.is_required} onChange={(e) => setAddonForm({ ...addonForm, is_required: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
                     <span className="text-sm text-gray-700">{t('products.addonRequired')}</span>
+                  </label>
+                  <label className="flex items-center gap-2">
+                    <input type="checkbox" checked={addonForm.allow_multiple_quantities} onChange={(e) => setAddonForm({ ...addonForm, allow_multiple_quantities: e.target.checked })} className="rounded border-gray-300 text-brand focus:ring-brand" />
+                    <span className="text-sm text-gray-700">Allow multiple quantities per add-on</span>
                   </label>
                   <div>
                     <div className="flex justify-between items-center mb-2">

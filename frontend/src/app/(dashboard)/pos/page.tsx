@@ -212,7 +212,7 @@ export default function POSPage() {
           product_id: item.product.id,
           quantity: item.quantity,
           addons: item.addons.length > 0
-            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price }))
+            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
             : null,
           special_instructions: item.special_instructions || null,
         }));
@@ -231,7 +231,7 @@ export default function POSPage() {
             product_id: item.product.id,
             quantity: item.quantity,
             addons: item.addons.length > 0
-              ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price }))
+              ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
               : null,
             special_instructions: item.special_instructions || null,
           })),
@@ -271,7 +271,7 @@ export default function POSPage() {
           product_id: item.product.id,
           quantity: item.quantity,
           addons: item.addons.length > 0
-            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price }))
+            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
             : null,
           special_instructions: item.special_instructions || null,
         })),
@@ -412,7 +412,7 @@ export default function POSPage() {
           product_id: item.product.id,
           quantity: item.quantity,
           addons: item.addons.length > 0
-            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price }))
+            ? item.addons.map((a) => ({ id: a.id, name: a.name, price: a.price, quantity: a.quantity || 1 }))
             : null,
           special_instructions: item.special_instructions || null,
         })),

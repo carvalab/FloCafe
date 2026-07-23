@@ -19,8 +19,8 @@ interface Props {
   mode?: 'add' | 'edit';
 }
 
-function groupInitialAddons(addons: Addon[]): Record<number, Addon[]> {
-  const grouped: Record<number, Addon[]> = {};
+function groupInitialAddons(addons: Addon[]): Record<string | number, Addon[]> {
+  const grouped: Record<string | number, Addon[]> = {};
   for (const addon of addons) {
     const groupId = addon.addon_group_id;
     if (groupId == null) continue;
@@ -35,39 +35,72 @@ export default function AddonModal({
 }: Props) {
   const { t } = useI18n();
   const fmt = useFormatCurrency();
-  const [selected, setSelected] = useState<Record<number, Addon[]>>(() => groupInitialAddons(initialAddons));
+  const [selected, setSelected] = useState<Record<string | number, Addon[]>>(() => groupInitialAddons(initialAddons));
   const [quantity, setQuantity] = useState(initialQuantity);
   const [instructions, setInstructions] = useState(initialInstructions);
 
   const groups = product.addon_groups || [];
 
-  const toggleAddon = (group: AddonGroup, addon: Addon) => {
-    const current = selected[group.id] || [];
-    const exists = current.find((a) => a.id === addon.id);
+  const getGroupTotalQuantity = (groupId: string | number): number => {
+    const list = selected[groupId] || [];
+    return list.reduce((sum, a) => sum + (a.quantity || 1), 0);
+  };
 
-    if (exists) {
-      setSelected({ ...selected, [group.id]: current.filter((a) => a.id !== addon.id) });
+  const updateAddonQuantity = (group: AddonGroup, addon: Addon, delta: number) => {
+    const groupId = group.id;
+    const currentList = selected[groupId] || [];
+    const existingIndex = currentList.findIndex((a) => a.id === addon.id);
+    const currentQty = existingIndex >= 0 ? (currentList[existingIndex].quantity || 1) : 0;
+    const newQty = currentQty + delta;
+
+    if (newQty <= 0) {
+      const updatedList = currentList.filter((a) => a.id !== addon.id);
+      setSelected({ ...selected, [groupId]: updatedList });
     } else {
+      const currentGroupTotal = currentList.reduce((sum, a) => sum + (a.quantity || 1), 0);
+      const newGroupTotal = currentGroupTotal + delta;
       const max = group.max_selection || 999;
-      if (current.length >= max) {
+      if (delta > 0 && newGroupTotal > max) {
         toast.error(t('pos.maxSelectionReached', { count: max }));
         return;
       }
-      setSelected({ ...selected, [group.id]: [...current, addon] });
+
+      if (existingIndex >= 0) {
+        const updatedList = [...currentList];
+        updatedList[existingIndex] = { ...updatedList[existingIndex], quantity: newQty };
+        setSelected({ ...selected, [groupId]: updatedList });
+      } else {
+        setSelected({ ...selected, [groupId]: [...currentList, { ...addon, quantity: newQty }] });
+      }
     }
   };
 
-  const isSelected = (groupId: number, addonId: number) =>
-    (selected[groupId] || []).some((a) => a.id === addonId);
+  const toggleAddonCheckbox = (group: AddonGroup, addon: Addon) => {
+    const currentList = selected[group.id] || [];
+    const exists = currentList.some((a) => a.id === addon.id);
+    if (exists) {
+      updateAddonQuantity(group, addon, -1);
+    } else {
+      updateAddonQuantity(group, addon, 1);
+    }
+  };
+
+  const getAddonQuantity = (groupId: string | number, addonId: string | number): number => {
+    const list = selected[groupId] || [];
+    const item = list.find((a) => a.id === addonId);
+    return item ? (item.quantity || 1) : 0;
+  };
 
   const allAddons = Object.values(selected).flat();
-  const addonTotal = allAddons.reduce((sum, a) => sum + Number(a.price), 0);
+  const addonTotal = allAddons.reduce((sum, a) => sum + Number(a.price) * (a.quantity || 1), 0);
   const itemTotal = (Number(product.price) + addonTotal) * quantity;
 
   const isValid = groups.every((g) => {
-    if (!g.is_required) return true;
-    const count = (selected[g.id] || []).length;
-    return count >= g.min_selection;
+    const count = getGroupTotalQuantity(g.id);
+    const requiredMin = Boolean(g.is_required) ? Math.max(1, g.min_selection || 1) : (g.min_selection || 0);
+    if (count < requiredMin) return false;
+    if (g.max_selection && count > g.max_selection) return false;
+    return true;
   });
 
   const handleAdd = () => {
@@ -91,15 +124,16 @@ export default function AddonModal({
 
         <div className="flex-1 overflow-y-auto p-5 space-y-5">
           {groups.map((group) => {
-            const count = (selected[group.id] || []).length;
+            const count = getGroupTotalQuantity(group.id);
             const activeAddons = (group.addons || []).filter((a) => a.is_active);
+            const allowMultiple = Boolean(group.allow_multiple_quantities);
 
             return (
               <div key={group.id}>
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-semibold text-sm text-gray-900">{group.name}</h3>
                   <span className="flex items-center gap-2">
-                    {group.is_required && (
+                    {Boolean(group.is_required) && (
                       <span className="text-xs text-red-500 font-medium">{t('pos.required')}</span>
                     )}
                     {group.max_selection ? (() => {
@@ -119,26 +153,116 @@ export default function AddonModal({
                 </div>
                 {group.description && <p className="text-xs text-gray-400 mb-2">{group.description}</p>}
                 <div className="space-y-1">
-                  {activeAddons.map((addon) => (
-                    <button
-                      key={addon.id}
-                      onClick={() => toggleAddon(group, addon)}
-                      className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-colors ${
-                        isSelected(group.id, addon.id)
-                          ? 'border-brand bg-brand-light text-brand'
-                          : 'border-gray-200 hover:border-gray-300'
-                      }`}
-                    >
-                      <span className="font-medium">{addon.name}</span>
-                      <span className={isSelected(group.id, addon.id) ? 'text-brand font-semibold' : 'text-gray-500'}>
-                        {Number(addon.price) === 0 ? t('pos.freeAddon') : `+${fmt(Number(addon.price))}`}
-                      </span>
-                    </button>
-                  ))}
+                  {activeAddons.map((addon) => {
+                    const addonQty = getAddonQuantity(group.id, addon.id);
+                    const isSel = addonQty > 0;
+
+                    if (allowMultiple) {
+                      return (
+                        <div
+                          key={addon.id}
+                          className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                            isSel
+                              ? 'border-brand bg-brand-light text-brand'
+                              : 'border-gray-200 hover:border-gray-300'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">{addon.name}</span>
+                            <span className={`text-xs ${isSel ? 'text-brand font-semibold' : 'text-gray-500'}`}>
+                              {Number(addon.price) === 0 ? t('pos.freeAddon') : `+${fmt(Number(addon.price))}`}
+                            </span>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {isSel ? (
+                              <div className="flex items-center gap-1.5 bg-white border border-brand rounded-lg p-0.5">
+                                <button
+                                  type="button"
+                                  onClick={() => updateAddonQuantity(group, addon, -1)}
+                                  className="w-6 h-6 rounded flex items-center justify-center text-brand hover:bg-brand-light"
+                                >
+                                  <Minus size={14} />
+                                </button>
+                                <span className="text-xs font-bold w-4 text-center text-brand">{addonQty}</span>
+                                <button
+                                  type="button"
+                                  onClick={() => updateAddonQuantity(group, addon, 1)}
+                                  className="w-6 h-6 rounded flex items-center justify-center text-brand hover:bg-brand-light"
+                                >
+                                  <Plus size={14} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => updateAddonQuantity(group, addon, 1)}
+                                className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div
+                        key={addon.id}
+                        className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg border text-sm transition-colors ${
+                          isSel
+                            ? 'border-brand bg-brand-light text-brand'
+                            : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium">{addon.name}</span>
+                          <span className={`text-xs ${isSel ? 'text-brand font-semibold' : 'text-gray-500'}`}>
+                            {Number(addon.price) === 0 ? t('pos.freeAddon') : `+${fmt(Number(addon.price))}`}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {isSel ? (
+                            <div className="flex items-center gap-1.5 bg-white border border-brand rounded-lg p-0.5">
+                              <button
+                                type="button"
+                                onClick={() => toggleAddonCheckbox(group, addon)}
+                                className="w-6 h-6 rounded flex items-center justify-center text-brand hover:bg-brand-light"
+                              >
+                                <Minus size={14} />
+                              </button>
+                              <span className="text-xs font-bold w-4 text-center text-brand">1</span>
+                              <button
+                                type="button"
+                                disabled
+                                className="w-6 h-6 rounded flex items-center justify-center text-gray-300 cursor-not-allowed opacity-50"
+                              >
+                                <Plus size={14} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => toggleAddonCheckbox(group, addon)}
+                              className="w-6 h-6 rounded-full bg-gray-100 flex items-center justify-center text-gray-600 hover:bg-gray-200"
+                            >
+                              <Plus size={14} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
-                {group.is_required && count < group.min_selection && (
-                  <p className="text-xs text-red-500 mt-1">{t('pos.selectAtLeast', { count: group.min_selection })}</p>
-                )}
+                {(() => {
+                  const requiredMin = Boolean(group.is_required) ? Math.max(1, group.min_selection || 1) : (group.min_selection || 0);
+                  if (requiredMin > 0 && count < requiredMin) {
+                    return (
+                      <p className="text-xs text-red-500 mt-1">{t('pos.selectAtLeast', { count: requiredMin })}</p>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             );
           })}
