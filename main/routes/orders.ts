@@ -534,6 +534,7 @@ router.post('/:id/items', requireRole('owner', 'manager', 'cashier', 'waiter'), 
     });
 
     cloudSync.recordOrderChanged(req.params.id, 'order.updated');
+    notifyKdsUpdate();
     notifyOrderUpdated();
 
     res.json({ order: Object.assign({}, updatedOrder, { items: updatedItems }) });

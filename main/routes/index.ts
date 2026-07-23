@@ -292,10 +292,8 @@ export function registerRoutes(app: Express): void {
       });
 
       cloudSync.recordOrderChanged(orderId, result.orderCancelled ? 'order.cancelled' : 'order.item_cancelled');
-      if (result.orderCancelled) {
-        notifyKdsUpdate();
-        notifyOrderUpdated();
-      }
+      notifyKdsUpdate();
+      notifyOrderUpdated();
       res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Cancel item error:', error);
@@ -398,6 +396,8 @@ export function registerRoutes(app: Express): void {
       });
 
       cloudSync.recordOrderChanged(orderId, 'order.item_restored');
+      notifyKdsUpdate();
+      notifyOrderUpdated();
       res.json({ order: { ...result.updatedOrder, items: result.items } });
     } catch (error: any) {
       console.error('[Orders] Restore item error:', error);
