@@ -77,7 +77,6 @@ async function main() {
     ['GET',    `/api/customers/${custId}/wallet`],
     ['POST',   '/api/customers/', { name: 'Attacker', phone: '5559999999' }],
     ['PUT',    `/api/customers/${custId}`, { name: 'Modified' }],
-    ['DELETE', `/api/customers/${custId}`],
     ['DELETE', '/api/customers/admin/cleanup'],
   ];
 
@@ -101,12 +100,7 @@ async function main() {
     assertEqual(walletRes.status, 200, `${label} can GET /api/customers/:id/wallet`);
   }
 
-  console.log('\n── 3. Write endpoints: cashier/waiter cannot DELETE; waiter cannot PUT ──');
-
-  for (const [label, auth] of [['cashier', cashierAuth], ['waiter', waiterAuth]]) {
-    const delRes = await request(app).delete(`/api/customers/${custId}`).set(auth as any);
-    assertEqual(delRes.status, 403, `${label} cannot DELETE /api/customers/:id`);
-  }
+  console.log('\n── 3. Write endpoints: waiter cannot PUT ──');
 
   const waiterPutRes = await request(app)
     .put(`/api/customers/${custId}`)
@@ -117,7 +111,7 @@ async function main() {
   console.log('\n── 4. Write endpoints: cashier, manager + owner allowed to PUT ──');
 
   // Cashiers can correct a customer's name/phone from the POS (e.g. a typo
-  // caught at checkout), but still can't DELETE — see section 3.
+  // caught at checkout). There's no DELETE to worry about — see 4b below.
   for (const [label, auth] of [['cashier', cashierAuth], ['manager', managerAuth], ['owner', ownerAuth]]) {
     const putRes = await request(app)
       .put(`/api/customers/${custId}`)
@@ -125,6 +119,19 @@ async function main() {
       .send({ name: `Modified by ${label}` });
     assertEqual(putRes.status, 200, `${label} can PUT /api/customers/:id`);
   }
+
+  console.log('\n── 4b. Customers are never deletable — DELETE /:id does not exist ──');
+
+  // Product decision: a customer record must never be removed (soft or hard)
+  // — orders/bills/loyalty_ledger reference it with no FK, and every
+  // customer's history/loyalty standing outweighs the cost of a stale row.
+  // Assert this for the highest-privilege role too, so the route can't
+  // quietly come back gated behind "owner only".
+  const ownerDeleteRes = await request(app).delete(`/api/customers/${custId}`).set(ownerAuth);
+  assertEqual(ownerDeleteRes.status, 404, 'DELETE /api/customers/:id does not exist, even for owner');
+
+  const stillActive = db.prepare('SELECT is_active FROM customers WHERE id = ?').get(custId) as any;
+  assertEqual(stillActive.is_active, 1, 'customer row is untouched — not soft-deleted');
 
   console.log('\n── 5. Admin cleanup: owner only ─────────────────────────────');
 
