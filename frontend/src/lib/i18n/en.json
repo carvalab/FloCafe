@@ -36,6 +36,7 @@
   "auth.recoverSuccess": "Password reset successfully. You can now sign in.",
   "auth.recoverTitle": "Recover Access",
   "auth.recoverWrongPin": "Invalid Master PIN.",
+  "auth.rememberMe": "Keep me logged in",
   "auth.selectBusiness": "Select Business",
   "auth.selectBusinessFailed": "Failed to select business",
   "auth.selectBusinessHint": "Choose which business to manage",

@@ -36,6 +36,7 @@
   "auth.recoverSuccess": "Contraseña restablecida con éxito. Ya podés iniciar sesión.",
   "auth.recoverTitle": "Recuperar Acceso",
   "auth.recoverWrongPin": "PIN Maestro inválido.",
+  "auth.rememberMe": "Mantener sesión iniciada",
   "auth.selectBusiness": "Elegí el negocio",
   "auth.selectBusinessFailed": "No se pudo seleccionar el negocio",
   "auth.selectBusinessHint": "Elegí qué negocio administrar",
