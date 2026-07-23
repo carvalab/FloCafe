@@ -101,22 +101,24 @@ async function main() {
     assertEqual(walletRes.status, 200, `${label} can GET /api/customers/:id/wallet`);
   }
 
-  console.log('\n── 3. Write endpoints: cashier/waiter cannot PUT or DELETE ──');
+  console.log('\n── 3. Write endpoints: cashier/waiter cannot DELETE; waiter cannot PUT ──');
 
   for (const [label, auth] of [['cashier', cashierAuth], ['waiter', waiterAuth]]) {
-    const putRes = await request(app)
-      .put(`/api/customers/${custId}`)
-      .set(auth as any)
-      .send({ name: 'Modified' });
-    assertEqual(putRes.status, 403, `${label} cannot PUT /api/customers/:id`);
-
     const delRes = await request(app).delete(`/api/customers/${custId}`).set(auth as any);
     assertEqual(delRes.status, 403, `${label} cannot DELETE /api/customers/:id`);
   }
 
-  console.log('\n── 4. Write endpoints: manager + owner allowed ───────────────');
+  const waiterPutRes = await request(app)
+    .put(`/api/customers/${custId}`)
+    .set(waiterAuth as any)
+    .send({ name: 'Modified' });
+  assertEqual(waiterPutRes.status, 403, 'waiter cannot PUT /api/customers/:id');
 
-  for (const [label, auth] of [['manager', managerAuth], ['owner', ownerAuth]]) {
+  console.log('\n── 4. Write endpoints: cashier, manager + owner allowed to PUT ──');
+
+  // Cashiers can correct a customer's name/phone from the POS (e.g. a typo
+  // caught at checkout), but still can't DELETE — see section 3.
+  for (const [label, auth] of [['cashier', cashierAuth], ['manager', managerAuth], ['owner', ownerAuth]]) {
     const putRes = await request(app)
       .put(`/api/customers/${custId}`)
       .set(auth as any)

@@ -3,7 +3,7 @@ import { getDatabase, now, getSettingValue } from '../db';
 import { requireRole } from '../middleware/security';
 import { parsePhoneE164, stripPhoneDigits } from '../lib/phone';
 
-function parseCustomer(c: any): any {
+export function parseCustomer(c: any): any {
   if (!c) return c;
   return {
     ...c,
@@ -13,7 +13,7 @@ function parseCustomer(c: any): any {
 
 const router = Router();
 
-function getWalletBalance(customerId: string | number | null): number {
+export function getWalletBalance(customerId: string | number | null): number {
   if (!customerId) return 0;
   const db = getDatabase();
   const credits = db.prepare(`
@@ -233,7 +233,7 @@ router.post('/', requireRole('owner', 'manager', 'cashier', 'waiter'), (req: Req
   }
 });
 
-router.put('/:id', requireRole('owner', 'manager'), (req: Request, res: Response) => {
+router.put('/:id', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
     const {
       phone, name, email, address, notes, country_code
