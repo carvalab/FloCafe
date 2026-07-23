@@ -565,10 +565,15 @@ router.patch('/:id/status', requireRole('owner', 'manager', 'chef', 'waiter'), (
       return res.status(404).json({ error: 'Order not found' });
     }
 
-    // Override validation: cancelling an order in preparing+ status requires manager PIN
+    // Override validation: cancelling an order in preparing+ status (or with items in preparing+) requires manager PIN
     const statusOrder = ['pending', 'preparing', 'ready', 'served', 'completed'];
     const currentStatusIndex = statusOrder.indexOf((order as any).status);
-    const requiresOverride = currentStatusIndex > 0 && status === 'cancelled';
+    const hasItemsInProgress = db.prepare(`
+      SELECT 1 FROM order_items 
+      WHERE order_id = ? AND status IN ('preparing', 'ready', 'served', 'completed') 
+      LIMIT 1
+    `).get(req.params.id) !== undefined;
+    const requiresOverride = (currentStatusIndex > 0 || hasItemsInProgress) && status === 'cancelled';
 
     if (requiresOverride) {
       if (!override_pin) {

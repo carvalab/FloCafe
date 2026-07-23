@@ -1236,7 +1236,7 @@ export default function OrdersPage() {
                 </div>
               )}
 
-              {cancelModal.order.status !== 'pending' && (
+              {(cancelModal.order.status !== 'pending' || cancelModal.order.items?.some((i) => ['preparing', 'ready', 'served', 'completed'].includes(i.status))) && (
                 <div>
                   <label htmlFor="overridePin" className="block text-sm font-medium text-gray-700 mb-1">
                     {t('orders.overridePinLabel')}
