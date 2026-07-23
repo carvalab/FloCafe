@@ -26,6 +26,19 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
 
+      - name: Upload standalone uninstaller scripts
+        # Independent utility scripts, not part of the app bundle — for
+        # users who need to fully remove/reinstall outside the packaged
+        # per-platform uninstaller (e.g. a broken install).
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          gh release upload "v${VERSION}" \
+            scripts/uninstallers/uninstall-macos.sh \
+            scripts/uninstallers/uninstall-windows.ps1 \
+            --repo FreeOpenSourcePOS/FloCafe --clobber
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   release-linux:
     runs-on: ubuntu-22.04
     needs: create-release

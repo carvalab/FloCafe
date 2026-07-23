@@ -196,6 +196,22 @@ export function startKdsServer(): Promise<void> {
       }
     });
 
+    // Current user info — lets the frontend restore a session from a saved
+    // token on page load/reload instead of forcing a fresh login every time.
+    app.get('/api/auth/me', requireAuth, (req: Request, res: Response) => {
+      try {
+        const authedUser = (req as any).user as KdsRequestUser;
+        const db = getDatabase();
+        const row = db.prepare('SELECT id, name, email, role FROM users WHERE id = ?').get(authedUser.userId) as any;
+        if (!row) {
+          return res.status(404).json({ error: 'User not found' });
+        }
+        res.json({ user: row });
+      } catch (error: any) {
+        res.status(500).json({ error: 'Internal server error' });
+      }
+    });
+
     // Get orders for KDS (pending, preparing, ready)
     app.get('/api/kds/orders', requireAuth, (req: Request, res: Response) => {
       if (!isKdsEnabled()) {

@@ -94,8 +94,22 @@ interface WsMessage {
   message?: string;
 }
 
+export interface UseKdsConnectionEndpoints {
+  login?: string;
+  me?: string;
+  orders?: string;
+  /** Path template containing a literal `:itemId` placeholder, e.g. '/kds/items/:itemId/status'. */
+  itemStatus?: string;
+}
+
 export interface UseKdsConnectionOptions {
   api: AxiosInstance;
+  /**
+   * Overrides the default (main-server) endpoint paths. The standalone KDS
+   * device page talks to kds-server.ts, which exposes a different, smaller
+   * route set than the main server the dashboard-embedded KDS talks to.
+   */
+  endpoints?: UseKdsConnectionEndpoints;
 }
 
 export interface UseKdsConnectionResult {
@@ -119,10 +133,16 @@ export interface UseKdsConnectionResult {
 }
 
 const LOGIN_ENDPOINT = '/auth/login';
+const ME_ENDPOINT = '/auth/me';
 const ORDERS_ENDPOINT = '/kitchen/orders';
+const ITEM_STATUS_ENDPOINT = '/order-items/:itemId/status';
 
 export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnectionResult {
-  const { api } = options;
+  const { api, endpoints } = options;
+  const loginPath = endpoints?.login ?? LOGIN_ENDPOINT;
+  const mePath = endpoints?.me ?? ME_ENDPOINT;
+  const ordersPath = endpoints?.orders ?? ORDERS_ENDPOINT;
+  const itemStatusPath = endpoints?.itemStatus ?? ITEM_STATUS_ENDPOINT;
   const { t } = useI18n();
   const { confirm, ConfirmDialog } = useConfirm();
 
@@ -152,14 +172,14 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
 
   const fetchOrdersRest = useCallback(async () => {
     try {
-      const { data } = await api.get(`${ORDERS_ENDPOINT}?status=pending,preparing,ready,served`);
+      const { data } = await api.get(`${ordersPath}?status=pending,preparing,ready,served`);
       setOrders(data.orders || []);
       setCounts(data.counts || {});
       setConnected(true);
     } catch {
       setConnected(false);
     }
-  }, [api]);
+  }, [api, ordersPath]);
 
   const startRestPolling = useCallback(() => {
     stopRestPolling();
@@ -173,7 +193,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     async (itemId: number, status: KitchenStatus, opts: { silent?: boolean } = {}) => {
       setUpdating(itemId);
       try {
-        await api.patch(`/order-items/${itemId}/status`, { status });
+        await api.patch(itemStatusPath.replace(':itemId', String(itemId)), { status });
         if (!opts.silent) toast.success(t('kds.itemMarked', { status: statusLabel(status) }));
       } catch {
         if (!opts.silent) toast.error(t('kds.failedToUpdateItem'));
@@ -183,7 +203,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
     },
     // statusLabel is derived from `t` (already in deps), so omit it.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [api, t],
+    [api, itemStatusPath, t],
   );
 
   const tryWebSocket = useCallback(
@@ -282,7 +302,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
       setLoading(true);
 
       try {
-        const { data } = await api.post(LOGIN_ENDPOINT, {
+        const { data } = await api.post(loginPath, {
           email: loginEmail,
           password: loginPassword,
         });
@@ -304,7 +324,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
         setLoginLoading(false);
       }
     },
-    [api, loginEmail, loginPassword, t, tryWebSocket],
+    [api, loginEmail, loginPassword, loginPath, t, tryWebSocket],
   );
 
   const handleLogout = useCallback(async () => {
@@ -327,7 +347,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
       setLoading(false);
       return;
     }
-    api.get('/auth/me')
+    api.get(mePath)
       .then(({ data }) => {
         setUser({
           id: data.user.id,
@@ -349,7 +369,7 @@ export function useKdsConnection(options: UseKdsConnectionOptions): UseKdsConnec
       }
       stopRestPolling();
     };
-  }, [api, tryWebSocket, stopRestPolling]);
+  }, [api, mePath, tryWebSocket, stopRestPolling]);
 
   useEffect(() => {
     if (connectionMode === 'rest' && user) {

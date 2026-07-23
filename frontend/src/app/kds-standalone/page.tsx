@@ -55,7 +55,16 @@ export default function KdsStandalonePage() {
   useSyncServerLanguage();
   // Lazy-init the axios instance — must not run during SSR prerender.
   const api = useMemo(() => (typeof window !== 'undefined' ? createStandaloneApi() : null), []);
-  const conn = useKdsConnection(api ? { api } : { api: axios.create() });
+  // kds-server.ts (this page's backend, a separate Express app from the main
+  // server) exposes a smaller, differently-named route set than the
+  // dashboard-embedded KDS talks to — override the hook's main-server defaults.
+  const standaloneEndpoints = {
+    login: '/api/auth/login',
+    me: '/api/auth/me',
+    orders: '/api/kds/orders',
+    itemStatus: '/api/kds/items/:itemId/status',
+  };
+  const conn = useKdsConnection(api ? { api, endpoints: standaloneEndpoints } : { api: axios.create() });
   const origin = typeof window !== 'undefined' ? window.location.origin : '';
   const { kdsDefaultView } = useServerKdsInfo(origin);
   const kdsDisabled = useKdsDisabledCheck(origin);

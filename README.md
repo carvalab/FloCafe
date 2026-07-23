@@ -76,6 +76,17 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 | **Linux (AppImage)** | `Flo.Cafe-<version>.AppImage` | Portable Linux binary, built on `ubuntu-22.04` for glibc compatibility with Ubuntu 22.04+ and similarly recent distros |
 | **Linux (Debian)** | `flo-desktop_<version>_amd64.deb` | Debian/Ubuntu package, same `ubuntu-22.04` build target |
 
+**Uninstalling:** standalone uninstaller scripts for macOS and Windows are attached to every [release](https://github.com/FreeOpenSourcePOS/FloCafe/releases) — useful if the packaged uninstaller is missing or a reinstall needs a clean slate. They remove the app and its support files but leave your database/backups/Master PIN alone unless you pass `--purge-data` / `-PurgeData`.
+
+```sh
+# macOS
+curl -fsSL https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/uninstall-macos.sh -o uninstall-macos.sh && chmod +x uninstall-macos.sh && ./uninstall-macos.sh
+```
+```powershell
+# Windows (PowerShell)
+irm https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/uninstall-windows.ps1 -OutFile uninstall-windows.ps1; powershell -ExecutionPolicy Bypass -File .\uninstall-windows.ps1
+```
+
 ## 🚀 Features
 
 ### Core POS

@@ -2,6 +2,14 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.3] - 2026-07-23
+
+### Fixed
+- Standalone Kitchen Display (the separate device page served on port 3002, as opposed to the dashboard-embedded KDS) failed to log in with "Login failed — the database may have an error" — the frontend was calling the main server's API paths (`/auth/login`, `/kitchen/orders`, `/order-items/:id/status`, `/auth/me`), none of which exist on the standalone KDS server, which exposes its own smaller route set. The standalone page now talks to the correct paths, and the standalone server gained the `/api/auth/me` route it was missing (needed to restore a session after a page reload instead of forcing a fresh login every time).
+
+### Added
+- Standalone uninstaller scripts for macOS and Windows, attached to this and every future release. Useful when the packaged per-platform uninstaller is missing or a reinstall needs a clean slate. Removes the app and its support files (preferences, caches, shortcuts, auto-update state); leaves your database, backups, and Master PIN alone unless you explicitly pass `--purge-data` / `-PurgeData`.
+
 ## [2.0.2] - 2026-07-23
 
 ### Security
