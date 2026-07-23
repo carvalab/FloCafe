@@ -28,6 +28,7 @@ FloCafe runs entirely on your own machine — no internet, no subscriptions, no 
 
 - [Why FloCafe](#why-flocafe)
 - [Downloads](#downloads)
+- [Install on Linux](#install-on-linux)
 - [Features](#features)
 - [Project Stats](#project-stats)
 - [Public Roadmap](#public-roadmap)
@@ -73,8 +74,11 @@ Or grab the latest build directly from [Releases](https://github.com/FreeOpenSou
 | **macOS (Apple Silicon DMG)** | `Flo.Cafe-<version>-arm64.dmg` | Direct download for M1/M2/M3/M4 |
 | **Windows** | [Microsoft Store](https://apps.microsoft.com/detail/9n1md6585p4q) | Recommended — auto-updates |
 | **Windows (EXE)** | `Flo.Cafe.Setup.<version>.exe` | Direct download installer |
-| **Linux (AppImage)** | `Flo.Cafe-<version>.AppImage` | Portable Linux binary, built on `ubuntu-22.04` for glibc compatibility with Ubuntu 22.04+ and similarly recent distros |
-| **Linux (Debian)** | `flo-desktop_<version>_amd64.deb` | Debian/Ubuntu package, same `ubuntu-22.04` build target |
+| **Linux (Snap)** | [`sudo snap install flocafe`](#install-on-linux) | Recommended for Ubuntu, Fedora (via snapd), Mint, elementary — auto-updates via snapd |
+| **Linux (AppImage)** | `flocafe-<version>-x86_64.AppImage` | Portable, glibc ≥ 2.34 (Ubuntu 22.04+, Fedora 36+, Debian 12+) — [install](#install-on-linux) |
+| **Linux (AppImage arm64)** | `flocafe-<version>-arm64.AppImage` | Raspberry Pi 4/5, ARM servers, Apple-Silicon Linux VMs — [install](#install-on-linux) |
+| **Linux (Debian)** | `flocafe_<version>_amd64.deb` | Debian / Ubuntu / Pop!_OS / Mint |
+| **Linux (Debian arm64)** | `flocafe_<version>_arm64.deb` | Same as above on arm64 distros |
 
 **Uninstalling:** standalone uninstaller scripts for macOS and Windows are attached to every [release](https://github.com/FreeOpenSourcePOS/FloCafe/releases) — useful if the packaged uninstaller is missing or a reinstall needs a clean slate. They always remove the app and its support files; for your database/backups/Master PIN, run interactively and you'll be asked Delete or Keep, or pass `--purge-data` / `-PurgeData` upfront to delete without asking (add `--dry-run` / `-DryRun` to preview first).
 
@@ -86,6 +90,56 @@ curl -fsSL https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download
 # Windows (PowerShell)
 irm https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/uninstall-windows.ps1 -OutFile uninstall-windows.ps1; powershell -ExecutionPolicy Bypass -File .\uninstall-windows.ps1
 ```
+
+## Install on Linux
+
+Three official channels: Snap (auto-updates), AppImage (any distro, no install), `.deb` (Debian/Ubuntu and derivatives).
+
+### Snap
+
+```bash
+sudo snap install flocafe
+```
+
+Stable channel is `latest/stable`; pre-releases are on `edge` (`sudo snap install flocafe --edge`). Auto-update is on by default — every new tag from this repo lands on `latest/stable` automatically. To pin a specific version: `sudo snap refresh flocafe --channel=2.0.5/stable`.
+
+For tails that need a receipt printer over USB without `sudo`, grant the snap a confined-usb override:
+
+```bash
+sudo snap connect flocafe:raw-usb
+```
+
+### AppImage (any distro)
+
+Both architectures are signed and bundled in the latest release's assets. From the [Releases page](https://github.com/FreeOpenSourcePOS/FloCafe/releases), expand `Assets` at the bottom, download the AppImage matching your CPU, then:
+
+```bash
+# x86_64 — most desktops, servers, Steam Deck, most VMs
+curl -L -O https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/flocafe-x86_64.AppImage
+chmod +x flocafe-x86_64.AppImage
+./flocafe-x86_64.AppImage
+
+# arm64 — Raspberry Pi 4/5, ARM servers, Apple-Silicon Linux VMs
+curl -L -O https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/flocafe-arm64.AppImage
+chmod +x flocafe-arm64.AppImage
+./flocafe-arm64.AppImage
+```
+
+If the AppImage doesn't launch on an older distro, `sudo apt install libfuse2` first (Ubuntu 22.04 ships libfuse3 by default; earlier releases like 20.04 still need `libfuse2`). Your data lives under `~/.config/flo-desktop` once running.
+
+### Debian / Ubuntu (`.deb`)
+
+```bash
+# x86_64
+curl -L -O https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/flocafe_amd64.deb
+sudo apt install ./flocafe_amd64.deb
+
+# arm64 (Raspberry Pi OS arm64, etc.)
+curl -L -O https://github.com/FreeOpenSourcePOS/FloCafe/releases/latest/download/flocafe_arm64.deb
+sudo apt install ./flocafe_arm64.deb
+```
+
+Fedora / RHEL / Nobara users: substitute the `.rpm` asset from the same release (filename pattern `flocafe-<version>-<arch>.rpm`) and install with `sudo rpm -i ./flocafe-<arch>.rpm`.
 
 ## 🚀 Features
 
