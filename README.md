@@ -389,7 +389,7 @@ picks it up automatically from there:
    **mandatory**: this step fails the workflow loudly instead of publishing a release
    with no notes if one is missing.
 2. Builds and uploads installers for Linux (AppImage/deb/rpm/snap), macOS (dmg/zip +
-   the `latest-mac.yml` auto-update manifest), and Windows (nsis/portable + the
+   the `latest-mac.yml` auto-update manifest), and Windows (nsis + the
    `latest.yml` manifest) — each platform job verifies its own auto-update assets exist
    before uploading, so a release can't silently ship without a working update path.
 3. Uploads `scripts/uninstallers/uninstall-macos.sh` and `uninstall-windows.ps1` as

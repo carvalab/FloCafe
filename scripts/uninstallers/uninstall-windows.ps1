@@ -36,17 +36,28 @@ $AppName = 'Flo Cafe'
 
 function Write-Step($msg) { Write-Host "`n$msg" -ForegroundColor Cyan }
 function Write-Log($msg)  { Write-Host "  $msg" }
+function Write-Warn($msg) { Write-Host "  $msg" -ForegroundColor Yellow }
 function Invoke-Removal($path, $description) {
-  if (Test-Path $path) {
-    if ($DryRun) {
-      Write-Log "[dry-run] would remove $description at $path"
-    } else {
-      Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
-      Write-Log "removed $description"
-    }
+  if (-not (Test-Path $path)) { return $false }
+  if ($DryRun) {
+    Write-Log "[dry-run] would remove $description at $path"
     return $true
   }
-  return $false
+  Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+  # Deletion can silently no-op if a file underneath is still locked (most often
+  # because Flo Cafe wasn't fully closed yet) -- retry briefly instead of just
+  # trusting Remove-Item and claiming success regardless.
+  for ($i = 0; $i -lt 6 -and (Test-Path $path); $i++) {
+    Start-Sleep -Milliseconds 500
+    Remove-Item -Path $path -Recurse -Force -ErrorAction SilentlyContinue
+  }
+  if (Test-Path $path) {
+    Write-Warn "could NOT fully remove $description at $path -- some files are still locked."
+    Write-Warn "make sure Flo Cafe is completely closed (check Task Manager for `"Flo Cafe.exe`", it may be hiding in the system tray) and re-run this script."
+  } else {
+    Write-Log "removed $description"
+  }
+  return $true
 }
 
 Write-Step "Flo Cafe uninstaller (Windows)"
@@ -56,7 +67,12 @@ if ($DryRun) { Write-Log "(dry run -- nothing will actually be deleted)" }
 Write-Step "Closing Flo Cafe if it's running..."
 $proc = Get-Process -Name "Flo Cafe" -ErrorAction SilentlyContinue
 if ($proc) {
-  if (-not $DryRun) { $proc | Stop-Process -Force -ErrorAction SilentlyContinue }
+  if (-not $DryRun) {
+    $proc | Stop-Process -Force -ErrorAction SilentlyContinue
+    # Wait for it to actually exit so the SQLite db/log files below aren't
+    # still locked when we try to delete them a moment later.
+    $proc | Wait-Process -Timeout 10 -ErrorAction SilentlyContinue
+  }
   Write-Log "closed running instance"
 } else {
   Write-Log "not running"

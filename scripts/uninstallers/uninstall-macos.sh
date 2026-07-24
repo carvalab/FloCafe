@@ -50,8 +50,25 @@ run()  {
 }
 remove_path() {
   local target="$1"
-  if [ -e "$target" ] || [ -L "$target" ]; then
+  if [ ! -e "$target" ] && [ ! -L "$target" ]; then
+    return
+  fi
+  if [ "$DRY_RUN" -eq 1 ]; then
+    log "[dry-run] would remove $target"
+    return
+  fi
+  run rm -rf "$target"
+  # rm -f masks failures (e.g. a file still open by a not-fully-quit Flo Cafe
+  # process) -- verify instead of just trusting it and reporting success.
+  for _ in 1 2 3 4 5 6; do
+    if [ ! -e "$target" ] && [ ! -L "$target" ]; then break; fi
+    sleep 0.5
     run rm -rf "$target"
+  done
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    echo -e "  \033[33mcould NOT fully remove $target -- some files are still in use.\033[0m"
+    echo -e "  \033[33mmake sure Flo Cafe is completely quit (check Activity Monitor), then re-run this script.\033[0m"
+  else
     log "removed $target"
   fi
 }
@@ -64,6 +81,12 @@ if pgrep -x "$APP_NAME" >/dev/null 2>&1; then
   run osascript -e "tell application \"$APP_NAME\" to quit" || true
   sleep 1
   run pkill -x "$APP_NAME" 2>/dev/null || true
+  # Wait for it to actually exit so the SQLite db/log files below aren't
+  # still locked when we try to delete them a moment later.
+  for _ in 1 2 3 4 5 6 7 8 9 10; do
+    pgrep -x "$APP_NAME" >/dev/null 2>&1 || break
+    sleep 0.5
+  done
   log "quit $APP_NAME"
 else
   log "not running"
