@@ -88,7 +88,13 @@ remove_path "$HOME/Library/Saved Application State/$BUNDLE_ID.savedState"
 remove_path "$HOME/Library/HTTPStorages/$BUNDLE_ID"
 remove_path "$HOME/Library/WebKit/$BUNDLE_ID"
 
-DATA_PATH="$HOME/Library/Application Support/$APP_NAME"
+# Electron's default userData dir comes from package.json's top-level "name"
+# ("flo-desktop"), not the electron-builder "productName" ("Flo Cafe") used
+# for the .app bundle -- so the real data lives under "flo-desktop", not
+# under "$APP_NAME". Sweep both so stray data from either naming never
+# survives an uninstall.
+DATA_PATH="$HOME/Library/Application Support/flo-desktop"
+LEGACY_DATA_PATH="$HOME/Library/Application Support/$APP_NAME"
 step "Your business data"
 log "database, backups, and Master PIN live at:"
 log "  $DATA_PATH"
@@ -110,6 +116,7 @@ fi
 if [ "$PURGE_DATA" -eq 1 ]; then
   step "Removing your business data…"
   remove_path "$DATA_PATH"
+  remove_path "$LEGACY_DATA_PATH"
 else
   log "keeping your data"
 fi

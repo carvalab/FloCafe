@@ -76,7 +76,16 @@ export default function SetupPage() {
 
   useEffect(() => {
     api.get('/auth/setup/status')
-      .then(({ data }) => setMasterPinAvailable(!!data.masterPinAvailable))
+      .then(({ data }) => {
+        setMasterPinAvailable(!!data.masterPinAvailable);
+        // An owner already exists — /auth/setup/initialize is disabled server-side,
+        // so bail out immediately instead of letting the user fill the whole wizard
+        // and only find out at the final submit.
+        if (!data.needsSetup) {
+          toast.error('Setup has already been completed on this install. Redirecting to login…');
+          window.location.replace('/auth/login');
+        }
+      })
       .catch(() => setMasterPinAvailable(false));
   }, []);
 

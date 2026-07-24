@@ -125,7 +125,13 @@ if ($entry) {
 }
 
 # ── User data (database, backups, Master PIN) ────────────────────────────
-$userDataPath = Join-Path $env:APPDATA $AppName
+# Electron's default userData dir comes from package.json's top-level "name"
+# ("flo-desktop"), not the electron-builder "productName" ("Flo Cafe") used
+# for the installer/shortcuts -- so the real data lives under "flo-desktop",
+# not under "$AppName". Sweep both so stray data from either naming never
+# survives an uninstall.
+$userDataPath = Join-Path $env:APPDATA "flo-desktop"
+$legacyUserDataPath = Join-Path $env:APPDATA $AppName
 Write-Step "Your business data"
 Write-Log "database, backups, and Master PIN live at:"
 Write-Log "  $userDataPath"
@@ -146,6 +152,7 @@ if ($PurgeData) {
   Write-Step "Removing your business data..."
   Write-Log "this is irreversible -- there is no undo"
   Invoke-Removal $userDataPath "user data" | Out-Null
+  Invoke-Removal $legacyUserDataPath "legacy user data" | Out-Null
 } else {
   Write-Log "keeping your data"
 }
