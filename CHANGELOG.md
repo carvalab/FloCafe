@@ -2,6 +2,16 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.6] - 2026-07-24
+
+### Fixed
+- Both standalone uninstaller scripts (`uninstall-windows.ps1`, `uninstall-macos.sh`) were purging the wrong folder: Electron's actual userData directory comes from package.json's top-level `name` (`flo-desktop`), not the electron-builder `productName` (`Flo Cafe`) used for the installer/shortcuts. `-PurgeData` / `--purge-data` could silently no-op against a folder that never held your database, backups, or Master PIN, making it look like your data survived an uninstall when it never had a chance to be touched in the first place. Both scripts now target the real folder (and still sweep the old name in case anything was ever written there).
+- Same scripts also used to report a path as "removed" right after attempting deletion, even if a locked file (most often the app not being fully quit yet) made it silently fail. They now wait for the app process to fully exit, verify the path is actually gone afterward, retry briefly, and warn explicitly if something's still stuck instead of falsely claiming success.
+- First-run `/setup` only checked whether a Master PIN was configured, not whether setup had already been completed — so on an already-initialized install it would let you fill out the entire multi-step wizard before rejecting at the very last step with "Setup already complete. This endpoint is disabled." It now checks up front and redirects straight to login if an owner already exists.
+
+### Removed
+- Windows no longer ships a portable `.exe` build — only the NSIS installer (direct download) and the Microsoft Store build remain.
+
 ## [2.0.4] - 2026-07-23
 
 ### Fixed
