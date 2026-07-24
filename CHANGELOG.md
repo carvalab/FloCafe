@@ -2,6 +2,15 @@
 
 All notable changes to Flo Cafe are documented here. Dates are release dates, not commit dates. Format loosely follows [Keep a Changelog](https://keepachangelog.com/).
 
+## [2.0.7] - 2026-07-24
+
+### Fixed
+- Linux snap builds never actually shipped despite 2.0.5 wiring the publish step: `snapcraft.core24.useDestructiveMode` runs the build directly on the host, which only works when the host matches the snap base. The release runners were stuck on `ubuntu-22.04`, so destructive mode bailed before snapcraft could start (`ERR_ELECTRON_BUILDER_CANNOT_EXECUTE — Ubuntu 24.04 builds cannot be performed on this Ubuntu 22.04 system`). Release runners moved to `ubuntu-24.04` / `ubuntu-24.04-arm64` (both GA, both ship snapd out of the box); destructive mode for core24 now works natively and the LXD daemon install is gone. `useDestructiveMode: true` replaces `useLXD: true` in `package.json`.
+
+### Changed
+- Linux AppImage, deb, rpm and snap are now built on `ubuntu-24.04` and `ubuntu-24.04-arm64`. Every release ships the full target quartet (AppImage + deb + rpm + snap) for **both** `x86_64` / `amd64` and `arm64`. The arm64 build was previously declared but never ran.
+- Linux snap is now actually published to the Snap Store as part of the release pipeline. 2.0.5 added the wiring, but 2.0.6 (the first attempt) failed at the snapcraft step and shipped without a snap. 2.0.7 is the first release with a working snap upload under the `flocafe` name, on `amd64` and `arm64` revisions.
+
 ## [2.0.6] - 2026-07-24
 
 ### Fixed
