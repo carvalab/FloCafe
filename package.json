@@ -303,7 +303,7 @@
         "extensions": [
           "gnome"
         ],
-        "useLXD": true,
+        "useDestructiveMode": true,
         "plugs": [
           "default",
           "cups-control",
