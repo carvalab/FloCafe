@@ -237,28 +237,52 @@
       "identity": "Apple Development: Codify Apps Private Limited (BKDY677XJA)"
     },
     "linux": {
+      "synopsis": "Self-hosted Point of Sale for cafes and restaurants",
+      "description": "Flo is a free, open-source point-of-sale system for cafes, restaurants, and small kitchens. Local-first, offline-capable, no cloud lock-in, no per-seat fees.",
       "target": [
         {
           "target": "AppImage",
           "arch": [
-            "x64"
+            "x64",
+            "arm64"
           ]
         },
         {
           "target": "deb",
           "arch": [
-            "x64"
+            "x64",
+            "arm64"
+          ]
+        },
+        {
+          "target": "rpm",
+          "arch": [
+            "x64",
+            "arm64"
           ]
         },
         {
           "target": "snap",
           "arch": [
-            "x64"
+            "x64",
+            "arm64"
           ]
         }
       ],
       "icon": "assets",
       "category": "Office",
+      "executableName": "flocafe",
+      "artifactName": "flocafe-${version}-${arch}.${ext}",
+      "extraFiles": [
+        {
+          "from": "assets/com.flo.desktop.metainfo.xml",
+          "to": "usr/share/metainfo/com.flo.desktop.metainfo.xml"
+        },
+        {
+          "from": "assets/icons",
+          "to": "usr/share/icons"
+        }
+      ],
       "desktop": {
         "entry": {
           "Name": "Flo Cafe",
@@ -269,17 +293,27 @@
         }
       }
     },
-    "snap": {
-      "confinement": "strict",
-      "plugs": [
-        "cups-control",
-        "avahi-observe",
-        "avahi-control",
-        "raw-usb",
-        "removable-media"
-      ],
-      "environment": {
-        "TMPDIR": "$XDG_RUNTIME_DIR"
+    "snapcraft": {
+      "base": "core24",
+      "core24": {
+        "confinement": "strict",
+        "extensions": [
+          "gnome"
+        ],
+        "useDestructiveMode": true,
+        "plugs": [
+          "default",
+          "cups-control",
+          "avahi-observe",
+          "avahi-control",
+          "raw-usb",
+          "removable-media",
+          "network-bind",
+          "screen-inhibit-control"
+        ],
+        "environment": {
+          "TMPDIR": "$XDG_RUNTIME_DIR"
+        }
       }
     },
     "nsis": {

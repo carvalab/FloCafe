@@ -12,6 +12,17 @@ All notable changes to Flo Cafe are documented here. Dates are release dates, no
 ### Removed
 - Windows no longer ships a portable `.exe` build — only the NSIS installer (direct download) and the Microsoft Store build remain.
 
+## [2.0.5] - 2026-07-23
+
+### Added
+- Linux release pipeline now ships a signed `.snap` to the Snap Store on every release tag, using the `core24` base with the GNOME extension (mirrors the `snapcrafters/signal-desktop` recipe). One-time repo secret `SNAPCRAFT_STORE_CREDENTIALS` (a snapcraft macaroon from `snapcraft export-login`) is all that is needed: the release workflow self-registers the snap name on first run and uploads subsequent revisions automatically.
+- Linux release job is now a matrix on `ubuntu-22.04` and `ubuntu-22.04-arm64`. Each entry builds and uploads its full target set (AppImage + deb + rpm + snap) for its host architecture, and both publish their snap to Snap Store under the same `flocafe` name as a multi-arch revision. Net result of every release: `flocafe-<version>-x86_64.AppImage` + `_amd64.deb` + `_x86_64.rpm` + `_amd64.snap` + the same quartet on `_arm64`.
+- AppImageHub catalog compatibility: `linux.artifactName` is now an explicit lowercase template (`flocafe-<version>-<arch>.<ext>`) instead of electron-builder's default `Flo Cafe-<version>-<arch>.<ext>`, so the AppImageHub catalog's auto-discovery filename regex picks the binary up on its next release scan; the AppStream metainfo at `assets/com.flo.desktop.metainfo.xml` is now wired into the AppImage at the spec-correct `/usr/share/metainfo/` path via `linux.extraFiles` so the catalog CI's `appstreamcli validate` passes and GNOME Software / KDE Discover display the listing correctly.
+
+### Fixed
+- Linux snap builds under strict confinement were silently broken: the legacy `build.snap` block replaced electron-builder's default plug set, leaving the snap without `home`, `x11`, `wayland`, or `network-bind`. Result was that the Express server on `0.0.0.0:3001` and the KDS server on `0.0.0.0:3002` couldn't bind under confined snap, and the renderer couldn't open a window on X11 or Wayland. Plug list now uses `"default"` to extend instead of replace, and adds `network-bind` and `screen-inhibit-control` explicitly.
+- AppStream metainfo (`assets/com.flo.desktop.metainfo.xml`) shipped with a stale `1.7.1` release entry in every build, so AppImageHub / GNOME Software / KDE Discover showed a years-old version. The release job now runs `scripts/update-metainfo.js` which prepends a fresh `<release>` block with the current version + date + CHANGELOG notes before each build. Idempotent; the on-disk source file is rewritten but not auto-committed.
+
 ## [2.0.4] - 2026-07-23
 
 ### Fixed
