@@ -135,10 +135,15 @@ jobs:
       - name: Publish snap to Snap Store (stable)
         # Both matrix entries publish their snap, each tagged with its arch.
         # Snap Store keeps multiple per-arch revisions under one snap name.
-        if: secrets.SNAPCRAFT_STORE_CREDENTIALS != ''
+        # The credentials check is at runtime, not in `if:` — GitHub Actions
+        # rejects `secrets` in `if:` expressions (unrecognized named-value).
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
+          if [ -z "$SNAPCRAFT_STORE_CREDENTIALS" ]; then
+            echo "::warning::SNAPCRAFT_STORE_CREDENTIALS not set — skipping snap publish for ${{ matrix.arch }}"
+            exit 0
+          fi
           SNAP_NAME="flocafe"
           # snapcraft CLI uses amd64 for x86_64; map our matrix.arch accordingly.
           case "${{ matrix.arch }}" in
