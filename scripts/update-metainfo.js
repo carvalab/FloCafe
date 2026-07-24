@@ -1,0 +1,43 @@
+#!/usr/bin/env node
+// Prepends a <release> entry to assets/com.flo.desktop.metainfo.xml at release
+// time so the AppImage ships with an up-to-date AppStream release history.
+// Reads version from package.json and release notes from CHANGELOG.md (via
+// scripts/changelog-notes.sh). The on-disk source file is rewritten; the
+// running pipeline does NOT auto-commit this change back to the repo.
+
+const { readFileSync, writeFileSync } = require('node:fs');
+const { execFileSync } = require('node:child_process');
+const path = require('node:path');
+
+const ROOT = path.resolve(__dirname, '..');
+const META_FILE = path.join(ROOT, 'assets/com.flo.desktop.metainfo.xml');
+const NOTES_HELPER = path.join(ROOT, 'scripts/changelog-notes.sh');
+
+const pkg = JSON.parse(readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
+const version = pkg.version;
+const date = new Date().toISOString().slice(0, 10);
+
+const notes = execFileSync(NOTES_HELPER, [version], { encoding: 'utf8' })
+  .trim()
+  .replace(/[\r\n]+/g, ' ')
+  .replace(/&/g, '&amp;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;');
+
+const xml = readFileSync(META_FILE, 'utf8');
+
+if (xml.includes(`version="${version}"`)) {
+  console.log(`release ${version} already present in ${path.basename(META_FILE)} — skipping`);
+  process.exit(0);
+}
+
+const entry = `
+    <release version="${version}" date="${date}">
+      <description>
+        <p>${notes}</p>
+      </description>
+    </release>`;
+
+const updated = xml.replace(/(\s*<releases>)/, `$1${entry}`);
+writeFileSync(META_FILE, updated);
+console.log(`prepended <release version="${version}" date="${date}"> to ${path.basename(META_FILE)}`);
