@@ -83,6 +83,12 @@ export function initDatabase(): void {
 
   db.pragma('foreign_keys = ON');
 
+  const hasOwner = Boolean(db.prepare('SELECT 1 FROM users LIMIT 1').get());
+  const country = getSettingValue('country');
+  if (hasOwner && country) {
+    require('./plugins/installations').provisionBuiltinTaxPackage(country);
+  }
+
   runStartupIntegrityCheck();
   repairSequences();
   autoRepairPaymentDetails();
@@ -1273,6 +1279,40 @@ export const MIGRATIONS: { version: number; name: string; up: () => void }[] = [
     up: () => {
       if (!getColumns(db, 'addon_groups').includes('allow_multiple_quantities')) {
         db.exec(`ALTER TABLE addon_groups ADD COLUMN allow_multiple_quantities INTEGER DEFAULT 0`);
+      }
+    },
+  },
+  {
+    version: 34,
+    name: 'add_plugin_installation_state_and_permissions',
+    up: () => {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS plugin_installations (
+          id TEXT PRIMARY KEY, package_id TEXT NOT NULL UNIQUE, package_version TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('installed', 'activated', 'disabled', 'uninstalled')),
+          installed_at TEXT NOT NULL, activated_at TEXT, disabled_at TEXT, installed_by TEXT, notes TEXT
+        );
+        CREATE TABLE IF NOT EXISTS plugin_features (
+          installation_id TEXT NOT NULL, capability_id TEXT NOT NULL,
+          status TEXT NOT NULL CHECK (status IN ('inactive', 'activating', 'active', 'deactivating', 'deactivated')),
+          activated_at TEXT, deactivated_at TEXT, notes TEXT,
+          PRIMARY KEY (installation_id, capability_id),
+          FOREIGN KEY (installation_id) REFERENCES plugin_installations(id) ON DELETE CASCADE
+        );
+        CREATE TABLE IF NOT EXISTS plugin_connector_accounts (
+          id TEXT PRIMARY KEY, store_id TEXT NOT NULL DEFAULT 'local', installation_id TEXT NOT NULL,
+          package_id TEXT NOT NULL, capability_id TEXT NOT NULL, provider TEXT NOT NULL,
+          provider_account_ref TEXT, auth_status TEXT NOT NULL DEFAULT 'unauthorized',
+          readiness TEXT NOT NULL DEFAULT 'unconfigured', last_health_check_at TEXT, last_error TEXT,
+          config_json TEXT, created_at TEXT NOT NULL, updated_at TEXT NOT NULL,
+          UNIQUE (installation_id, capability_id),
+          FOREIGN KEY (installation_id) REFERENCES plugin_installations(id) ON DELETE CASCADE
+        );
+        CREATE INDEX IF NOT EXISTS idx_plugin_installations_status ON plugin_installations(status);
+        CREATE INDEX IF NOT EXISTS idx_plugin_connector_accounts_installation ON plugin_connector_accounts(installation_id);
+      `);
+      if (!getColumns(db, 'plugin_installations').includes('granted_permissions_json')) {
+        db.exec(`ALTER TABLE plugin_installations ADD COLUMN granted_permissions_json TEXT NOT NULL DEFAULT '[]'`);
       }
     },
   },

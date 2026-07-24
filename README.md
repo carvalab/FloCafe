@@ -235,6 +235,17 @@ Use the owner email and password created during first launch.
 
 ## Development Setup
 
+### Create a Plugin Scaffold
+
+Stage 1 country packages are generated and registered with:
+
+```bash
+npm run plugin:create -- --name "Mexico operations" --countries MX
+npm run plugin:create -- --name "Central America operations" --countries GT,HN,SV
+```
+
+The command creates `main/plugins/<slug>/`, adds a typed manifest scaffold, and updates the built-in registry. Replace the placeholder capability with real contracts and add tests before committing.
+
 ```bash
 # Clone the repo
 git clone https://github.com/FreeOpenSourcePOS/FloCafe.git

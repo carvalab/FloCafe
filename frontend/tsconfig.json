@@ -20,7 +20,8 @@
     ],
     "paths": {
       "@/*": ["./src/*"],
-      "@countries": ["../main/countries.ts"]
+      "@countries": ["../main/countries.ts"],
+      "@flo-plugin-api": ["../shared/plugin-api.ts"]
     }
   },
   "include": [

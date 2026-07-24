@@ -10,7 +10,7 @@ import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import { useCartStore } from '@/store/cart';
 import { useConfirm } from '@/hooks/use-confirm';
 import { useI18n } from '@/hooks/useI18n';
-import { PAYMENT_METHODS } from '@/lib/payment-methods';
+import { usePaymentMethods } from '@/lib/payment-methods';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { useWhatsAppReady } from '@/hooks/useWhatsAppReady';
 import { sendBillViaFlo } from '@/lib/whatsapp-share';
@@ -42,6 +42,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
   const isWhatsAppReady = useWhatsAppReady();
   const [justPaid, setJustPaid] = useState(false);
   const [sendingWa, setSendingWa] = useState(false);
+  const paymentMethods = usePaymentMethods();
   const [payments, setPayments] = useState<Payment[]>([
     { method: 'cash', amount: remaining.toString() },
   ]);
@@ -429,7 +430,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
           {payments.map((p, idx) => (
             <div key={idx} className="bg-gray-50 rounded-xl p-2.5 space-y-1.5">
               <div className="flex gap-1">
-                {PAYMENT_METHODS.map((m) => {
+                {paymentMethods.map((m) => {
                   const Icon = m.icon;
                   return (
                     <button
@@ -440,7 +441,7 @@ export default function PaymentModal({ bill, currency, onClose, onPaid, onBillUp
                       }`}
                     >
                       <Icon size={14} />
-                      {t(m.labelKey)}
+                       {m.labelKey ? t(m.labelKey) : m.label?.en ?? m.key}
                     </button>
                   );
                 })}

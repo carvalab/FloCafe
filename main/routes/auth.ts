@@ -9,6 +9,7 @@ import { authorizeMasterPin, isMasterPinAvailable, setMasterPin } from '../servi
 import { authRateLimit, validatePassword } from '../middleware/security';
 import { getCurrencySymbol, getCountryByCode } from '../countries';
 import { cloudSync, DEFAULT_CLOUD_SERVER_URL, normalizeCloudServerUrl } from '../services/cloud-sync';
+import { provisionBuiltinTaxPackage } from '../plugins/installations';
 
 const router = Router();
 
@@ -737,6 +738,7 @@ router.post('/setup/initialize', (req: Request, res: Response) => {
       });
 
       seedSetupProfile(db, normalizedSetupProfile, normalizedServiceModel, language, country);
+      provisionBuiltinTaxPackage(country);
     })();
 
     // Written to userData/, outside flo.db and outside this transaction — the

@@ -21,7 +21,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 };
 
 const {
-  initTestDb, createApp, startServer,
+  initTestDb, seedCountryTaxPackage, createApp, startServer,
   seedOwnerUser, seedCategory, seedProduct,
   api, assert, assertEqual,
   getResults, closeDatabase, getDatabase, now,
@@ -40,6 +40,9 @@ async function main() {
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('country', 'IN', ?)").run(now());
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('business_type', 'restaurant', ?)").run(now());
   db.prepare("INSERT OR REPLACE INTO settings (key, value, updated_at) VALUES ('state_code', '27', ?)").run(now());
+  // The country package is the only path that selects the India GST
+  // engine. Provision it so the dispatcher can find the active tax pack.
+  seedCountryTaxPackage();
 
   // Seed data
   const { authHeader } = seedOwnerUser(db);

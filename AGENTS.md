@@ -119,5 +119,14 @@ dropAllTables();
 
 `frontend/` is part of this repository. It is not a git submodule.
 
+## Plugins
+
+- Plugin contracts are Flo-owned. A plugin may implement `TaxEngine`, `PaymentConnector`, `FiscalDocumentProvider`, or `DeliveryConnector`; it must never introduce a parallel host interface, kind, operation, or permission.
+- Define manifest capabilities with `PluginCapabilityKind.*` and executable runtimes with `PluginRuntimeKind.*`. Do not use raw kind strings in shipped plugin manifests or runtime bundles.
+- Every executable package must use `definePluginRuntimeBundle({ manifest, runtimes })`. This binds each runtime's literal `capabilityId` and kind to a capability declared by that manifest at compile time.
+- All plugin boundary input is untrusted. Add or reuse an exported Zod schema for manifests, runtime bundles, connector configuration, and envelopes; do not add hand-written structural validators. Keep `PluginRegistry.register()` coverage checks in place. Add a contract test for every new kind, capability, or connector method.
+- Keep `manifest.ts` declarative and provider-free. Put executable implementations in `runtime.ts`; the manifest catalog registry must never import runtimes.
+- Before changing plugin contracts, read `docs/plugin-proposal.md`, `docs/plugin-authoring.md`, and `docs/plugin-references.md`; update all three when the contract changes.
+
 ## Post-Implementation Protocol
 - **MANDATORY**: After modifying ANY code, you MUST run all linting (`npm run lint`), build (`npm run build`), and testing (`npm test`) commands to ensure zero regressions before reporting back to the user. Do not blindly assume changes compile successfully; always verify via terminal output.

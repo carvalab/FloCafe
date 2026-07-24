@@ -24,7 +24,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 };
 
 const {
-  initTestDb, createApp, startServer,
+  initTestDb, seedCountryTaxPackage, createApp, startServer,
   seedOwnerUser, seedCategory, seedProduct,
   api, assert, assertEqual,
   getResults, closeDatabase,
@@ -38,6 +38,10 @@ async function main() {
   console.log('='.repeat(50));
 
   const db = initTestDb();
+  // Provision the country tax pack for the seeded `country` setting so
+  // the order/bill paths pick up the right tax engine instead of the
+  // generic default.
+  seedCountryTaxPackage();
 
   // Seed: owner user, category, 2 products
   const { authHeader } = seedOwnerUser(db);

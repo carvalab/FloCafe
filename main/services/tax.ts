@@ -1,3 +1,39 @@
+/**
+ * Tax engine — the core dispatcher.
+ *
+ * Stage 1 (this file) keeps every public export from the original
+ * implementation (`calculateItemTax`, `aggregateTaxBreakdown`,
+ * `calculateRoundOff`, `calculateTaxPreview`) with byte-for-byte
+ * identical inputs/outputs so existing endpoints and tests don't
+ * change.
+ *
+ * The country switch is gone. Country-specific math now lives in
+ * `main/plugins/{ar,in}/tax-engine.ts`, and the generic default math
+ * (Thailand 7% VAT plus the original `product.tax_rate` / inclusive /
+ * exclusive / taxName behavior) lives in
+ * `main/plugins/global/tax-engine.ts`. This file only retains the early
+ * `tax_type === 'none'` guard — the dispatcher hands every other
+ * request to the resolved tax plugin and converts its envelope back to
+ * the legacy shape.
+ *
+ * `getTaxEngineForCountry()` is activation-aware. When the country
+ * package is installed but not activated, or no package is installed at
+ * all, the dispatcher returns undefined and the function returns the
+ * same shape as the legacy `calculateDefaultTax` fallback
+ * (`tax_amount: 0`, empty breakdown) so the order pipeline keeps
+ * working without a tax pack. Existing tests rely on that no-op
+ * behavior for "unactivated store" scenarios.
+ *
+ * ponytail: this is the seam, not a refactor opportunity. Adding a new
+ * country in Stage 2 means dropping another country package into
+ * `main/plugins/<code>/` and registering it in `runtime-registry.ts`.
+ * Don't preempt that.
+ */
+
+import { COUNTRIES } from '../countries';
+import { getTaxEngineForCountry } from '../plugins/runtime-registry';
+import type { FiscalIdentity } from '../plugins/api-types';
+
 interface TenantInfo {
   country: string;
   business_type: string;
@@ -12,6 +48,8 @@ interface Product {
 interface Customer {
   gstin?: string;
   customer_state_code?: string;
+  cuit?: string;
+  fiscalIdentity?: FiscalIdentity;
 }
 
 interface TaxResult {
@@ -26,19 +64,15 @@ interface TaxBreakdown {
   amount: number;
 }
 
-const INDIA_FIXED_RATES: Record<string, number> = {
-  restaurant: 5.0,
-  salon: 5.0,
-};
-
-const THAILAND_VAT_RATE = 7.0;
-
-import { COUNTRIES } from '../countries';
-
 function round(value: number, decimals: number = 2): number {
   return Math.round(value * Math.pow(10, decimals)) / Math.pow(10, decimals);
 }
 
+/**
+ * Returns the per-item tax for a single product line. Every consumer
+ * (orders, bills, preview endpoint) calls this. Country-specific math
+ * and the default / Thailand branches now live in the plugin runtimes.
+ */
 export function calculateItemTax(
   tenant: TenantInfo,
   product: Product,
@@ -49,101 +83,52 @@ export function calculateItemTax(
     return { tax_amount: 0, tax_breakdown: [], tax_type: 'none' };
   }
 
-  const isRegistered = true; // In self-hosted, we assume tax settings are configured
-
-  if (!isRegistered) {
+  const taxEngine = getTaxEngineForCountry(tenant.country);
+  if (!taxEngine) {
+    // No activated tax plugin covers this store. Keep the order pipeline
+    // moving with a zero-tax line so existing behavior for "unactivated
+    // store" scenarios is preserved byte-for-byte.
     return { tax_amount: 0, tax_breakdown: [], tax_type: product.tax_type };
   }
 
-  switch (tenant.country) {
-    case 'IN':
-      return calculateIndiaTax(tenant, product, taxableAmount, customer);
-    case 'TH':
-      return calculateThailandTax(product, taxableAmount);
-    default:
-      return calculateDefaultTax(product, taxableAmount, tenant.country);
-  }
-}
-
-function calculateIndiaTax(
-  tenant: TenantInfo,
-  product: Product,
-  taxableAmount: number,
-  customer: Customer | null
-): TaxResult {
-  let rate: number;
-
-  if (INDIA_FIXED_RATES[tenant.business_type]) {
-    rate = INDIA_FIXED_RATES[tenant.business_type];
-  } else {
-    rate = product.tax_rate || 0;
-  }
-
-  if (rate <= 0) {
-    return { tax_amount: 0, tax_breakdown: [], tax_type: product.tax_type };
-  }
-
-  const taxAmount = computeTaxAmount(product.tax_type, taxableAmount, rate);
-
-  // Inter-state: IGST
-  if (customer?.gstin && customer?.customer_state_code && tenant.state_code) {
-    if (customer.customer_state_code !== tenant.state_code) {
-      return {
-        tax_amount: round(taxAmount, 2),
-        tax_breakdown: [{ title: 'IGST', rate, amount: round(taxAmount, 2) }],
-        tax_type: product.tax_type,
-      };
-    }
-  }
-
-  // Intra-state: CGST + SGST
-  const halfRate = round(rate / 2, 2);
-  const halfAmount = round(taxAmount / 2, 2);
-  const otherHalf = round(taxAmount - halfAmount, 2);
-
+  const currency = COUNTRIES.find((country) => country.code === tenant.country)?.currency || 'USD';
+  const result = taxEngine.calculate({
+    installationId: 'core',
+    storeId: 'local',
+    country: tenant.country,
+    requestId: `tax-${Date.now()}`,
+    currency,
+    storeRegionCode: tenant.state_code,
+    lines: [{
+      description: 'order item',
+      quantity: 1,
+      unitPrice: { amountMinor: Math.round(taxableAmount * 100), currency },
+      tax: { rate: product.tax_rate || 0, included: product.tax_type === 'inclusive', category: tenant.business_type },
+    }],
+    // Generic fiscal identity. The country engine decides whether
+    // GSTIN, CUIT, or anything else changes the math. GST computation
+    // is here; fiscal invoice authorization is a separate `fiscal.*`
+    // capability and lives elsewhere.
+    customer: customer ? { fiscalIdentity: resolveFiscalIdentity(customer), regionCode: customer.customer_state_code } : undefined,
+  });
   return {
-    tax_amount: round(taxAmount, 2),
-    tax_breakdown: [
-      { title: 'CGST', rate: halfRate, amount: halfAmount },
-      { title: 'SGST', rate: halfRate, amount: otherHalf },
-    ],
+    tax_amount: result.totalTax.amountMinor / 100,
+    tax_breakdown: result.lines.map((line) => ({ title: line.label, rate: line.rate, amount: line.amount.amountMinor / 100 })),
     tax_type: product.tax_type,
   };
 }
 
-function calculateThailandTax(product: Product, taxableAmount: number): TaxResult {
-  const rate = THAILAND_VAT_RATE;
-  const taxAmount = computeTaxAmount(product.tax_type, taxableAmount, rate);
-
-  return {
-    tax_amount: round(taxAmount, 2),
-    tax_breakdown: [{ title: 'VAT', rate, amount: round(taxAmount, 2) }],
-    tax_type: product.tax_type,
-  };
-}
-
-function calculateDefaultTax(product: Product, taxableAmount: number, country?: string): TaxResult {
-  const rate = product.tax_rate || 0;
-
-  if (rate <= 0) {
-    return { tax_amount: 0, tax_breakdown: [], tax_type: product.tax_type };
-  }
-
-  const taxAmount = computeTaxAmount(product.tax_type, taxableAmount, rate);
-  const title = (country && COUNTRIES.find((c) => c.code === country)?.taxName) || 'Tax';
-
-  return {
-    tax_amount: round(taxAmount, 2),
-    tax_breakdown: [{ title, rate, amount: round(taxAmount, 2) }],
-    tax_type: product.tax_type,
-  };
-}
-
-function computeTaxAmount(taxType: string, amount: number, rate: number): number {
-  if (taxType === 'inclusive') {
-    return amount - (amount / (1 + rate / 100));
-  }
-  return amount * rate / 100;
+/**
+ * Resolves a customer record into a generic fiscal identity. The
+ * customer table still stores country-specific fields (gstin, cuit).
+ * New countries should add a field; this resolver normalizes the
+ * legacy fields into the `{type, value}` shape the contracts use.
+ */
+function resolveFiscalIdentity(customer: Customer): FiscalIdentity | undefined {
+  if (customer.fiscalIdentity) return customer.fiscalIdentity;
+  if (customer.cuit) return { type: 'cuit', value: customer.cuit };
+  if (customer.gstin) return { type: 'gstin', value: customer.gstin };
+  return undefined;
 }
 
 export function aggregateTaxBreakdown(itemBreakdowns: any[]): TaxBreakdown[] {

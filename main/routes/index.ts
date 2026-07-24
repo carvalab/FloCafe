@@ -17,6 +17,7 @@ import { reportRoutes } from './reports';
 import { kdsRoutes } from './kds';
 import { kdsInfoRoutes } from './kds-info';
 import { moreAppsRoutes } from './more-apps';
+import { pluginRoutes } from '../plugins';
 import { notifyKdsUpdate, notifyOrderUpdated } from '../services/kds';
 import { printerRoutes } from './printers';
 import { databaseRoutes } from './database';
@@ -71,6 +72,7 @@ export function registerRoutes(app: Express): void {
   app.use('/api/kds', kdsRoutes);
   app.use('/api/kds-info', kdsInfoRoutes);
   app.use('/api/more-apps', moreAppsRoutes);
+  app.use('/api/plugins', pluginRoutes);
   app.use('/api/printers', printerRoutes);
   app.use('/api/db', databaseRoutes);
   app.use('/api/db-tools', databaseToolsRoutes);

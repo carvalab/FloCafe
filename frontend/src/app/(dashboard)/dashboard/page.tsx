@@ -9,7 +9,7 @@ import { Banknote, ChefHat, Clock, LayoutGrid, TrendingUp, ClipboardList, ArrowR
 import { useI18n } from '@/hooks/useI18n';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 import { getCountryByCode } from '@/lib/countries';
-import { PAYMENT_METHODS } from '@/lib/payment-methods';
+import { usePaymentMethods } from '@/lib/payment-methods';
 
 interface PaymentMethodBreakdown {
   method: string | null;
@@ -168,6 +168,8 @@ export default function DashboardPage() {
       .finally(() => setLoading(false));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, selectedDate]);
+
+  const configuredPaymentMethods = usePaymentMethods();
 
   if (!isOwner) return null;
 
@@ -433,9 +435,11 @@ export default function DashboardPage() {
             ) : (
               <div className="space-y-3">
                 {paymentMethods.map((pm) => {
-                  const meta = PAYMENT_METHODS.find((m) => m.key === pm.method);
+                  const meta = configuredPaymentMethods.find((m) => m.key === pm.method);
                   const Icon = meta?.icon ?? Wallet;
-                  const label = meta ? t(meta.labelKey) : t('pos.methodWallet');
+                  const label = meta
+                    ? meta.labelKey ? t(meta.labelKey) : meta.label?.en ?? meta.key
+                    : t('pos.methodWallet');
                   const percent = paymentMethodsTotal > 0 ? Math.round((Number(pm.total) / paymentMethodsTotal) * 100) : 0;
                   return (
                     <div key={pm.method ?? 'unknown'}>

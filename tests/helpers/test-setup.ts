@@ -118,6 +118,40 @@ function initTestDb() {
   return getDatabase();
 }
 
+/**
+ * Installs and activates the country package that matches the current
+ * `country` setting, so the tax engine for that country is reachable
+ * for downstream order/bill/preview calls. This mirrors what
+ * first-run setup would do in production: the merchant picks a country
+ * and the matching tax pack becomes the source of truth.
+ *
+ * The proposal says "activation-aware" tax resolution, so a test that
+ * wants to exercise the India GST engine must explicitly seed its
+ * installation. This helper just removes the boilerplate.
+ */
+function seedCountryTaxPackage() {
+  const { getDatabase } = require('../../main/db');
+  const db = getDatabase();
+  const row = db.prepare("SELECT value FROM settings WHERE key = 'country'").get() as { value: string } | undefined;
+  const country = (row?.value || '').toUpperCase();
+  if (!country) return null;
+  const packageId = `country.${country.toLowerCase()}`;
+  // Only the Stage 1 in-repo packages have a tax engine today.
+  const known: Record<string, { version: string; permissions: string[] }> = {
+    'country.in': { version: '1.0.0', permissions: ['settings.read', 'settings.write', 'payment.write', 'fiscal.write', 'delivery.events', 'broker.connect'] },
+    'country.ar': { version: '1.0.0', permissions: ['settings.read', 'settings.write', 'payment.write', 'fiscal.write', 'delivery.events', 'broker.connect'] },
+  };
+  const pkg = known[packageId];
+  if (!pkg) return null;
+   const { installPackage, setInstallationStatus, setFeatureStatus } = require('../../main/plugins/installations');
+   const existing = db.prepare('SELECT id FROM plugin_installations WHERE package_id = ?').get(packageId) as { id: string } | undefined;
+   const id = existing?.id ?? installPackage({ packageId, packageVersion: pkg.version, grantedPermissions: pkg.permissions }).id;
+   setInstallationStatus(id, 'activated');
+   const capabilityId = packageId === 'country.in' ? 'tax.gst' : 'tax.iva';
+   setFeatureStatus(id, capabilityId, 'active');
+  return id;
+}
+
 // ── Express App Factory ──────────────────────────────────────────────────────
 
 function createApp(routeModules: Record<string, any>, options?: { authRole?: string }) {
@@ -183,6 +217,10 @@ function seedOwnerUser(db: any): { userId: string; token: string; authHeader: Re
     `INSERT OR IGNORE INTO users (id, name, email, password, role, is_active, created_at, updated_at)
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
   ).run(userId, 'Test Owner', 'owner@test.local', passwordHash, 'owner', 1, now(), now());
+
+  const { getSettingValue } = require('../../main/db');
+  const { provisionBuiltinTaxPackage } = require('../../main/plugins/installations');
+  provisionBuiltinTaxPackage(getSettingValue('country') || 'IN');
 
   const token = jwt.sign(
     { userId, email: 'owner@test.local', role: 'owner' },
@@ -295,6 +333,7 @@ module.exports = {
 
   // Database
   initTestDb,
+  seedCountryTaxPackage,
   isNativeAbiMismatch,
 
   // Express

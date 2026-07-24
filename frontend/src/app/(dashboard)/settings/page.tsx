@@ -19,6 +19,7 @@ import { MasterPinPrompt } from '@/components/settings/MasterPinPrompt';
 import { HealthCheckDialog } from '@/components/settings/HealthCheckDialog';
 import { InitializeDatabaseDialog } from '@/components/settings/InitializeDatabaseDialog';
 import { WhatsAppEnableCard } from '@/components/settings/WhatsAppEnableCard';
+import { PluginCatalog } from '@/components/plugins';
 import type { HealthCheckReport } from '@/types/electron';
 import { useI18n } from '@/hooks/useI18n';
 import { useFormatDate } from '@/hooks/useFormatDate';
@@ -1059,7 +1060,8 @@ export default function SettingsPage() {
       ]);
 
       const d = businessRes.data;
-      const matchedCountry = COUNTRIES.find(c => c.currency === d.currency && c.timezone === d.timezone);
+      const matchedCountry = COUNTRIES.find(c => c.code === d.country)
+        || COUNTRIES.find(c => c.currency === d.currency && c.timezone === d.timezone);
       const loaded: BusinessForm = {
         businessName: d.business_name || '',
         countryCode: matchedCountry?.code || '',
@@ -1190,7 +1192,8 @@ export default function SettingsPage() {
 
     api.get('/settings/business').then((res) => {
       const d = res.data;
-      const matchedCountry = COUNTRIES.find(c => c.currency === d.currency && c.timezone === d.timezone);
+      const matchedCountry = COUNTRIES.find(c => c.code === d.country)
+        || COUNTRIES.find(c => c.currency === d.currency && c.timezone === d.timezone);
       const loaded: BusinessForm = {
         businessName: d.business_name || '',
         countryCode: matchedCountry?.code || '',
@@ -3047,7 +3050,12 @@ export default function SettingsPage() {
         </TabsContent>
 
         <TabsContent value="integrations">
-          <div className="pb-6 max-w-3xl space-y-6">
+          <div className="pb-6 max-w-4xl space-y-6">
+            {/* Plugins & Integrations — country-filtered catalog (docs/plugin-proposal.md).
+                Sits at the top so the operator sees the marketplace first, with the
+                existing FloAdmin / Google Drive / OrderFlow / companion apps underneath. */}
+            <PluginCatalog storeCountry={savedBusiness.countryCode || null} />
+
             <div className="space-y-6">
             <h2 className="text-lg font-semibold text-gray-900">{t('settings.cloud')}</h2>
 

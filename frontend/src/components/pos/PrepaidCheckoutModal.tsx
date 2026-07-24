@@ -9,7 +9,7 @@ import { useTaxPreview } from '@/hooks/use-tax-preview';
 import { useI18n } from '@/hooks/useI18n';
 import TaxBreakdown from '@/components/pos/TaxBreakdown';
 import toast from 'react-hot-toast';
-import { PAYMENT_METHODS } from '@/lib/payment-methods';
+import { usePaymentMethods } from '@/lib/payment-methods';
 import { useFormatCurrency } from '@/hooks/useFormatCurrency';
 
 interface LoyaltySettings {
@@ -48,6 +48,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
   const { tax, loading: taxLoading } = useTaxPreview(cart.items, cart.customerId);
   const customer = cart.customer;
   const { t } = useI18n();
+  const paymentMethods = usePaymentMethods();
   const currencyFmt = useFormatCurrency();
 
   const [loyaltySettings, setLoyaltySettings] = useState<LoyaltySettings | null>(null);
@@ -375,7 +376,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
           {payments.map((p, idx) => (
             <div key={idx} className="bg-gray-50 rounded-xl p-2.5 space-y-1.5">
               <div className="flex gap-1">
-                {PAYMENT_METHODS.map((m) => {
+                {paymentMethods.map((m) => {
                   const Icon = m.icon;
                   return (
                     <button
@@ -386,7 +387,7 @@ export default function PrepaidCheckoutModal({ currency, onClose, onConfirm }: P
                       }`}
                     >
                       <Icon size={14} />
-                      {t(m.labelKey)}
+                       {m.labelKey ? t(m.labelKey) : m.label?.en ?? m.key}
                     </button>
                   );
                 })}

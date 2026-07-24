@@ -60,8 +60,8 @@ Module._load = function (request, parent, isMain) {
 };
 
 // ── Now load and start the compiled backend ───────────────────────────────────
-const { initDatabase } = require('./dist/db');
-const { startServer } = require('./dist/server');
+const { initDatabase } = require('./dist/main/db');
+const { startServer } = require('./dist/main/server');
 
 (async () => {
   try {
