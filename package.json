@@ -1,5 +1,5 @@
 {
-  "name": "flocafe",
+  "name": "flo-desktop",
   "version": "2.0.5",
   "description": "Flo - Self-hosted Point of Sale System",
   "engines": {
@@ -277,11 +277,16 @@
       ],
       "icon": "assets",
       "category": "Office",
-      "artifactName": "${name}-${version}-${arch}.${ext}",
+      "executableName": "flocafe",
+      "artifactName": "flocafe-${version}-${arch}.${ext}",
       "extraFiles": [
         {
           "from": "assets/com.flo.desktop.metainfo.xml",
           "to": "usr/share/metainfo/com.flo.desktop.metainfo.xml"
+        },
+        {
+          "from": "assets/icons",
+          "to": "usr/share/icons"
         }
       ],
       "desktop": {

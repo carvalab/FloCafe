@@ -27,7 +27,7 @@
     </ul>
   </description>
 
-  <launchable type="desktop-id">com.flo.desktop.desktop</launchable>
+  <launchable type="desktop-id">flocafe.desktop</launchable>
 
   <url type="homepage">https://github.com/FreeOpenSourcePOS/FloCafe</url>
   <url type="bugtracker">https://github.com/FreeOpenSourcePOS/FloCafe/issues</url>

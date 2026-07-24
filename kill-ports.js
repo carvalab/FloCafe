@@ -26,11 +26,14 @@ const isLinux = os.platform() === 'linux';
 // ── Identity: how to recognize a Flo Desktop process ────────────────────────
 // These patterns match the process command line on all platforms.
 // In dev: `electron .` with app.name = 'flo-desktop'
-// Packaged: binary path contains "Flo Cafe" or "flo-desktop"
+// Packaged:
+//   - Linux: executableName "flocafe" (snap/AppImage/deb binary path)
+//   - Mac/Windows: productName "Flo Cafe"
 const FLO_PATTERNS = [
-  /flo[_\-]?desktop/i,
-  /Flo\s*Cafe/i,
-  /com\.flo\.desktop/i,
+  /flo[_\-]?desktop/i,  // legacy Linux app.name (kept for dev backward compat)
+  /flocafe/i,           // Linux executableName (snap/AppImage/deb)
+  /Flo\s*Cafe/i,        // macOS/Windows productName
+  /com\.flo\.desktop/i, // macOS bundle ID
 ];
 
 function isFloProcess(cmdline) {

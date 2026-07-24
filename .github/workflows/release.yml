@@ -139,7 +139,7 @@ jobs:
         env:
           SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
         run: |
-          SNAP_NAME=$(node -p "require('./package.json').name")
+          SNAP_NAME="flocafe"
           # snapcraft CLI uses amd64 for x86_64; map our matrix.arch accordingly.
           case "${{ matrix.arch }}" in
             x64)   SNAP_ARCH=amd64 ;;
