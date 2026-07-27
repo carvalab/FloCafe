@@ -39,6 +39,17 @@ export interface TaxCategory {
   defaultBehavior?: TaxBehavior;
 }
 
+export interface ActivationVector {
+  label: string;
+  categoryId: string;
+  taxBehavior: Exclude<TaxBehavior, 'country_default'>;
+  quantity: string;
+  unitPrice: string;
+  customerStateCode?: string;
+  expectedTaxAmount: string;
+  expectedPayableTotal: string;
+}
+
 export interface CountryPack {
   schemaVersion: 1;
   id: string;
@@ -60,4 +71,5 @@ export interface CountryPack {
   rules: TaxRule[];
   taxRounding: TaxRounding;
   payableRounding: PayableRounding;
+  activationVectors?: ActivationVector[];
 }

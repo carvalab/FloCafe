@@ -195,34 +195,32 @@ function containsUnsafeData(value: unknown): boolean {
 }
 
 function bundledVectorPasses(pack: CountryPack): boolean {
-  const expectedTax = pack.id === 'official-in' ? '5.00'
-    : pack.id === 'official-th' ? '7.00'
-      : pack.id === 'local-generic' ? '0.00'
-        : null;
-  if (expectedTax === null) return false;
-  const calculate = (customerStateCode?: string) => TaxEngine.calculate({
-    pack,
-    country: pack.country === '*' ? 'ZZ' : pack.country,
-    jurisdiction: pack.jurisdiction,
-    businessType: 'restaurant',
-    storeStateCode: pack.country === 'IN' ? 'KA' : undefined,
-    customer: customerStateCode ? { stateCode: customerStateCode } : undefined,
-    transactionDate: pack.effectiveFrom,
-    lines: [{
-      lineId: 'bundled-activation-vector',
-      kind: 'product',
-      quantity: '1',
-      unitPrice: '100',
-      productCategoryId: pack.categories[0]?.id,
-      taxBehavior: 'exclusive',
-    }],
-  });
-  const primary = calculate();
-  if (!new Decimal(primary.taxAmount).eq(expectedTax)
-    || !new Decimal(primary.payableTotal).eq(new Decimal(100).plus(expectedTax))) {
-    return false;
+  const vectors = pack.activationVectors;
+  if (!vectors || vectors.length === 0) return false;
+  for (const vector of vectors) {
+    const result = TaxEngine.calculate({
+      pack,
+      country: pack.country === '*' ? 'ZZ' : pack.country,
+      jurisdiction: pack.jurisdiction,
+      businessType: 'restaurant',
+      storeStateCode: vector.customerStateCode ? 'KA' : undefined,
+      customer: vector.customerStateCode ? { stateCode: vector.customerStateCode } : undefined,
+      transactionDate: pack.effectiveFrom,
+      lines: [{
+        lineId: `vector:${vector.label}`,
+        kind: 'product',
+        quantity: vector.quantity,
+        unitPrice: vector.unitPrice,
+        productCategoryId: vector.categoryId,
+        taxBehavior: vector.taxBehavior,
+      }],
+    });
+    if (!new Decimal(result.taxAmount).eq(vector.expectedTaxAmount)
+      || !new Decimal(result.payableTotal).eq(vector.expectedPayableTotal)) {
+      return false;
+    }
   }
-  return pack.id !== 'official-in' || new Decimal(calculate('MH').taxAmount).eq(expectedTax);
+  return true;
 }
 
 function audit(

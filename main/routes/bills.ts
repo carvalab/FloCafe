@@ -17,6 +17,7 @@ import {
   calculateConfiguredChargeTaxes,
   combineItemAndChargeTaxes,
   getActiveCountryPack,
+  getConfiguredChargeTaxCategories,
 } from '../services/tax';
 import { applyPayableRounding } from '../services/tax-engine';
 
@@ -128,10 +129,22 @@ router.get('/order/:orderId', requireRole('owner', 'manager', 'cashier'), (req: 
 
 router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Request, res: Response) => {
   try {
-    const { order_id } = req.body;
+    const { order_id, packaging_charge, delivery_charge, service_charge } = req.body;
 
     if (!order_id) {
       return res.status(400).json({ error: 'Order ID is required' });
+    }
+
+    // ponytail: validate charges once at the trust boundary. Each is an
+    // optional override; absent means "keep what the order already has".
+    const overrides: Record<string, number | null> = {};
+    for (const [key, raw] of [['packaging_charge', packaging_charge], ['delivery_charge', delivery_charge], ['service_charge', service_charge]] as const) {
+      if (raw === undefined || raw === null) continue;
+      const parsed = Number(raw);
+      if (!Number.isFinite(parsed) || parsed < 0) {
+        return res.status(400).json({ error: `${key} must be a non-negative number` });
+      }
+      overrides[key] = Math.round(parsed * 100) / 100;
     }
 
     const db = getDatabase();
@@ -139,6 +152,58 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
     if (!order) {
       return res.status(404).json({ error: 'Order not found' });
     }
+
+    // Effective values: explicit override wins, otherwise pull from order (or 0).
+    const effectivePackaging = overrides.packaging_charge ?? order.packaging_charge ?? 0;
+    const effectiveDelivery = overrides.delivery_charge ?? order.delivery_charge ?? 0;
+    const effectiveService = overrides.service_charge ?? order.service_charge ?? 0;
+
+    // Tenant + charge categories are shared between the new-charge recompute
+    // and the old-charge baseline recompute.
+    const tenantInfo = {
+      country: getSettingValue('country') || 'IN',
+      business_type: getSettingValue('business_type') || 'restaurant',
+      state_code: getSettingValue('state_code') || '',
+    };
+    const customer = order.customer_id
+      ? db.prepare('SELECT * FROM customers WHERE id = ?').get(order.customer_id) as any
+      : null;
+    const chargeCategories = getConfiguredChargeTaxCategories(tenantInfo.country);
+
+    // ponytail: order.tax_amount combines inclusive-extracted and exclusive-
+    // added taxes; order_items carry the *pre-discount* item tax so we can't
+    // use them here. We treat the post-discount order.total as the baseline
+    // (subtotal-discount + item exclusive tax + old charges + old charge
+    // exclusive tax) and adjust only the charge delta. Old charges are
+    // whatever the order had; their exclusive tax is recomputed from the
+    // engine so the baseline math is reproducible.
+    const oldPackaging = order.packaging_charge || 0;
+    const oldDelivery = order.delivery_charge || 0;
+    const oldService = order.service_charge || 0;
+    const oldChargeTaxes = calculateConfiguredChargeTaxes(tenantInfo, {
+      packaging_charge: oldPackaging,
+      delivery_charge: oldDelivery,
+      service_charge: oldService,
+      packaging_tax_category_id: chargeCategories.packaging?.categoryId || null,
+      delivery_tax_category_id: chargeCategories.delivery?.categoryId || null,
+      service_charge_tax_category_id: chargeCategories.service_charge?.categoryId || null,
+    }, customer);
+    const oldChargeExclusiveTax = Number(oldChargeTaxes.exclusiveTaxAmount.toFixed(2));
+    const oldChargeTotalTax = Number(oldChargeTaxes.taxAmount.toFixed(2));
+
+    // Recompute charge tax against the effective values. Re-uses the same
+    // engine that the discount path uses, so the math is identical wherever
+    // the merchant edits the bill.
+    const chargeTaxes = calculateConfiguredChargeTaxes(tenantInfo, {
+      packaging_charge: effectivePackaging,
+      delivery_charge: effectiveDelivery,
+      service_charge: effectiveService,
+      packaging_tax_category_id: chargeCategories.packaging?.categoryId || null,
+      delivery_tax_category_id: chargeCategories.delivery?.categoryId || null,
+      service_charge_tax_category_id: chargeCategories.service_charge?.categoryId || null,
+    }, customer);
+    const chargeTaxAmount = Number(chargeTaxes.taxAmount.toFixed(2));
+    const chargeExclusiveTax = Number(chargeTaxes.exclusiveTaxAmount.toFixed(2));
 
     const existingBill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(order_id) as any;
     if (existingBill) {
@@ -148,22 +213,45 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
       const orderSubtotal      = order.subtotal        || 0;
       const orderTaxAmount     = order.tax_amount      || 0;
       const orderDiscountAmt   = order.discount_amount || 0;
-      const orderDelivery      = order.delivery_charge || 0;
-      const orderPackaging     = order.packaging_charge|| 0;
       const orderTotal         = order.total           || 0;
 
       const pack = getActiveCountryPack(getSettingValue('country') || 'IN');
-      const { total: roundedOrderTotal, adjustment: orderRoundOff } = applyPayableRounding(orderTotal, pack);
+
+      const chargesChanged =
+        (existingBill.delivery_charge || 0) !== effectiveDelivery ||
+        (existingBill.packaging_charge || 0) !== effectivePackaging ||
+        (existingBill.service_charge || 0) !== effectiveService;
+      // ponytail: bill total = order.total baseline − old charges − old charge
+      // exclusive tax + new charges + new charge exclusive tax. The baseline
+      // already has post-discount item math + old charges baked in, so we
+      // only adjust the charge delta.
+      const newBillTaxAmount = Number(orderTaxAmount) - oldChargeTotalTax + chargeTaxAmount;
+      const totalDelta = chargesChanged
+        ? ((effectivePackaging + effectiveDelivery + effectiveService)
+          - (oldPackaging + oldDelivery + oldService)
+          + (chargeExclusiveTax - oldChargeExclusiveTax))
+        : 0;
+      const newTotalRaw = orderTotal + totalDelta;
+      // Bills are the settlement boundary — apply the active pack's rounding
+      // policy here rather than forcing whole units in Math.round().
+      const { total: newTotal, adjustment: newRoundOff } = applyPayableRounding(newTotalRaw, pack);
+      const newBalance = Math.max(0, newTotal - (existingBill.paid_amount || 0));
+      const combinedBreakdown = chargesChanged
+        ? JSON.stringify([
+            ...(order.tax_breakdown ? (JSON.parse(order.tax_breakdown) as any[][]).filter(Array.isArray) : []),
+            ...chargeTaxes.breakdowns,
+          ])
+        : (order.tax_breakdown || '[]');
 
       const totalsChanged =
         existingBill.payment_status !== 'paid' && (
           existingBill.discount_amount !== orderDiscountAmt ||
           existingBill.subtotal        !== orderSubtotal    ||
-          existingBill.total           !== roundedOrderTotal
+          existingBill.total           !== newTotal         ||
+          chargesChanged
         );
 
       if (totalsChanged) {
-        const newBalance = Math.max(0, roundedOrderTotal - (existingBill.paid_amount || 0));
         db.prepare(`
           UPDATE bills
           SET subtotal       = ?,
@@ -176,16 +264,17 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
               discount_reason= ?,
               delivery_charge= ?,
               packaging_charge= ?,
+              service_charge = ?,
               round_off      = ?,
               total          = ?,
               balance        = ?,
               updated_at     = ?
           WHERE id = ?
         `).run(
-          orderSubtotal, orderTaxAmount, order.tax_breakdown, order.tax_snapshot,
+          orderSubtotal, newBillTaxAmount, combinedBreakdown, order.tax_snapshot,
           orderDiscountAmt, order.discount_type, order.discount_value, order.discount_reason,
-          orderDelivery, orderPackaging, orderRoundOff,
-          roundedOrderTotal, newBalance, now(),
+          effectiveDelivery, effectivePackaging, effectiveService,
+          newRoundOff, newTotal, newBalance, now(),
           existingBill.id
         );
 
@@ -196,26 +285,47 @@ router.post('/generate', requireRole('owner', 'manager', 'cashier'), (req: Reque
       return res.json({ bill: parseRowJson(existingBill) });
     }
 
+    // Same rule as the existing-bill path: order.tax_amount already includes
+    // charge tax from order creation. Only fold in freshly computed charge
+    // tax when the merchant actually overrode a charge amount on this call.
+    const chargesOverridden = overrides.packaging_charge !== undefined
+      || overrides.delivery_charge !== undefined
+      || overrides.service_charge !== undefined;
+    const subtotal = order.subtotal || 0;
+    const discountAmount = order.discount_amount || 0;
+    const orderBreakdown = order.tax_breakdown
+      ? (JSON.parse(order.tax_breakdown) as any[][]).filter(Array.isArray)
+      : [];
+    const combinedBreakdown = chargesOverridden
+      ? JSON.stringify([...orderBreakdown, ...chargeTaxes.breakdowns])
+      : (order.tax_breakdown || '[]');
+    // ponytail: bill total = order.total + charge delta, rounded by the
+    // active pack at the settlement boundary instead of by Math.round().
+    const totalDelta = chargesOverridden
+      ? ((effectivePackaging + effectiveDelivery + effectiveService)
+        - (oldPackaging + oldDelivery + oldService)
+        + (chargeExclusiveTax - oldChargeExclusiveTax))
+      : 0;
+    const billTaxAmount = (Number(order.tax_amount) || 0) - oldChargeTotalTax + chargeTaxAmount;
+    const packForNewBill = getActiveCountryPack(getSettingValue('country') || 'IN');
+    const unroundedTotal = (order.total || 0) + totalDelta;
+    const { total: newBillTotal, adjustment: roundOff } = applyPayableRounding(unroundedTotal, packForNewBill);
+
     const result = withTxn(() => {
       // Generate bill number inside transaction to prevent race conditions
       const billNumber = generateBillNumber();
-      const subtotal = order.subtotal || 0;
-      const taxAmount = order.tax_amount || 0;
-      const discountAmount = order.discount_amount || 0;
-      const deliveryCharge = order.delivery_charge || 0;
-      const packagingCharge = order.packaging_charge || 0;
-      const pack = getActiveCountryPack(getSettingValue('country') || 'IN');
-      const { total, adjustment: roundOff } = applyPayableRounding(order.total || 0, pack);
-
       return db.prepare(`
         INSERT INTO bills (bill_number, order_id, customer_id, subtotal, tax_amount, tax_breakdown, tax_snapshot,
           discount_amount, discount_type, discount_value, discount_reason,
-          delivery_charge, packaging_charge, round_off, total, paid_amount, balance, payment_status, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', ?, ?)
+          delivery_charge, packaging_charge, service_charge,
+          round_off, total, paid_amount, balance, payment_status, created_at, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'unpaid', ?, ?)
       `).run(
-        billNumber, order_id, order.customer_id, subtotal, taxAmount, order.tax_breakdown, order.tax_snapshot,
+        billNumber, order_id, order.customer_id, subtotal, billTaxAmount, combinedBreakdown, order.tax_snapshot,
         discountAmount, order.discount_type, order.discount_value, order.discount_reason,
-        deliveryCharge, packagingCharge, roundOff, total, 0, total, now(), now()
+        effectiveDelivery, effectivePackaging, effectiveService,
+        roundOff, newBillTotal, 0, newBillTotal,
+        now(), now()
       );
     });
 

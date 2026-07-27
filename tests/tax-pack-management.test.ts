@@ -60,7 +60,7 @@ async function main() {
     console.log('\n1. Bundled packs are registered and readable');
     const listRes = await api(baseUrl, '/api/tax-packs', { headers: manager.authHeader });
     assertEqual(listRes.status, 200, 'manager can view installed packs');
-    assertEqual(listRes.data.packs.length, 3, 'all three bundled packs are installed');
+    assertEqual(listRes.data.packs.length, 5, 'all bundled packs (IN, TH, AR, BR, generic) are installed');
     const india = listRes.data.packs.find((pack: any) => pack.id === 'official-in');
     assert(!!india, 'India pack is listed');
     assertEqual(india.versions[0].version, '1.0.0', 'India pack version is shown');
@@ -78,7 +78,7 @@ async function main() {
         detailRes.data.active_version.validation.checks.filter((check: any) => !check.passed),
       )}`,
     );
-    for (const packId of ['official-th', 'local-generic']) {
+    for (const packId of ['official-th', 'official-ar', 'official-br', 'local-generic']) {
       const bundledDetail = await api(baseUrl, `/api/tax-packs/${packId}`, { headers: manager.authHeader });
       assertEqual(bundledDetail.status, 200, `${packId} details are readable`);
       assertEqual(
