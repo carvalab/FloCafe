@@ -37,7 +37,7 @@ jobs:
         # publishing a release with no notes if one is missing.
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          if gh release view "${VERSION}" --repo FreeOpenSourcePOS/FloCafe >/dev/null 2>&1; then
+          if gh release view "${VERSION}" --repo "${{ github.repository }}" >/dev/null 2>&1; then
             echo "Release ${VERSION} already exists, skipping creation."
             exit 0
           fi
@@ -50,11 +50,11 @@ jobs:
           PREV_TAG=$(git tag --list --sort=-v:refname | grep -E '^v?[0-9]+\.[0-9]+\.[0-9]+$' | grep -Ev "^(v)?${VERSION}\$" | head -1)
           if [ -n "$PREV_TAG" ]; then
             echo "" >> /tmp/release-notes.md
-            echo "**Full Changelog**: https://github.com/FreeOpenSourcePOS/FloCafe/compare/${PREV_TAG}...${VERSION}" >> /tmp/release-notes.md
+            echo "**Full Changelog**: https://github.com/${{ github.repository }}/compare/${PREV_TAG}...${VERSION}" >> /tmp/release-notes.md
           fi
 
           gh release create "${VERSION}" \
-            --repo FreeOpenSourcePOS/FloCafe \
+            --repo "${{ github.repository }}" \
             --title "${VERSION}" \
             --notes-file /tmp/release-notes.md
         env:
@@ -69,7 +69,7 @@ jobs:
           gh release upload "${VERSION}" \
             scripts/uninstallers/uninstall-macos.sh \
             scripts/uninstallers/uninstall-windows.ps1 \
-            --repo FreeOpenSourcePOS/FloCafe --clobber
+            --repo "${{ github.repository }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -77,20 +77,24 @@ jobs:
     runs-on: ${{ matrix.runner }}
     needs: create-release
     timeout-minutes: 60
-    # Each matrix entry builds AppImage + deb + rpm + snap for its host
-    # architecture.electron-builder doesn't cross-compile, so x64 hosts
-    # produce x86_64 / amd64 artifacts and arm64 hosts produce arm64 ones.
-    # Both upload to the same GitHub release (filename suffixes uniquely
-    # identify arch, no collision) and both publish their snap to Snap
-    # Store under one snap name with multi-arch revisions.
+    # Each matrix entry builds AppImage + deb + rpm for its host architecture
+    # (electron-builder doesn't cross-compile, so x64 hosts produce x86_64 and
+    # arm64 hosts produce arm64 artifacts). The snap is built remotely on
+    # Canonical's Launchpad farm instead: remoteBuild assembles the arch payload
+    # locally (native modules like better-sqlite3 are compiled per-arch during
+    # npm ci), then Launchpad wraps it with the gnome extension. Each entry
+    # remote-builds only its own arch (buildFor), so the amd64 and arm64 snaps
+    # each contain their own native-module payload.
     strategy:
       fail-fast: false
       matrix:
         include:
           - arch: x64
             runner: ubuntu-24.04
+            snap_build_for: amd64
           - arch: arm64
             runner: ubuntu-24.04-arm
+            snap_build_for: arm64
     concurrency:
       # Scoped per-arch so x64 and arm64 (distinct group keys) never contend with
       # each other — each only queues behind a previous run of that *same* arch on
@@ -100,6 +104,10 @@ jobs:
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        # Full clone required: the core24 remote builder (Launchpad) needs a
+        # fully-cloned git repository, not a shallow checkout.
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@39370e3970a6d050c480ffad4ff0ed4d3fdee5af # v4.1.0
         with:
@@ -126,13 +134,16 @@ jobs:
         run: node scripts/update-metainfo.js
 
       - name: Build Linux artifacts
-        # Builds all four targets for the host arch only. electron-builder's
-        # per-target arch filter handles which arch each target produces;
-        # we declare arm64 on every target so the arm64 matrix entry builds
-        # all four as arm64.
+        # Builds AppImage + deb + rpm for the host arch locally, and the snap
+        # remotely on Launchpad. electron-builder's per-target arch filter
+        # handles which arch each target produces; the snap remote-build uses
+        # SNAP_BUILD_FOR so each matrix entry builds only its own arch payload.
+        # SNAPCRAFT_STORE_CREDENTIALS is required here (not just at publish)
+        # because the remote build authenticates to Launchpad through it.
         run: npm run build:frontend && npm run build && npx electron-builder --linux AppImage deb rpm snap --publish never
         env:
-          SNAPCRAFT_BUILD_ENVIRONMENT: host
+          SNAP_BUILD_FOR: ${{ matrix.snap_build_for }}
+          SNAPCRAFT_STORE_CREDENTIALS: ${{ secrets.SNAPCRAFT_STORE_CREDENTIALS }}
 
       - name: Upload Linux assets to GitHub release
         # Each matrix entry uploads its own arch-tagged artifacts. Filename
@@ -143,7 +154,7 @@ jobs:
           shopt -s nullglob
           FILES=(release/*.AppImage release/*.deb release/*.rpm release/*.snap)
           [ ${#FILES[@]} -gt 0 ] || { echo "::error::no artifacts produced for ${{ matrix.arch }}"; exit 1; }
-          gh release upload "${VERSION}" "${FILES[@]}" --repo FreeOpenSourcePOS/FloCafe --clobber
+          gh release upload "${VERSION}" "${FILES[@]}" --repo "${{ github.repository }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -304,7 +315,7 @@ jobs:
             release/*.zip \
             release/*.zip.blockmap \
             release/latest-mac.yml \
-            --repo FreeOpenSourcePOS/FloCafe --clobber
+            --repo "${{ github.repository }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}
 
@@ -321,7 +332,7 @@ jobs:
           DOWNLOAD_DIR=$(mktemp -d)
           VERIFY_DIR=$(mktemp -d)
           trap 'rm -rf "$DOWNLOAD_DIR" "$VERIFY_DIR"' EXIT
-          gh release download "${VERSION}" --repo FreeOpenSourcePOS/FloCafe --pattern '*.zip' --dir "$DOWNLOAD_DIR"
+          gh release download "${VERSION}" --repo "${{ github.repository }}" --pattern '*.zip' --dir "$DOWNLOAD_DIR"
           ls "$DOWNLOAD_DIR"/*.zip >/dev/null 2>&1 || { echo "::error::no .zip downloaded from the published release"; exit 1; }
           for ZIP in "$DOWNLOAD_DIR"/*.zip; do
             APP_DIR="$VERIFY_DIR/$(basename "$ZIP" .zip)"
@@ -391,6 +402,6 @@ jobs:
       - name: Upload Windows assets to GitHub release
         run: |
           $VERSION = node -p "require('./package.json').version"
-          gh release upload "$VERSION" (Get-ChildItem release\*.exe, release\*.exe.blockmap, release\latest.yml | Select-Object -ExpandProperty FullName) --repo FreeOpenSourcePOS/FloCafe --clobber
+          gh release upload "$VERSION" (Get-ChildItem release\*.exe, release\*.exe.blockmap, release\latest.yml | Select-Object -ExpandProperty FullName) --repo "${{ github.repository }}" --clobber
         env:
           GH_TOKEN: ${{ github.token }}

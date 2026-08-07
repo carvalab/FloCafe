@@ -330,7 +330,16 @@
       "base": "core24",
       "core24": {
         "confinement": "strict",
-        "useDestructiveMode": true,
+        "extensions": [
+          "gnome"
+        ],
+        "remoteBuild": {
+          "enabled": true,
+          "buildFor": [
+            "${env.SNAP_BUILD_FOR}"
+          ],
+          "acceptPublicUpload": true
+        },
         "plugs": [
           "default",
           "cups-control",
@@ -352,5 +361,10 @@
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true
     }
+  },
+  "allowScripts": {
+    "better-sqlite3@13.0.1": true,
+    "protobufjs": true,
+    "@whiskeysockets/baileys": true
   }
 }
