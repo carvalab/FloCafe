@@ -612,6 +612,425 @@ async function main() {
       0,
       'failed validation leaves no installed version behind',
     );
+
+    console.log('\n9. Argentina IVA pack passes activation validation and computes inclusive tax');
+    const argentinaPackData = require('../main/tax-packs/argentina.json');
+    const argentinaPackJson = JSON.stringify(argentinaPackData);
+    const argentinaSignature = sign(
+      null,
+      Buffer.from(argentinaPackJson, 'utf8'),
+      privateKey,
+    ).toString('base64');
+    const argentinaTag = `tax-pack-${argentinaPackData.id}-v${argentinaPackData.version}`;
+    const argentinaEntry = {
+      id: argentinaPackData.id,
+      publisher: argentinaPackData.publisher,
+      country: argentinaPackData.country,
+      jurisdiction: argentinaPackData.jurisdiction,
+      version: argentinaPackData.version,
+      publishedAt: argentinaPackData.publishedAt,
+      minFloVersion: argentinaPackData.minFloVersion,
+      downloadUrl: `https://github.com/FreeOpenSourcePOS/FloCafe-Plugins/releases/download/${argentinaTag}/${argentinaPackData.id}-v${argentinaPackData.version}.json`,
+      signatureUrl: `https://github.com/FreeOpenSourcePOS/FloCafe-Plugins/releases/download/${argentinaTag}/${argentinaPackData.id}-v${argentinaPackData.version}.json.sig`,
+      digest: taxPackSha256(argentinaPackJson),
+    };
+    const argentinaFetch = async (input: string | URL | Request) => new Response(
+      String(input) === argentinaEntry.downloadUrl ? argentinaPackJson : argentinaSignature,
+      { status: 200 },
+    );
+    const argentinaInstalled = await installCatalogEntry(argentinaEntry, {
+      actorUserId: owner.userId,
+      fetchImpl: argentinaFetch,
+      publicKey,
+    });
+    assertEqual(
+      argentinaInstalled.validation.checks.length,
+      24,
+      'Argentina pack goes through the same 24-check validation as every other country pack',
+    );
+    assertEqual(
+      argentinaInstalled.validation.valid,
+      true,
+      'Argentina IVA pack passes activation validation',
+    );
+
+    // Schema sanity: the Argentina pack source JSON declares
+    // registrationNumberLabel so receipt/footer consumers resolve the label
+    // through getActiveCountryPack as through countries.ts.
+    assertEqual(argentinaPackData.registrationNumberLabel, 'CUIT', 'Argentina pack declares registration label "CUIT"');
+
+    // Mirror ensure-country's category backfill (main/routes/tax-packs.ts:739-744)
+    // so the active pack's default product category is what uncategorized
+    // products resolve to. The install helper writes the version row directly
+    // without going through the route, so it has to reproduce that step.
+    db.prepare(
+      `UPDATE products SET tax_category_id = ? WHERE tax_category_id IS NULL AND deleted_at IS NULL`
+    ).run(argentinaPackData.defaultCategories.product);
+    db.prepare(
+      `UPDATE addons SET tax_category_id = ? WHERE tax_category_id IS NULL`
+    ).run(argentinaPackData.defaultCategories.addon);
+    // The store country must match the pack for getActiveCountryPack to pick
+    // it up; the other sections set it to IN/TH through the legacy fixtures.
+    db.prepare("UPDATE settings SET value = 'AR' WHERE key = 'country'").run();
+    db.prepare("UPDATE settings SET value = 'true' WHERE key = 'taxes_enabled'").run();
+    // Switch to the Argentina catalog entry's installed pack by making it
+    // the active row for country=AR.
+    db.prepare(`
+      UPDATE country_packs
+      SET active_version_id = ?, status = 'active', updated_at = ?
+      WHERE id = ?
+    `).run(argentinaInstalled.versionId, new Date().toISOString(), argentinaPackData.id);
+    // activePackForCountry() picks the active row whose country matches the
+    // store's setting; mark the AR-installed pack as the one that resolves.
+    db.prepare(`
+      UPDATE country_packs SET status = 'installed', updated_at = ?
+      WHERE country = 'AR' AND id != ?
+    `).run(new Date().toISOString(), argentinaPackData.id);
+
+    const arCalculation = await api(baseUrl, '/api/tax-packs/test-calculation', {
+      method: 'POST',
+      body: { category_id: 'iva_21', amount: '1000', tax_behavior: 'inclusive' },
+      headers: manager.authHeader,
+    });
+    assertEqual(arCalculation.status, 200, 'Argentina test calculation runs against the active pack');
+    assertEqual(
+      arCalculation.data.calculation.taxAmount,
+      '173.55',
+      'ARS 1000 inclusive at 21% extracts ARS 173.55 tax',
+    );
+    assertEqual(
+      arCalculation.data.calculation.payableTotal,
+      '1000',
+      'inclusive payable total stays at ARS 1000',
+    );
+
+    console.log('\n10. Manual-config installs a synthetic local pack when no official pack exists');
+    // Reset Argentina's pack so manual-config can claim the country. The
+    // 409 path under it relies on a clean slate, which is what an owner
+    // sees in real life after they disable taxes.
+    db.prepare("UPDATE country_packs SET status = 'installed', active_version_id = NULL WHERE id = ?")
+      .run(argentinaPackData.id);
+    db.prepare("UPDATE country_pack_versions SET status = 'installed' WHERE pack_id = ?")
+      .run(argentinaPackData.id);
+    db.prepare("UPDATE settings SET value = 'false' WHERE key = 'taxes_enabled'").run();
+    // Reset the test product so the manual-config backfill is observable;
+    // earlier sections in this test set its tax_category_id to iva_21.
+    db.prepare(`UPDATE products SET tax_category_id = NULL WHERE id = 'override-product'`).run();
+
+    const managerManual = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '21', inclusive: true, label: 'CUIT' },
+      headers: manager.authHeader,
+    });
+    assertEqual(managerManual.status, 403, 'manager cannot save manual tax configuration');
+
+    const outOfRange = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '101' },
+      headers: owner.authHeader,
+    });
+    assertEqual(outOfRange.status, 400, 'rates above 100 are rejected');
+
+    const negative = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '-1' },
+      headers: owner.authHeader,
+    });
+    assertEqual(negative.status, 400, 'negative rates are rejected');
+
+    const manual = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '21', inclusive: true, label: 'CUIT' },
+      headers: owner.authHeader,
+    });
+    assertEqual(manual.status, 200, 'owner can save a manual rate');
+    assertEqual(manual.data.enabled, true, 'manual-config returns enabled=true');
+    assertEqual(manual.data.country, 'AR', 'manual-config targets the store country');
+    assertEqual(manual.data.pack_id, 'manual-ar', 'manual-config uses a synthetic pack id');
+    assertEqual(
+      manual.data.validation.checks.length,
+      24,
+      'manual-config pack goes through the same 24-check validation',
+    );
+    assertEqual(manual.data.validation.valid, true, 'manual-config pack passes all checks');
+
+    // The settings panel tells a saved manual config apart from a pristine
+    // install by asking whether the active local pack carries a rate. Both
+    // halves of that invariant have to hold or the form silently prefills the
+    // bundled no-tax defaults (exclusive pricing, "Tax registration") and an
+    // owner can save them by accident.
+    const genericRules = db.prepare(`
+      SELECT rule.rate FROM tax_rules AS rule
+      JOIN country_pack_versions AS version ON version.id = rule.pack_version_id
+      WHERE version.pack_id = 'local-generic'
+    `).all() as Array<{ rate: string | null }>;
+    assertEqual(genericRules.length, 0, 'the bundled local-generic pack carries no tax rules');
+    const manualRules = db.prepare(`
+      SELECT rule.rate FROM tax_rules AS rule
+      WHERE rule.pack_version_id = (SELECT active_version_id FROM country_packs WHERE id = 'manual-ar')
+    `).all() as Array<{ rate: string | null }>;
+    assertEqual(manualRules.length, 1, 'a saved manual pack carries exactly one rule');
+    assertEqual(manualRules[0].rate, '21', 'that rule carries the configured rate');
+
+    const activeManual = db.prepare(
+      `SELECT pack.*, version.pack_json FROM country_packs AS pack
+       JOIN country_pack_versions AS version ON version.id = pack.active_version_id
+       WHERE pack.id = 'manual-ar'`
+    ).get() as any;
+    assert(!!activeManual, 'manual-ar is the active pack for AR');
+    assertEqual(activeManual.publisher, 'local', 'manual pack is marked local');
+    assertEqual(activeManual.status, 'active', 'manual pack is active');
+    // Trust status surfaces 'Local' for publisher='local' so the panel can
+    // distinguish a manual configuration from a verified official pack
+    // (docs/tax-engine-v2-spec.md:646). Re-fetch the list — the captured
+    // listRes from section 1 predates the manual-config save.
+    const refreshedList = await api(baseUrl, '/api/tax-packs', { headers: manager.authHeader });
+    const manualPackSummary = refreshedList.data.packs.find((pack: any) => pack.id === 'manual-ar');
+    assert(!!manualPackSummary, 'manual pack is included in the listed packs');
+    assertEqual(manualPackSummary.trust_status, 'Local', 'manual pack reports trust status Local');
+    const manualPack = JSON.parse(activeManual.pack_json);
+    assertEqual(manualPack.inclusivePricingDefault, true, 'inclusive flag is persisted');
+    assertEqual(manualPack.registrationNumberLabel, 'CUIT', 'label is persisted');
+    assertEqual(manualPack.rules[0].rate, '21', 'rate is persisted');
+    assertEqual(
+      db.prepare("SELECT value FROM settings WHERE key = 'taxes_enabled'").get().value,
+      'true',
+      'taxes_enabled is flipped on after manual-config',
+    );
+    assertEqual(
+      db.prepare(`SELECT tax_category_id FROM products WHERE id = 'override-product'`).get().tax_category_id,
+      'standard',
+      'uncategorized products are backfilled to the manual standard category',
+    );
+
+    const manualAudit = db.prepare(`
+      SELECT details_json FROM tax_config_audit
+      WHERE pack_id = 'manual-ar' AND action = 'activate_pack'
+      ORDER BY id DESC LIMIT 1
+    `).get() as { details_json: string };
+    assert(!!manualAudit, 'manual-config writes an audit row');
+    const auditDetails = JSON.parse(manualAudit.details_json);
+    assertEqual(auditDetails.source, 'manual_config', 'audit details identify manual_config source');
+    assertEqual(auditDetails.rate, '21', 'audit captures the rate that was configured');
+    assertEqual(auditDetails.previousVersionId, null, 'first save has no previous version');
+
+    const manualCalculation = await api(baseUrl, '/api/tax-packs/test-calculation', {
+      method: 'POST',
+      body: { category_id: 'standard', amount: '1000', tax_behavior: 'inclusive' },
+      headers: manager.authHeader,
+    });
+    assertEqual(manualCalculation.status, 200, 'test calculation works against the manual pack');
+    assertEqual(
+      manualCalculation.data.calculation.taxAmount,
+      '173.55',
+      'manual 21% inclusive extracts the same ARS 173.55 as the Argentina IVA pack',
+    );
+
+    console.log('\n11. Manual-config needs an explicit override to replace an active official pack');
+    // Reactivate Argentina's official pack so manual-config sees it as a
+    // blocking pack and refuses with 409 unless override:true is sent.
+    db.prepare("UPDATE country_packs SET status = 'active', active_version_id = ? WHERE id = ?")
+      .run(`${argentinaPackData.id}@${argentinaPackData.version}`, argentinaPackData.id);
+    db.prepare("UPDATE country_pack_versions SET status = 'active' WHERE id = ?")
+      .run(`${argentinaPackData.id}@${argentinaPackData.version}`);
+    // A product carrying an Argentina-only category: after the override the
+    // manual pack has no 'iva_21', and leaving it there would make the engine
+    // match no rule and throw a 400 on every checkout line.
+    db.prepare(`UPDATE products SET tax_category_id = 'iva_21' WHERE id = 'override-product'`).run();
+
+    const officialBlocks = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '10.5' },
+      headers: owner.authHeader,
+    });
+    assertEqual(
+      officialBlocks.status,
+      409,
+      'manual-config is rejected while an official pack is active for the country',
+    );
+    assertEqual(officialBlocks.data.can_override, true, '409 tells the panel an override is possible');
+
+    const officialOverridden = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '10.5', override: true },
+      headers: owner.authHeader,
+    });
+    assertEqual(officialOverridden.status, 200, 'override:true replaces the active official pack');
+    assertEqual(
+      db.prepare("SELECT status FROM country_packs WHERE id = ?").get(argentinaPackData.id).status,
+      'installed',
+      'the replaced official pack is demoted to installed',
+    );
+    assertEqual(
+      db.prepare(`SELECT tax_category_id FROM products WHERE id = 'override-product'`).get().tax_category_id,
+      'standard',
+      'categories the replacing pack does not define are remapped to its default',
+    );
+    // Decision K: the remap must record its mapping, not guess in silence.
+    const remapAudit = db.prepare(`
+      SELECT details_json FROM tax_config_audit
+      WHERE action = 'remap_categories' ORDER BY id DESC LIMIT 1
+    `).get() as { details_json: string } | undefined;
+    assert(!!remapAudit, 'the remap writes an audit row');
+    const remapped = JSON.parse(remapAudit!.details_json).remapped as Array<{
+      entity: string; from: string; to: string; count: number;
+    }>;
+    const productRemap = remapped.find((entry) => entry.entity === 'product' && entry.from === 'iva_21');
+    assert(!!productRemap, 'the audit records the category that was overwritten');
+    assertEqual(productRemap!.to, 'standard', 'the audit records what it was overwritten with');
+    assert(productRemap!.count >= 1, 'the audit records how many rows changed');
+    assertEqual(
+      officialOverridden.data.remapped.length > 0,
+      true,
+      'the response tells the owner assignments were remapped',
+    );
+    assertEqual(
+      typeof officialOverridden.data.dormant_overrides,
+      'number',
+      'the response reports how many merchant overrides stopped applying',
+    );
+    const replaceAudit = JSON.parse((db.prepare(`
+      SELECT details_json FROM tax_config_audit
+      WHERE pack_id = 'manual-ar' AND action = 'activate_pack'
+      ORDER BY id DESC LIMIT 1
+    `).get() as { details_json: string }).details_json);
+    assertEqual(
+      replaceAudit.replacedPackId,
+      argentinaPackData.id,
+      'audit records which pack the manual rate replaced',
+    );
+
+    console.log('\n12. Manual-config re-saves create a new version on the same manual pack');
+    // Demote the Argentina official pack so the re-save path can run.
+    db.prepare("UPDATE country_packs SET status = 'installed', active_version_id = NULL WHERE id = ?")
+      .run(argentinaPackData.id);
+    db.prepare("UPDATE country_pack_versions SET status = 'installed' WHERE pack_id = ?")
+      .run(argentinaPackData.id);
+    // The manual pack is still active from section 10 — exercise the re-save path.
+    const firstVersionId = db.prepare(
+      `SELECT active_version_id FROM country_packs WHERE id = 'manual-ar'`
+    ).get() as { active_version_id: string };
+    assertEqual(firstVersionId.active_version_id.startsWith('manual-ar@1.0.'), true,
+      'manual-ar has a 1.0.x version from section 10');
+
+    // Decision F: re-save must preserve merchant overrides across versions.
+    // Create an override against the current active version; after the
+    // re-save below, activateInstalledPack should re-point its
+    // pack_version_id at the new version so the override keeps applying.
+    const overrideCreate = await api(baseUrl, '/api/tax-packs/overrides', {
+      method: 'POST',
+      body: { entity_type: 'product', entity_id: 'override-product', category_id: 'standard' },
+      headers: owner.authHeader,
+    });
+    assertEqual(overrideCreate.status, 201, 'owner can create a product override against the manual pack');
+    const manualOverrideId = overrideCreate.data.override.id;
+    const overrideBefore = db.prepare(
+      'SELECT pack_version_id FROM tax_overrides WHERE id = ?'
+    ).get(manualOverrideId) as { pack_version_id: string };
+    assertEqual(
+      overrideBefore.pack_version_id,
+      firstVersionId.active_version_id,
+      'override is pinned to the active version before re-save',
+    );
+
+    const resave = await api(baseUrl, '/api/tax-packs/manual-config', {
+      method: 'POST',
+      body: { rate: '10.5', inclusive: false, label: 'GST' },
+      headers: owner.authHeader,
+    });
+    assertEqual(resave.status, 200, 'manual-config re-saves over the existing manual pack');
+    assertEqual(resave.data.pack_id, 'manual-ar', 're-save keeps the same pack id');
+    assert(resave.data.version !== firstVersionId.active_version_id.split('@')[1],
+      're-save produces a fresh patch version');
+    assertEqual(
+      resave.data.validation.checks.length,
+      24,
+      're-saved pack still passes through the full 24-check validation',
+    );
+    assertEqual(resave.data.validation.valid, true, 're-saved pack is valid');
+
+    const activeRows = db.prepare(
+      `SELECT version, status FROM country_pack_versions WHERE pack_id = 'manual-ar' ORDER BY version DESC`
+    ).all() as Array<{ version: string; status: string }>;
+    assertEqual(activeRows[0].status, 'active', 'the new version is the active one');
+    assert(activeRows.length >= 2, 'the old version row is retained for rollback');
+    const demoted = activeRows.find((row) => row.version === firstVersionId.active_version_id.split('@')[1]);
+    assertEqual(demoted?.status, 'installed', 'the previous version is demoted to installed');
+
+    const latestPack = db.prepare(
+      'SELECT pack_json FROM country_pack_versions WHERE id = ?'
+    ).get(`manual-ar@${resave.data.version}`) as { pack_json: string };
+    const parsedPack = JSON.parse(latestPack.pack_json);
+    assertEqual(parsedPack.rules[0].rate, '10.5', 'the new version carries the new rate');
+    assertEqual(parsedPack.inclusivePricingDefault, false, 're-save updates the inclusive flag');
+    assertEqual(parsedPack.registrationNumberLabel, 'GST', 're-save updates the registration label');
+
+    const resaveAudit = db.prepare(`
+      SELECT details_json FROM tax_config_audit
+      WHERE pack_id = 'manual-ar' AND action = 'activate_pack'
+      ORDER BY id DESC LIMIT 1
+    `).get() as { details_json: string };
+    const resaveDetails = JSON.parse(resaveAudit.details_json);
+    assertEqual(resaveDetails.source, 'manual_config', 're-save audit identifies manual_config');
+    assertEqual(resaveDetails.rate, '10.5', 're-save audit captures the new rate');
+    assertEqual(
+      resaveDetails.previousVersionId,
+      firstVersionId.active_version_id,
+      're-save audit points at the previous version for traceability',
+    );
+
+    const resaveCalculation = await api(baseUrl, '/api/tax-packs/test-calculation', {
+      method: 'POST',
+      body: { category_id: 'standard', amount: '1000', tax_behavior: 'exclusive' },
+      headers: manager.authHeader,
+    });
+    assertEqual(
+      resaveCalculation.data.calculation.taxAmount,
+      '105.00',
+      're-saved 10.5% exclusive computes ARS 105.00 tax on ARS 1000',
+    );
+
+    // Decision F carry-over: merchant override created against version N
+    // must apply against version N+1 after the re-save.
+    const overrideAfter = db.prepare(
+      'SELECT pack_version_id FROM tax_overrides WHERE id = ?'
+    ).get(manualOverrideId) as { pack_version_id: string };
+    assertEqual(
+      overrideAfter.pack_version_id,
+      `manual-ar@${resave.data.version}`,
+      'merchant override is re-pointed at the new active version after re-save',
+    );
+    assert(
+      overrideAfter.pack_version_id !== overrideBefore.pack_version_id,
+      'override moved off the demoted previous version',
+    );
+
+    console.log('\n13. resolveTaxIdLabel prefers the active pack over main/countries.ts');
+    const { resolveTaxIdLabel } = require('../main/services/tax');
+    // Manual pack (section 12 re-save) is active for AR — the label comes
+    // from the latest active version: section 10 set label="CUIT"; section
+    // 12 re-saved with label="GST", so the active version wins.
+    assertEqual(
+      resolveTaxIdLabel('AR'),
+      'GST',
+      'latest active manual version wins over countries.ts for the registration label',
+    );
+    // Unknown country: only the bundled generic pack covers it (country='*'),
+    // but `resolveTaxIdLabel` only trusts country-specific pack labels — for
+    // an unknown country it falls through to countries.ts (no entry) and the
+    // hardcoded "Tax ID" fallback.
+    assertEqual(
+      resolveTaxIdLabel('ZZ'),
+      'Tax ID',
+      'unknown country falls back to the hardcoded "Tax ID" default',
+    );
+    // Country that only lives in countries.ts (no pack installed) still
+    // resolves through the legacy fallback.
+    assertEqual(
+      resolveTaxIdLabel('TH'),
+      'Tax ID',
+      'TH falls back to countries.ts "Tax ID" when no pack is installed',
+    );
   } finally {
     server.close();
     closeDatabase();

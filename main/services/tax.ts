@@ -1,6 +1,7 @@
 import Decimal from 'decimal.js';
 import { getDatabase, getSettingValue } from '../db';
 import { getBundledCountryPack } from '../tax-packs/bundled';
+import { getCountryByCode } from '../countries';
 
 interface TenantInfo {
   country: string;
@@ -99,6 +100,87 @@ export function getActiveCountryPack(country: string): CountryPack {
     // JSON remains the required offline fallback.
   }
   return getBundledCountryPack(country);
+}
+
+export function resolveTaxIdLabel(country: string): string {
+  // Active pack wins only when it's specific to this country. The bundled
+  // `local-generic` pack (country='*') applies to every country but carries
+  // the generic "Tax registration" label — using it would override per-
+  // country labels in countries.ts (e.g. TH → "Tax ID"), so we fall through
+  // to countries.ts unless the active pack is country-specific.
+  try {
+    const pack = getActiveCountryPack(country);
+    if (pack.country === country && pack.registrationNumberLabel) {
+      return pack.registrationNumberLabel;
+    }
+  } catch {
+    // fall through to countries.ts
+  }
+  return getCountryByCode(country)?.taxIdLabel || 'Tax ID';
+}
+
+export type CategoryRemap = {
+  entity: 'product' | 'addon';
+  from: string;
+  to: string;
+  count: number;
+};
+
+export function backfillCategoryDefaults(
+  pack: CountryPack,
+  db: ReturnType<typeof getDatabase>,
+  installedAt: string,
+): CategoryRemap[] {
+  // calculateItemTax short-circuits to zero tax when no category is set
+  // (main/services/tax.ts:151), so an activated pack must backfill uncategorized
+  // rows for the engine path to actually apply the rate. Explicit assignments
+  // the new pack still defines are preserved; ones it does not define are
+  // stale ids from the previously active pack (e.g. 'iva_21' after switching
+  // AR -> manual), and leaving them makes the engine match no rule and throw a
+  // 400 on every checkout line. Remap those to the pack default instead.
+  const categoryIds = pack.categories.map((category) => category.id);
+  const placeholders = categoryIds.map(() => '?').join(',');
+  const productDefault = pack.defaultCategories.product;
+  const addonDefault = pack.defaultCategories.addon;
+
+  // Capture what the remap overwrites BEFORE it runs, so the caller can record
+  // the mapping in the audit (tax-engine-v2-spec Decision K: record the
+  // mapping; do not guess). NULL rows are a backfill, not an overwrite, so
+  // they are excluded — only destroyed assignments are reported.
+  // ponytail: counts per category, not per-row ids — bounded and enough to
+  // review; store ids too if owners ever need a per-product migration list.
+  const staleProducts = db.prepare(`
+    SELECT tax_category_id AS fromCategory, COUNT(*) AS total
+    FROM products
+    WHERE deleted_at IS NULL AND tax_category_id IS NOT NULL
+      AND tax_category_id NOT IN (${placeholders})
+    GROUP BY tax_category_id
+  `).all(...categoryIds) as Array<{ fromCategory: string; total: number }>;
+  const staleAddons = db.prepare(`
+    SELECT tax_category_id AS fromCategory, COUNT(*) AS total
+    FROM addons
+    WHERE tax_category_id IS NOT NULL AND tax_category_id NOT IN (${placeholders})
+    GROUP BY tax_category_id
+  `).all(...categoryIds) as Array<{ fromCategory: string; total: number }>;
+
+  db.prepare(
+    `UPDATE products SET tax_category_id = ?, updated_at = ?
+     WHERE deleted_at IS NULL
+       AND (tax_category_id IS NULL OR tax_category_id NOT IN (${placeholders}))`
+  ).run(productDefault, installedAt, ...categoryIds);
+  db.prepare(
+    `UPDATE addons SET tax_category_id = ?
+     WHERE tax_category_id IS NULL OR tax_category_id NOT IN (${placeholders})`
+  ).run(addonDefault, ...categoryIds);
+
+  return [
+    ...staleProducts.map((row) => ({
+      entity: 'product' as const, from: row.fromCategory, to: productDefault, count: row.total,
+    })),
+    ...staleAddons.map((row) => ({
+      entity: 'addon' as const, from: row.fromCategory, to: addonDefault, count: row.total,
+    })),
+  ];
 }
 
 export function hasConfiguredTaxCategories(pack: CountryPack, businessType: string): boolean {

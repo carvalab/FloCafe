@@ -4,6 +4,7 @@ import Decimal from 'decimal.js';
 import { getDatabase, getSettingValue, now, upsertSettings, withTxn } from '../db';
 import { requireRole } from '../middleware/security';
 import { TaxEngine } from '../services/tax-engine';
+import { backfillCategoryDefaults, type CategoryRemap } from '../services/tax';
 import type { CountryPack, TaxBehavior } from '../tax-packs/types';
 import { BUNDLED_COUNTRY_PACKS } from '../tax-packs/bundled';
 import {
@@ -77,7 +78,12 @@ function actorUserId(req: Request): string | null {
   return (req as any).user?.userId || (req as any).user?.id || null;
 }
 
-function activateInstalledPack(pack: PackRow, version: VersionRow, actorId: string | null): void {
+function activateInstalledPack(
+  pack: PackRow,
+  version: VersionRow,
+  actorId: string | null,
+  auditExtras: Record<string, unknown> = {},
+): void {
   const db = getDatabase();
   const validation = validationChecklist(version);
   if (!validation.valid) {
@@ -95,8 +101,70 @@ function activateInstalledPack(pack: PackRow, version: VersionRow, actorId: stri
     db.prepare(`UPDATE country_packs SET active_version_id = ?, status = 'active', updated_at = ? WHERE id = ?`)
       .run(version.id, now(), pack.id);
     db.prepare(`UPDATE country_pack_versions SET status = 'active' WHERE id = ?`).run(version.id);
-    audit('activate_pack', actorId, pack.id, version.id, null, { previousVersionId, automatic: true });
+    audit('activate_pack', actorId, pack.id, version.id, null, { previousVersionId, automatic: true, ...auditExtras });
   });
+}
+
+function persistPackVersionArtifacts(
+  versionRow: VersionRow,
+  definition: CountryPack,
+  installedAt: string,
+): void {
+  const db = getDatabase();
+  const versionId = versionRow.id;
+  db.prepare(`
+    INSERT INTO country_pack_versions (
+      id, pack_id, version, schema_version, manifest_json, pack_json, digest, signature,
+      effective_from, effective_to, min_flo_version, published_at, status, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'installed', ?)
+  `).run(
+    versionRow.id,
+    versionRow.pack_id,
+    versionRow.version,
+    versionRow.schema_version,
+    versionRow.manifest_json,
+    versionRow.pack_json,
+    versionRow.digest,
+    versionRow.signature,
+    versionRow.effective_from,
+    versionRow.effective_to,
+    versionRow.min_flo_version,
+    versionRow.published_at,
+    installedAt,
+  );
+  const insertCategory = db.prepare(`
+    INSERT INTO tax_categories (
+      id, pack_version_id, category_id, label, default_behavior, definition_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const category of definition.categories) {
+    insertCategory.run(
+      `${versionId}:category:${category.id}`,
+      versionId, category.id, category.label,
+      category.defaultBehavior || null,
+      JSON.stringify(category),
+      installedAt,
+    );
+  }
+  const insertRule = db.prepare(`
+    INSERT INTO tax_rules (
+      id, pack_version_id, rule_id, label, calculation_type, rate, amount,
+      applies_per, base_rule_ids, definition_json, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  for (const rule of definition.rules) {
+    insertRule.run(
+      `${versionId}:rule:${rule.id}`,
+      versionId, rule.id, rule.label,
+      rule.type,
+      rule.rate || null,
+      rule.amount || null,
+      rule.appliesPer || null,
+      JSON.stringify(rule.baseRuleIds || []),
+      JSON.stringify(rule),
+      installedAt,
+    );
+  }
 }
 
 function trustStatus(pack: PackRow, overrideCount: number): string {
@@ -559,63 +627,7 @@ export async function installCatalogEntry(
     if (versionExists) {
       throw Object.assign(new Error('This tax pack version is already installed'), { statusCode: 409 });
     }
-    db.prepare(`
-      INSERT INTO country_pack_versions (
-        id, pack_id, version, schema_version, manifest_json, pack_json, digest, signature,
-        effective_from, effective_to, min_flo_version, published_at, status, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'installed', ?)
-    `).run(
-      version.id,
-      version.pack_id,
-      version.version,
-      version.schema_version,
-      version.manifest_json,
-      version.pack_json,
-      version.digest,
-      version.signature,
-      version.effective_from,
-      version.effective_to,
-      version.min_flo_version,
-      version.published_at,
-      version.created_at,
-    );
-    const insertCategory = db.prepare(`
-      INSERT INTO tax_categories (
-        id, pack_version_id, category_id, label, default_behavior, definition_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const category of artifact.pack.categories) {
-      insertCategory.run(
-        `${versionId}:category:${category.id}`,
-        versionId,
-        category.id,
-        category.label,
-        category.defaultBehavior || null,
-        JSON.stringify(category),
-        installedAt,
-      );
-    }
-    const insertRule = db.prepare(`
-      INSERT INTO tax_rules (
-        id, pack_version_id, rule_id, label, calculation_type, rate, amount,
-        applies_per, base_rule_ids, definition_json, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `);
-    for (const rule of artifact.pack.rules) {
-      insertRule.run(
-        `${versionId}:rule:${rule.id}`,
-        versionId,
-        rule.id,
-        rule.label,
-        rule.type,
-        rule.rate || null,
-        rule.amount || null,
-        rule.appliesPer || null,
-        JSON.stringify(rule.baseRuleIds || []),
-        JSON.stringify(rule),
-        installedAt,
-      );
-    }
+    persistPackVersionArtifacts(version, artifact.pack, installedAt);
     audit('install_downloaded_pack', options.actorUserId, artifact.pack.id, versionId, null, {
       source: 'github_release',
       version: artifact.pack.version,
@@ -739,20 +751,215 @@ router.post('/ensure-country', requireRole('owner', 'manager'), async (req: Requ
     if (!pack || !version) throw new Error('Installed tax pack could not be loaded');
     activateInstalledPack(pack, version, actorUserId(req));
     const definition = JSON.parse(version.pack_json) as CountryPack;
-    // Enabling taxes should work immediately for a normal merchant. Existing
-    // explicit assignments are preserved; only previously unclassified rows
-    // receive the official country defaults.
     withTxn(() => {
-      db.prepare(`UPDATE products SET tax_category_id = ?, updated_at = ? WHERE tax_category_id IS NULL AND deleted_at IS NULL`)
-        .run(definition.defaultCategories.product, now());
-      db.prepare(`UPDATE addons SET tax_category_id = ? WHERE tax_category_id IS NULL`)
-        .run(definition.defaultCategories.addon);
+      const remapped = backfillCategoryDefaults(definition, db, now());
+      if (remapped.length) {
+        audit('remap_categories', actorUserId(req), pack!.id, version!.id, null, { remapped });
+      }
     });
     upsertSettings({ taxes_enabled: 'true' });
     return res.json({ enabled: true, country, pack_id: pack.id, version: version.version });
   } catch (error: any) {
     const statusCode = error.statusCode || 502;
     return res.status(statusCode).json({ error: error.message || 'Could not install the country tax plugin' });
+  }
+});
+
+// Manual-config path: the owner enters a single global rate here and FloCafe
+// builds and activates a synthetic local pack (publisher='local',
+// signature=null) — the same validation and engine path as every other pack,
+// no separate calc path (Decision F in docs/tax-engine-v2-spec.md). Used both
+// when no official pack exists for the store country and, with override:true,
+// to replace an official pack whose rates do not match the store. Per-product
+// differentiation continues to use the existing Merchant overrides panel.
+router.post('/manual-config', requireRole('owner'), (req: Request, res: Response) => {
+  try {
+    const db = getDatabase();
+    const country = String(getSettingValue('country') || '').toUpperCase();
+    if (!/^[A-Z]{2}$/.test(country)) {
+      return res.status(400).json({ error: 'A valid country must be set in store settings first' });
+    }
+    const currency = String(getSettingValue('currency') || 'USD').toUpperCase();
+    const rateRaw = req.body?.rate;
+    const rateDecimal = new Decimal(rateRaw === undefined || rateRaw === null ? '' : String(rateRaw));
+    if (!rateDecimal.isFinite() || rateDecimal.lt(0) || rateDecimal.gt(100)) {
+      return res.status(400).json({ error: 'rate must be a decimal between 0 and 100' });
+    }
+    const inclusive = req.body?.inclusive !== false; // default true; matches Argentina retail
+    const label = typeof req.body?.label === 'string' && req.body.label.trim()
+      ? req.body.label.trim()
+      : 'Tax registration';
+
+    const activeForCountry = db.prepare(
+      `SELECT id, publisher, active_version_id FROM country_packs WHERE country = ? AND status = 'active'`
+    ).get(country) as { id: string; publisher: string; active_version_id: string | null } | undefined;
+    // Replacing an official pack is allowed but never implicit: the owner has
+    // to send override:true (the panel asks first). activateInstalledPack
+    // demotes the other country pack; its merchant overrides stay pinned to
+    // that pack's version and go dormant, so switching back restores them.
+    const replacesOfficial = Boolean(activeForCountry && activeForCountry.publisher !== 'local');
+    if (replacesOfficial && req.body?.override !== true) {
+      return res.status(409).json({
+        error: `An active tax pack is already installed for ${country}; disable it or confirm the replacement before entering a manual rate`,
+        active_pack_id: activeForCountry!.id,
+        can_override: true,
+      });
+    }
+    // Overrides stay pinned to the pack they were made against. A manual pack
+    // applies one rate to every category, so re-pointing them would change no
+    // tax outcome while overwriting the category the owner picked — they are
+    // left dormant instead, and revive if the official pack is activated
+    // again. Count them so the owner is told rather than left to notice.
+    const dormantOverrides = replacesOfficial && activeForCountry!.active_version_id
+      ? (db.prepare('SELECT COUNT(*) AS total FROM tax_overrides WHERE pack_version_id = ?')
+        .get(activeForCountry!.active_version_id) as { total: number }).total
+      : 0;
+    let remapped: CategoryRemap[] = [];
+
+    const installedAt = now();
+    const packId = `manual-${country.toLowerCase()}`;
+    const existingVersions = db.prepare(
+      'SELECT version FROM country_pack_versions WHERE pack_id = ?'
+    ).all(packId) as Array<{ version: string }>;
+    const usedPatches = new Set(existingVersions.map((row) => row.version));
+    let packVersion = `1.0.${Date.now()}`;
+    let bump = 0;
+    while (usedPatches.has(packVersion) && bump < 1_000) {
+      bump += 1;
+      packVersion = `1.0.${Date.now() + bump}`;
+    }
+    const effectiveFrom = installedAt.slice(0, 10);
+    const pack: CountryPack = {
+      schemaVersion: 1,
+      id: packId,
+      publisher: 'local',
+      version: packVersion,
+      country,
+      jurisdiction: '*',
+      currency,
+      effectiveFrom,
+      publishedAt: effectiveFrom,
+      minFloVersion: '2.4.0',
+      taxPoint: 'finalized_at',
+      inclusivePricingDefault: inclusive,
+      registrationNumberLabel: label,
+      categories: [
+        { id: 'standard', label: 'Standard', ruleIds: ['tax'] },
+        { id: 'packaging', label: 'Packaging', ruleIds: ['tax'] },
+        { id: 'delivery', label: 'Delivery', ruleIds: ['tax'] },
+        { id: 'service_charge', label: 'Service charge', ruleIds: ['tax'] },
+        { id: 'addon', label: 'Add-on', ruleIds: ['tax'] },
+        { id: 'unclassified', label: 'Unclassified', ruleIds: ['tax'] },
+      ],
+      defaultCategories: {
+        product: 'standard',
+        packaging: 'packaging',
+        delivery: 'delivery',
+        service_charge: 'service_charge',
+        addon: 'addon',
+      },
+      unclassifiedCategoryId: 'unclassified',
+      rules: [{
+        id: 'tax',
+        label: 'Tax',
+        type: 'percent',
+        categoryIds: ['standard', 'packaging', 'delivery', 'service_charge', 'addon', 'unclassified'],
+        rate: rateDecimal.toString(),
+      }],
+      taxRounding: { scope: 'line', method: 'half_up', decimalPlaces: 2, remainderAllocation: 'largest_remainder' },
+      payableRounding: { increment: '0.01', method: 'half_up' },
+    };
+    const packJson = JSON.stringify(pack);
+    const digest = createHash('sha256').update(packJson, 'utf8').digest('hex');
+    const versionId = `${packId}@${packVersion}`;
+    const version: VersionRow = {
+      id: versionId,
+      pack_id: packId,
+      version: packVersion,
+      schema_version: 1,
+      manifest_json: JSON.stringify({
+        id: packId,
+        publisher: 'local',
+        country,
+        jurisdiction: '*',
+        version: packVersion,
+        publishedAt: effectiveFrom,
+      }),
+      pack_json: packJson,
+      digest,
+      signature: null,
+      effective_from: effectiveFrom,
+      effective_to: null,
+      min_flo_version: pack.minFloVersion,
+      published_at: effectiveFrom,
+      status: 'installed',
+      created_at: installedAt,
+    };
+    const validation = validationChecklist(version);
+    if (!validation.valid) {
+      return res.status(400).json({ error: 'Manual tax configuration failed validation', validation });
+    }
+
+    withTxn(() => {
+      // The pack row must hold the *previous* active_version_id when the
+      // re-save path goes through activateInstalledPack — that helper uses
+      // pack.active_version_id to find the version to demote and to re-point
+      // tax_overrides. For a fresh install it's null (no previous).
+      const existingPackRow = db.prepare(
+        'SELECT id, active_version_id FROM country_packs WHERE id = ?'
+      ).get(packId) as { id: string; active_version_id: string | null } | undefined;
+      const previousActiveVersionId = existingPackRow?.active_version_id ?? null;
+      if (!existingPackRow) {
+        db.prepare(`
+          INSERT INTO country_packs (
+            id, publisher, country, jurisdiction, active_version_id, status, created_at, updated_at
+          ) VALUES (?, 'local', ?, '*', ?, 'installed', ?, ?)
+        `).run(packId, country, previousActiveVersionId, installedAt, installedAt);
+      }
+      persistPackVersionArtifacts(version, pack, installedAt);
+      const packRowForActivation = db.prepare(
+        'SELECT * FROM country_packs WHERE id = ?'
+      ).get(packId) as PackRow;
+      // activateInstalledPack handles demote-previous, re-point overrides,
+      // set active, and audit. We extend the audit with source + rate +
+      // inclusive so the panel can label it "Manual configuration" (the
+      // automatic flag defaults to true inside the helper; we override it
+      // here so the timeline distinguishes owner-initiated manual saves
+      // from catalog-driven automatic installs).
+      activateInstalledPack(packRowForActivation, version, actorUserId(req), {
+        automatic: false,
+        source: 'manual_config',
+        rate: rateDecimal.toString(),
+        inclusive,
+        replacedPackId: replacesOfficial ? activeForCountry!.id : null,
+        dormantOverrides,
+      });
+      remapped = backfillCategoryDefaults(pack, db, installedAt);
+      if (remapped.length) {
+        audit('remap_categories', actorUserId(req), packId, versionId, null, { remapped });
+      }
+    });
+    upsertSettings({ taxes_enabled: 'true' });
+    // The Enable-taxes 404 path queues a tax_plugin_request:<country>
+    // support ticket whenever no official pack exists. A successful manual
+    // config resolves that gap, so clear the request and let the plugin
+    // request stay absent in the support outbox.
+    db.prepare("DELETE FROM settings WHERE key = ?")
+      .run(`tax_plugin_request:${country}`);
+    return res.json({
+      enabled: true,
+      country,
+      pack_id: packId,
+      version: packVersion,
+      validation,
+      // The owner needs to see what the save cost them: assignments the new
+      // pack could not keep, and overrides that stopped applying.
+      remapped,
+      dormant_overrides: dormantOverrides,
+    });
+  } catch (error: any) {
+    const statusCode = error.statusCode || 500;
+    return res.status(statusCode).json({ error: error.message || 'Could not save manual tax configuration' });
   }
 });
 

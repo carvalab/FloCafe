@@ -8,6 +8,7 @@ import { getDatabase, parseDbTimestamp } from '../db';
 import { PrinterCutMode, resolvePrinterProfile, matchSupportedPrinterProfile, SupportedPrinterProfile } from './profiles';
 import { getCountryByCode } from '../countries';
 import { resolveTaxComponents } from '../services/tax-components';
+import { resolveTaxIdLabel } from '../services/tax';
 import { correlationId, type FloErrorCode } from '../errors';
 import { sendEvent } from '../services/telemetry';
 import { cloudSync } from '../services/cloud-sync';
@@ -784,7 +785,7 @@ function formatCompactReceipt(order: any, bill: any, biz: any, cols: number = 48
   const amtLen = 10;
   const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
   const locale = getCountryByCode(biz.country)?.locale ?? 'en-US';
-  const taxIdLabel = getCountryByCode(biz.country)?.taxIdLabel || 'Tax ID';
+  const taxIdLabel = resolveTaxIdLabel(biz.country);
   const hasTax = Number(bill.tax_amount) !== 0
     || resolveTaxComponents({ ...bill, items: order.items }).some((component) => component.amount !== 0);
 
@@ -962,7 +963,7 @@ function formatDetailedReceipt(order: any, bill: any, biz: any, cols: number = 4
   const itemNameLen = cols === 42 ? 28 : 34;
   const prefix = resolveCurrencyPrefix(biz.currency_symbol || '₹', useUnicode);
   const locale = getCountryByCode(biz.country)?.locale ?? 'en-US';
-  const taxIdLabel = getCountryByCode(biz.country)?.taxIdLabel || 'Tax ID';
+  const taxIdLabel = resolveTaxIdLabel(biz.country);
   const taxComponents = resolveTaxComponents({ ...bill, items: order.items });
   const hasTax = Number(bill.tax_amount) !== 0
     || taxComponents.some((component) => component.amount !== 0);
