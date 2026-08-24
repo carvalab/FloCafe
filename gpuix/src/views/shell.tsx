@@ -2,16 +2,26 @@ import React from 'react'
 import type { Session } from '../lib/auth'
 import { C } from '../theme'
 
-export const NAV_ITEMS = [
-  { id: 'dashboard', label: 'Dashboard' },
-  { id: 'pos', label: 'New order' },
-  { id: 'products', label: 'Products' },
-  { id: 'orders', label: 'Orders' },
-  { id: 'customers', label: 'Customers' },
-  { id: 'staff', label: 'Staff' },
-] as const
+type Role = string
 
-export type ViewId = (typeof NAV_ITEMS)[number]['id']
+/** Mirrors shared/role-permissions.ts groups (subset used by these views). */
+export const NAV_ITEMS: { id: string; label: string; roles: Role[] }[] = [
+  { id: 'dashboard', label: 'Dashboard', roles: ['owner', 'manager'] },
+  { id: 'pos', label: 'New order', roles: ['owner', 'manager', 'cashier', 'server'] },
+  { id: 'orders', label: 'Orders', roles: ['owner', 'manager', 'cashier', 'server', 'chef'] },
+  { id: 'kds', label: 'Kitchen', roles: ['owner', 'manager', 'chef'] },
+  { id: 'tables', label: 'Tables', roles: ['owner', 'manager', 'cashier', 'server'] },
+  { id: 'products', label: 'Products', roles: ['owner', 'manager'] },
+  { id: 'customers', label: 'Customers', roles: ['owner', 'manager', 'cashier', 'server'] },
+  { id: 'staff', label: 'Staff', roles: ['owner', 'manager'] },
+  { id: 'settings', label: 'Settings', roles: ['owner', 'manager'] },
+]
+
+export function allowedViews(role: Role): string[] {
+  return NAV_ITEMS.filter((n) => n.roles.includes(role)).map((n) => n.id)
+}
+
+export type ViewId = string
 
 const WIDTH = 220
 
@@ -27,6 +37,7 @@ export function Shell({
   onNavigate: (id: ViewId) => void
   children: React.ReactNode
 }) {
+  const items = NAV_ITEMS.filter((n) => n.roles.includes(session.user.role))
   return (
     <div style={{ display: 'flex', flexDirection: 'row', width: '100%', height: '100%' }}>
       <div
@@ -48,12 +59,12 @@ export function Shell({
         <text style={{ fontSize: 17, fontWeight: 700, color: C.text, paddingLeft: 8 }}>
           {session.store.name}
         </text>
-        <text style={{ fontSize: 12, color: C.tertiary ?? C.muted, paddingLeft: 8, paddingBottom: 14 }}>
+        <text style={{ fontSize: 12, color: C.tertiary, paddingLeft: 8, paddingBottom: 14 }}>
           {session.user.name} · {session.user.role}
         </text>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: 2, flexGrow: 1 }}>
-          {NAV_ITEMS.map((item) => {
+          {items.map((item) => {
             const selected = item.id === active
             return (
               <div

@@ -1,5 +1,6 @@
 import React from 'react'
 import { getDb } from '../lib/db'
+import { updateOrderStatus } from '../lib/orders'
 import { C } from '../theme'
 
 interface Row {
@@ -18,11 +19,19 @@ const STATUS_COLOR: Record<string, string> = {
   cancelled: C.danger,
 }
 
-/** Most recent 200 orders, newest first. */
+const NEXT_ACTION: Record<string, { label: string; status: string }> = {
+  pending: { label: 'Start cooking', status: 'preparing' },
+  preparing: { label: 'Mark ready', status: 'ready' },
+  ready: { label: 'Complete + bill', status: 'completed' },
+}
+
+/** Recent 200 live orders with their next action. */
 export function OrdersView({ currencySymbol }: { currencySymbol: string }) {
+  const [tick, setTick] = React.useState(0)
   const rows = getDb()
     .prepare('SELECT id, order_number, type, status, total FROM orders ORDER BY created_at DESC, id DESC LIMIT 200')
     .all() as Row[]
+  const refresh = () => setTick((t) => t + 1)
 
   return (
     <div testId="orders-view" style={{ display: 'flex', flexDirection: 'column', flexGrow: 1, padding: 24 }}>
@@ -44,7 +53,30 @@ export function OrdersView({ currencySymbol }: { currencySymbol: string }) {
               <text style={{ fontSize: 12, color: STATUS_COLOR[o.status] ?? C.muted }}>{o.status}</text>
             </div>
             <div style={{ flexGrow: 1 }} />
-            <text style={{ fontSize: 13.5, color: C.text }}>
+            {NEXT_ACTION[o.status] && (
+              <div
+                testId={`order-${o.id}-${NEXT_ACTION[o.status].status}`}
+                onClick={() => {
+                  try {
+                    updateOrderStatus(o.id, NEXT_ACTION[o.status].status)
+                    refresh()
+                  } catch {}
+                }}
+                style={{
+                  paddingHorizontal: 10,
+                  paddingTop: 4,
+                  paddingBottom: 4,
+                  borderRadius: 6,
+                  borderWidth: 1,
+                  borderColor: C.primary,
+                  cursor: 'pointer',
+                  hover: { backgroundColor: C.navActive },
+                }}
+              >
+                <text style={{ fontSize: 12.5, color: C.primary }}>{NEXT_ACTION[o.status].label}</text>
+              </div>
+            )}
+            <text style={{ fontSize: 13.5, color: C.text, width: 80, textAlign: 'right' }}>
               {currencySymbol}
               {o.total.toFixed(2)}
             </text>

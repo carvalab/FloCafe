@@ -1,30 +1,39 @@
 import React, { useState } from 'react'
 import { loadSession, type Session } from './lib/auth'
 import { LoginView } from './views/login'
-import { Shell, type ViewId } from './views/shell'
+import { Shell, allowedViews, type ViewId } from './views/shell'
 import { DashboardView } from './views/dashboard'
+import { PosView } from './views/pos'
 import { ProductsView } from './views/products'
 import { OrdersView } from './views/orders'
-import { PosView } from './views/pos'
+import { KdsView } from './views/kds'
+import { TablesView } from './views/tables'
 import { CustomersView } from './views/customers'
 import { StaffView } from './views/staff'
-import { C } from './theme'
+import { SettingsView } from './views/settings'
 
 function Home({ session }: { session: Session }) {
-  const [view, setView] = useState<ViewId>('dashboard')
+  const [view, setView] = useState<ViewId>(() => allowedViews(session.user.role)[0] ?? 'dashboard')
+  const currency = session.store.currencySymbol
   const content =
     view === 'pos' ? (
-      <PosView currencySymbol={session.store.currencySymbol} />
+      <PosView currencySymbol={currency} />
     ) : view === 'products' ? (
-      <ProductsView currencySymbol={session.store.currencySymbol} />
+      <ProductsView currencySymbol={currency} />
     ) : view === 'orders' ? (
-      <OrdersView currencySymbol={session.store.currencySymbol} />
+      <OrdersView currencySymbol={currency} />
+    ) : view === 'kds' ? (
+      <KdsView />
+    ) : view === 'tables' ? (
+      <TablesView />
     ) : view === 'customers' ? (
       <CustomersView />
     ) : view === 'staff' ? (
       <StaffView />
+    ) : view === 'settings' ? (
+      <SettingsView />
     ) : (
-      <DashboardView currencySymbol={session.store.currencySymbol} />
+      <DashboardView currencySymbol={currency} />
     )
   return (
     <Shell session={session} active={view} onNavigate={setView}>
