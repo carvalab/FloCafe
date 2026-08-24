@@ -81,3 +81,26 @@ keystroke-tier tests auto-enable once @gpuix/native is built with test-support
 ## Skipped for now (add when needed)
 - i18n (hardcode English strings until views work)
 - printing/KDS/ESC-POS, tax engine, background services
+
+## Final parity audit (post-CRUD)
+
+| Original surface | gpuix |
+|---|---|
+| auth/login | ✅ bcrypt against users table |
+| dashboard | ✅ stats from sqlite |
+| pos (cart/categories/addons/hold) | ✅ incl. required-group validation |
+| orders + history + lifecycle | ✅ transitions, INV bills, payments |
+| kds | ✅ single-screen queue |
+| products (CRUD) | ✅ categories + products editors, soft delete |
+| addon-groups (CRUD) | ✅ groups + addons editors |
+| customers (CRUD) | ✅ inline editor, soft delete |
+| staff (create/activate) | ✅ bcrypt cross-compatible logins |
+| tables (CRUD + status) | ✅ grid cycle, add/remove |
+| settings | ✅ core keys (business/currency/timezone/order prefix) |
+
+Known gaps, deliberate:
+- Product↔addon-group linking exists (`linkAddonGroup`) but has no UI yet.
+- auth/recover needs email delivery; register is first-run setup owned by the
+  legacy DB during migration.
+- Printing, WhatsApp, Drive backup, customer display, tax packs, reports
+  charts: hardware/network baggage (see above).
