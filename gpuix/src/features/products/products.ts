@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto'
 import { getDb } from '../../shared/db'
 
 export interface Category {
@@ -65,4 +66,89 @@ export function loadAddonGroups(productId: string): AddonGroup[] {
   )
   for (const g of groups) g.addons = loadAddons.all(g.id) as Addon[]
   return groups
+}
+
+// ── menu management ──────────────────────────────────────────────────────────
+
+export function saveCategory(id: string | null, name: string): string {
+  if (!name.trim()) throw new Error('Name required')
+  const db = getDb()
+  const newId = id ?? randomUUID()
+  if (id) db.prepare('UPDATE categories SET name = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(name.trim(), id)
+  else db.prepare('INSERT INTO categories (id, name, created_at, updated_at) VALUES (?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)').run(newId, name.trim())
+  return newId
+}
+
+export function deactivateCategory(id: string): void {
+  getDb().prepare('UPDATE categories SET is_active = 0 WHERE id = ?').run(id)
+}
+
+/** Insert or update. price must be >= 0; taxRate 0–100. */
+export function saveProduct(p: {
+  productId?: string
+  name: string
+  sku?: string | null
+  price: number
+  taxRate: number
+  trackInventory?: number
+  stockQuantity?: number
+  categoryId?: string | null
+}): string {
+  if (!p.name.trim()) throw new Error('Name required')
+  if (!(p.price >= 0)) throw new Error('Price must be ≥ 0')
+  if (!(p.taxRate >= 0 && p.taxRate <= 100)) throw new Error('Tax rate must be 0–100')
+  const db = getDb()
+  if (p.productId) {
+    db.prepare(
+      'UPDATE products SET name = ?, sku = ?, price = ?, tax_rate = ?, track_inventory = ?, stock_quantity = ?, category_id = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?',
+    ).run(p.name.trim(), p.sku ?? null, p.price, p.taxRate, p.trackInventory ? 1 : 0, p.stockQuantity ?? 0, p.categoryId ?? null, p.productId)
+    return p.productId
+  }
+  const id = randomUUID()
+  db.prepare(
+    'INSERT INTO products (id, name, sku, price, tax_rate, track_inventory, stock_quantity, category_id, is_active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)',
+  ).run(id, p.name.trim(), p.sku ?? null, p.price, p.taxRate, p.trackInventory ? 1 : 0, p.stockQuantity ?? 0, p.categoryId ?? null)
+  return id
+}
+
+/** Soft delete — history must keep selling records intact. */
+export function deactivateProduct(productId: string): void {
+  getDb().prepare('UPDATE products SET is_active = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(productId)
+}
+
+export function saveAddonGroup(id: string | null, name: string, isRequired: boolean): string {
+  if (!name.trim()) throw new Error('Name required')
+  const db = getDb()
+  if (id) {
+    db.prepare('UPDATE addon_groups SET name = ?, is_required = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(name.trim(), isRequired ? 1 : 0, id)
+    return id
+  }
+  const newId = randomUUID()
+  db.prepare('INSERT INTO addon_groups (id, name, is_required, created_at, updated_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)').run(newId, name.trim(), isRequired ? 1 : 0)
+  return newId
+}
+
+export function saveAddon(groupdId: string, id: string | null, name: string, price: number): string {
+  if (!name.trim()) throw new Error('Name required')
+  if (!(price >= 0)) throw new Error('Price must be ≥ 0')
+  const db = getDb()
+  if (id) {
+    db.prepare('UPDATE addons SET name = ?, price = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(name.trim(), price, id)
+    return id
+  }
+  const newId = randomUUID()
+  db.prepare('INSERT INTO addons (id, addon_group_id, name, price, created_at, updated_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)').run(newId, groupdId, name.trim(), price)
+  return newId
+}
+
+export function linkAddonGroup(productId: string, addonGroupId: string): void {
+  getDb().prepare('INSERT OR IGNORE INTO addon_group_product (product_id, addon_group_id) VALUES (?, ?)').run(productId, addonGroupId)
+}
+
+export function deactivateAddonGroup(id: string): void {
+  getDb().prepare('UPDATE addon_groups SET is_active = 0 WHERE id = ?').run(id)
+}
+
+export function deactivateAddon(id: string): void {
+  getDb().prepare('UPDATE addons SET is_active = 0 WHERE id = ?').run(id)
 }
