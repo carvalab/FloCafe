@@ -50,11 +50,25 @@ Packages are on npm: `@gpuix/react@0.4.0`, `@gpuix/native@0.4.0` (prebuilt napi 
 - Done: dashboard stats, products list, recent orders, POS order creation
   (write path), customers, staff — all direct `bun:sqlite`, virtualized lists.
 
-### Phase 3 — parity & hardening (remaining)
-- Order lifecycle: status transitions, bills, printing hooks.
-- Tables/KDS views; settings editor (order-number prefix/timezone rules then
-  replace the naive sequence in lib/orders.ts).
-- i18n once views are stable; role-based nav gating.
+### Phase 3 — parity & hardening
+Done:
+- Order lifecycle ✅ (pending→preparing→ready→completed, cancel, INV bill on
+  completion — `lib/orders.ts` + action buttons in orders view)
+- Kitchen queue view ✅ (single-screen; station routing deferred)
+- Tables grid ✅ (status cycle), settings editor ✅ (business name, currency,
+  timezone, order-number prefix — numbering now reads them)
+- Role-gated nav ✅ (owner/manager/cashier/server/chef per shared/role-permissions)
+- Light theme matching globals.css ✅ (#3248FF brand blue)
+
+Not migrated (deliberate):
+- Printing/ESC-POS, Google Drive backup, WhatsApp, reports/charts, customer
+  display window, KDS as separate process/window, tax packs UI. Each is an
+  isolated slice on top of src/lib + src/views when needed.
+
+Automation tiers (AGENTS.md § Testing): every write path has unit coverage in
+src/lib/*.test.ts; the live-app mount test runs on the stock binary; click/
+keystroke-tier tests auto-enable once @gpuix/native is built with test-support
+(no published binary ships it — needs `bun run build` from gpuix source).
 
 ## Skipped for now (add when needed)
 - i18n (hardcode English strings until views work)

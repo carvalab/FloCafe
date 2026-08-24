@@ -28,11 +28,11 @@ gpuix/
     lib/               data + domain logic, plain TS, unit-testable without UI
       db.ts            bun:sqlite lazy singleton (FLOCAFE_DB env, foreign_keys on)
       auth.ts          bcrypt login via Bun.password, in-memory session
-      orders.ts        createOrder transaction (order + items + stock)
+      orders.ts        createOrder transaction, status lifecycle, INV bills
     views/             one file per full-window view + its test side by side
       login.tsx / login.test.tsx
       shell.tsx        sidebar nav + content pane
-      dashboard.tsx  pos.tsx  products.tsx  orders.tsx  customers.tsx  staff.tsx
+      login/shell/dashboard/pos/products/orders/kds/tables/customers/staff/settings
   README.md            run/test/cross-compile instructions
   PLAN.md              migration phases
 ```
