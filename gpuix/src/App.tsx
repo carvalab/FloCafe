@@ -6,6 +6,8 @@ import { DashboardView } from './views/dashboard'
 import { ProductsView } from './views/products'
 import { OrdersView } from './views/orders'
 import { PosView } from './views/pos'
+import { CustomersView } from './views/customers'
+import { StaffView } from './views/staff'
 import { C } from './theme'
 
 function Home({ session }: { session: Session }) {
@@ -17,6 +19,10 @@ function Home({ session }: { session: Session }) {
       <ProductsView currencySymbol={session.store.currencySymbol} />
     ) : view === 'orders' ? (
       <OrdersView currencySymbol={session.store.currencySymbol} />
+    ) : view === 'customers' ? (
+      <CustomersView />
+    ) : view === 'staff' ? (
+      <StaffView />
     ) : (
       <DashboardView currencySymbol={session.store.currencySymbol} />
     )

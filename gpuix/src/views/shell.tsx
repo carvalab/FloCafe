@@ -7,6 +7,8 @@ export const NAV_ITEMS = [
   { id: 'pos', label: 'New order' },
   { id: 'products', label: 'Products' },
   { id: 'orders', label: 'Orders' },
+  { id: 'customers', label: 'Customers' },
+  { id: 'staff', label: 'Staff' },
 ] as const
 
 export type ViewId = (typeof NAV_ITEMS)[number]['id']
