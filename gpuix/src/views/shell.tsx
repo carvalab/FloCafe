@@ -4,6 +4,7 @@ import { C } from '../theme'
 
 export const NAV_ITEMS = [
   { id: 'dashboard', label: 'Dashboard' },
+  { id: 'pos', label: 'New order' },
   { id: 'products', label: 'Products' },
   { id: 'orders', label: 'Orders' },
 ] as const

@@ -1,16 +1,18 @@
 import { Database } from 'bun:sqlite'
 
-// ponytail: read-only until a view writes; flip when orders creation lands.
-const dbPath = process.env.FLOCAFE_DB ?? 'flo.db'
+const dbPath = () => process.env.FLOCAFE_DB ?? 'flo.db'
 let instance: Database | null = null
 
 /** Lazy singleton — the window must open even without a database file. */
 export function getDb(): Database {
-  if (!instance) {
+  const path = dbPath()
+  if (!instance || (instance as any).__path !== path) {
     try {
-      instance = new Database(dbPath, { readonly: true })
+      instance = new Database(path)
+      ;(instance as any).__path = path
+      instance.exec('PRAGMA foreign_keys = ON')
     } catch {
-      throw new Error(`Database not found at ${dbPath} (set FLOCAFE_DB)`)
+      throw new Error(`Database not found at ${path} (set FLOCAFE_DB)`)
     }
   }
   return instance

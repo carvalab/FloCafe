@@ -5,12 +5,15 @@ import { Shell, type ViewId } from './views/shell'
 import { DashboardView } from './views/dashboard'
 import { ProductsView } from './views/products'
 import { OrdersView } from './views/orders'
+import { PosView } from './views/pos'
 import { C } from './theme'
 
 function Home({ session }: { session: Session }) {
   const [view, setView] = useState<ViewId>('dashboard')
   const content =
-    view === 'products' ? (
+    view === 'pos' ? (
+      <PosView currencySymbol={session.store.currencySymbol} />
+    ) : view === 'products' ? (
       <ProductsView currencySymbol={session.store.currencySymbol} />
     ) : view === 'orders' ? (
       <OrdersView currencySymbol={session.store.currencySymbol} />
