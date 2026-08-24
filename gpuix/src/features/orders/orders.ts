@@ -1,4 +1,4 @@
-import { getDb, settings } from './db'
+import { getDb, settings } from '../../shared/db'
 
 const FLOW: Record<string, string[]> = {
   pending: ['preparing', 'cancelled'],

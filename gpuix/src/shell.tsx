@@ -1,6 +1,6 @@
 import React from 'react'
-import type { Session } from '../lib/auth'
-import { C } from '../theme'
+import type { Session } from './features/auth/auth'
+import { C } from './shared/theme'
 
 type Role = string
 

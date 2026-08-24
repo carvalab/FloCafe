@@ -24,7 +24,7 @@ test('login flow end-to-end', async () => {
   if (!hasNativeTestRenderer) return console.log('skip: build @gpuix/native with test-support')
   const { createTestRoot } = await import('@gpuix/react')
   const { connectTest } = await import('@gpuix/react/automation')
-  const { App } = await import('../App')
+  const { App } = await import('../../App')
   const { render, renderer } = createTestRoot()
   render(<App />)
   const app = await connectTest(renderer)

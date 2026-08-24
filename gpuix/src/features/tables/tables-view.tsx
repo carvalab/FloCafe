@@ -1,6 +1,6 @@
 import React from 'react'
-import { getDb } from '../lib/db'
-import { C } from '../theme'
+import { getDb } from '../../shared/db'
+import { C } from '../../shared/theme'
 
 interface Table {
   id: string

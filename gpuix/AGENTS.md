@@ -23,16 +23,22 @@ process/window. The red traffic-light button quits.
 gpuix/
   app.tsx              entry ONLY: ends with render(<App/>, {...}). Nothing else here.
   src/
-    theme.ts           palette constants (single source of color)
     App.tsx            root component / view switch
-    lib/               data + domain logic, plain TS, unit-testable without UI
+    shell.tsx          sidebar nav + content pane (role-gated NAV_ITEMS)
+    shared/            cross-feature infrastructure
+      theme.ts         palette mirroring frontend/src/app/globals.css
       db.ts            bun:sqlite lazy singleton (FLOCAFE_DB env, foreign_keys on)
-      auth.ts          bcrypt login via Bun.password, in-memory session
-      orders.ts        createOrder transaction, status lifecycle, INV bills
-    views/             one file per full-window view + its test side by side
-      login.tsx / login.test.tsx
-      shell.tsx        sidebar nav + content pane
-      login/shell/dashboard/pos/products/orders/kds/tables/customers/staff/settings
+    features/          slice per feature — view(s) + logic + tests live together
+      auth/            login-view.tsx · auth.ts · *.test.ts(x)
+      dashboard/       dashboard-view.tsx
+      pos/             pos-view.tsx (cart, category tabs, addons, hold/resume)
+      orders/          orders-list-view.tsx · orders.ts · orders.test.ts
+      kds/             kds-view.tsx
+      products/        products-list-view.tsx
+      tables/          tables-view.tsx
+      customers/       customers-view.tsx
+      staff/           staff-view.tsx
+      settings/        settings-view.tsx
   README.md            run/test/cross-compile instructions
   PLAN.md              migration phases
 ```

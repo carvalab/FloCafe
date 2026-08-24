@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { getDb, settings as loadSettings } from '../lib/db'
-import { C } from '../theme'
+import { getDb, settings as loadSettings } from '../../shared/db'
+import { C } from '../../shared/theme'
 
 // The keys the native app reads/writes today. Everything else in settings
 // stays untouched — data safety first.

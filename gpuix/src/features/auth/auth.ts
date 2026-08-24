@@ -1,4 +1,4 @@
-import { getDb, settings } from './db'
+import { getDb, settings } from '../../shared/db'
 
 export interface User {
   id: number

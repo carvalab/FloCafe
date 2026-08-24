@@ -1,6 +1,6 @@
 import React from 'react'
-import { getDb } from '../lib/db'
-import { C } from '../theme'
+import { getDb } from '../../shared/db'
+import { C } from '../../shared/theme'
 
 function count(sql: string): number {
   return (getDb().prepare(sql).get() as any)?.n ?? 0

@@ -1,6 +1,6 @@
 import React, { useState } from 'react'
-import { login, type Session } from '../lib/auth'
-import { C } from '../theme'
+import { login, type Session } from './auth'
+import { C } from '../../shared/theme'
 
 export function LoginView({ onLogin }: { onLogin: (session: Session) => void }) {
   const [email, setEmail] = useState('')

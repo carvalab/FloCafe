@@ -1,7 +1,7 @@
 import React from 'react'
-import { getDb } from '../lib/db'
-import { updateOrderStatus } from '../lib/orders'
-import { C } from '../theme'
+import { getDb } from '../../shared/db'
+import { updateOrderStatus } from '../orders/orders'
+import { C } from '../../shared/theme'
 
 interface Row {
   id: number

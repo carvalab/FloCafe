@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react'
-import { createOrder, loadProducts, type CartItem } from '../lib/orders'
-import { C } from '../theme'
+import { createOrder, loadProducts, type CartItem } from '../orders/orders'
+import { C } from '../../shared/theme'
 
 /** Product grid + cart. Checkout writes through lib/orders.createOrder. */
 export function PosView({ currencySymbol }: { currencySymbol: string }) {
