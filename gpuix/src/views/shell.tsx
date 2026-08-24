@@ -34,7 +34,7 @@ export function Shell({
           width: WIDTH,
           flexShrink: 0,
           height: '100%',
-          backgroundColor: '#181818',
+          backgroundColor: C.sidebar,
           borderRightWidth: 1,
           borderRightColor: C.border,
           display: 'flex',
@@ -67,11 +67,11 @@ export function Shell({
                   alignItems: 'center',
                   paddingLeft: 10,
                   cursor: 'pointer',
-                  backgroundColor: selected ? C.item : 'transparent',
+                  backgroundColor: selected ? C.navActive : 'transparent',
                   hover: { backgroundColor: C.item },
                 }}
               >
-                <text style={{ fontSize: 13.5, fontWeight: selected ? 600 : 400, color: selected ? C.text : C.muted }}>
+                <text style={{ fontSize: 13.5, fontWeight: selected ? 600 : 400, color: selected ? C.primary : C.muted }}>
                   {item.label}
                 </text>
               </div>

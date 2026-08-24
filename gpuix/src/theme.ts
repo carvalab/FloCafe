@@ -1,13 +1,16 @@
-// FloCafe native palette. GPUI text defaults to black and does not inherit color.
+// Palette mirrors frontend/src/app/globals.css (light theme, brand blue).
 export const C = {
-  bg: '#17181C',
-  card: '#232323',
-  border: '#3A3B40',
-  text: '#E2E2E2',
-  muted: '#A3A3A3',
-  tertiary: '#7D7D7D',
-  item: '#F0F0F00F',
-  accent: '#E2795B',
-  onAccent: '#17181C',
-  danger: '#E5484D',
+  bg: '#FFFFFF',
+  card: '#FFFFFF',
+  sidebar: '#FAFAFA',
+  navActive: '#E8EBFF',
+  border: '#EBEBEB',
+  text: '#252525',
+  muted: '#6E6E6E',
+  tertiary: '#9A9A9A',
+  item: '#F7F7F7',
+  primary: '#3248FF',
+  onPrimary: '#FFFFFF',
+  success: '#1A7F37',
+  danger: '#DC3D43',
 }

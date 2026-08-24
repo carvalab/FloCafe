@@ -11,8 +11,10 @@ interface Row {
 }
 
 const STATUS_COLOR: Record<string, string> = {
-  pending: '#E2B341',
-  completed: '#46A758',
+  pending: '#B45309',
+  preparing: C.primary,
+  ready: '#1A7F37',
+  completed: C.success,
   cancelled: C.danger,
 }
 
@@ -36,7 +38,7 @@ export function OrdersView({ currencySymbol }: { currencySymbol: string }) {
                 paddingTop: 3,
                 paddingBottom: 3,
                 borderRadius: 10,
-                backgroundColor: (STATUS_COLOR[o.status] ?? C.muted) + '26',
+                backgroundColor: C.item,
               }}
             >
               <text style={{ fontSize: 12, color: STATUS_COLOR[o.status] ?? C.muted }}>{o.status}</text>

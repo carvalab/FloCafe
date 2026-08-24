@@ -49,7 +49,7 @@ export function PosView({ currencySymbol }: { currencySymbol: string }) {
                 borderWidth: 1,
                 borderColor: C.border,
                 cursor: 'pointer',
-                hover: { borderColor: C.accent },
+                hover: { borderColor: C.primary },
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 4,
@@ -71,7 +71,7 @@ export function PosView({ currencySymbol }: { currencySymbol: string }) {
           width: 280,
           flexShrink: 0,
           height: '100%',
-          backgroundColor: '#1D1E22',
+          backgroundColor: C.sidebar,
           borderLeftWidth: 1,
           borderLeftColor: C.border,
           display: 'flex',
@@ -97,21 +97,21 @@ export function PosView({ currencySymbol }: { currencySymbol: string }) {
           ))}
           {lines.length === 0 && <text style={{ fontSize: 13, color: C.tertiary }}>Tap products to add</text>}
         </div>
-        {message && <text style={{ fontSize: 12, color: C.accent }}>{message}</text>}
+        {message && <text style={{ fontSize: 12, color: C.primary }}>{message}</text>}
         <div
           testId="checkout"
           onClick={lines.length ? checkout : undefined}
           style={{
             height: 42,
             borderRadius: 8,
-            backgroundColor: lines.length ? C.accent : C.border,
+            backgroundColor: lines.length ? C.primary : C.border,
             alignItems: 'center',
             justifyContent: 'center',
             display: 'flex',
             cursor: lines.length ? 'pointer' : 'default',
           }}
         >
-          <text style={{ fontSize: 14, fontWeight: 600, color: lines.length ? C.onAccent : C.muted }}>
+          <text style={{ fontSize: 14, fontWeight: 600, color: lines.length ? C.onPrimary : C.muted }}>
             Charge {currencySymbol}
             {total.toFixed(2)}
           </text>

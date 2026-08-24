@@ -95,8 +95,8 @@ export function LoginView({ onLogin }: { onLogin: (session: Session) => void }) 
               height: 16,
               borderRadius: 4,
               borderWidth: 1,
-              borderColor: remember ? C.accent : C.border,
-              backgroundColor: remember ? C.accent : 'transparent',
+              borderColor: remember ? C.primary : C.border,
+              backgroundColor: remember ? C.primary : 'transparent',
             }}
           />
           <text style={{ fontSize: 13, color: C.muted }} onClick={() => setRemember(!remember)}>
@@ -112,7 +112,7 @@ export function LoginView({ onLogin }: { onLogin: (session: Session) => void }) 
           style={{
             height: 40,
             borderRadius: 8,
-            backgroundColor: C.accent,
+            backgroundColor: C.primary,
             alignItems: 'center',
             justifyContent: 'center',
             display: 'flex',
@@ -120,7 +120,7 @@ export function LoginView({ onLogin }: { onLogin: (session: Session) => void }) 
             hover: { opacity: 0.9 },
           }}
         >
-          <text style={{ fontSize: 14, fontWeight: 600, color: C.onAccent }}>Sign in</text>
+          <text style={{ fontSize: 14, fontWeight: 600, color: C.onPrimary }}>Sign in</text>
         </div>
       </div>
     </div>
