@@ -25,9 +25,14 @@ gpuix/
   src/
     theme.ts           palette constants (single source of color)
     App.tsx            root component / view switch
+    lib/               data + domain logic, plain TS, unit-testable without UI
+      db.ts            bun:sqlite lazy singleton (FLOCAFE_DB env, foreign_keys on)
+      auth.ts          bcrypt login via Bun.password, in-memory session
+      orders.ts        createOrder transaction (order + items + stock)
     views/             one file per full-window view + its test side by side
-      login.tsx
-      login.test.tsx
+      login.tsx / login.test.tsx
+      shell.tsx        sidebar nav + content pane
+      dashboard.tsx  pos.tsx  products.tsx  orders.tsx  customers.tsx  staff.tsx
   README.md            run/test/cross-compile instructions
   PLAN.md              migration phases
 ```
@@ -91,7 +96,7 @@ avoid both.
 ## Migration rules
 
 - Follow `PLAN.md` phases; keep slices vertical (screen + its data path).
-- Auth/session logic lives in plain TS modules under `src/`, called directly
-  by screens — same-process, backend-authoritative checks stay in code we own.
+- Auth/session logic lives in plain TS modules under `src/lib/`, called directly
+  by views — same-process, backend-authoritative checks stay in code we own.
 - Never mutate/delete user data from the old app's SQLite file during
   experiments; open read-only or on copies.

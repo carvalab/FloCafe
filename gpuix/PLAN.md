@@ -30,7 +30,7 @@ Packages are on npm: `@gpuix/react@0.4.0`, `@gpuix/native@0.4.0` (prebuilt napi 
 - `gpuix/package.json`, `bun install react @gpuix/react @gpuix/native`
 - `gpuix/app.tsx`: renders LoginScreen. Run: `cd gpuix && bun --hot app.tsx`
 
-### Phase 1 — login (first vertical slice)
+### Phase 1 — login (first vertical slice) ✅
 - Port `frontend/src/app/auth/login/page.tsx` to a gpuix component:
   email/password `<input>`, show-password toggle, remember-me, submit button,
   error banner. Inline styles, dark POS palette.
@@ -38,19 +38,23 @@ Packages are on npm: `@gpuix/react@0.4.0`, `@gpuix/native@0.4.0` (prebuilt napi 
   verify against the users table (same password hashing as `main/routes/auth.ts`),
   keep session in memory + JSON file (replaces zustand localStorage).
 - Tenant picker screen when user has >1 tenant (same rule as today).
-- Test: automation spec clicks through login with seeded test DB.
+  **Dropped:** FloCafe is single-tenant local — `buildLocalTenant` reads one
+  store from `settings`; no picker, no JWT, no refresh flow.
+- Test: automation spec clicks through login with seeded test DB. ✅ unit tests
+  in `src/lib/auth.test.ts` + live-app mount test in `src/views/login.test.tsx`
+  (click-tier gated on the native test-support build).
 
-### Phase 2 — app shell + first views
-- Sidebar navigation shell copied from the chat.tsx pattern (motion.div collapse,
-  transparent titlebar).
-- Migrate one read view first (`products` list with `<virtual-list>` reading
-  `bun:sqlite`), then orders/dashboard.
+### Phase 2 — app shell + first views ✅
+- Sidebar navigation shell copied from the chat.tsx pattern (motion.div collapse
+  and transparent titlebar still to add if wanted).
+- Done: dashboard stats, products list, recent orders, POS order creation
+  (write path), customers, staff — all direct `bun:sqlite`, virtualized lists.
 
-### Phase 3 — parity & hardening
-- Port remaining views one by one; each gets an automation smoke test
-  (`bun test gpuix/*.test.tsx`, or `launch({command:'bun', args:['app.tsx']})`
-  for full-process runs per README #automation).
-- Delete Electron/Next layers only when gpuix covers daily POS flow.
+### Phase 3 — parity & hardening (remaining)
+- Order lifecycle: status transitions, bills, printing hooks.
+- Tables/KDS views; settings editor (order-number prefix/timezone rules then
+  replace the naive sequence in lib/orders.ts).
+- i18n once views are stable; role-based nav gating.
 
 ## Skipped for now (add when needed)
 - i18n (hardcode English strings until views work)
