@@ -5,6 +5,8 @@ export const C = {
   border: '#3A3B40',
   text: '#E2E2E2',
   muted: '#A3A3A3',
+  tertiary: '#7D7D7D',
+  item: '#F0F0F00F',
   accent: '#E2795B',
   onAccent: '#17181C',
   danger: '#E5484D',
