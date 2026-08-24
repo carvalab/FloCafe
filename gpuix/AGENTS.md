@@ -31,10 +31,10 @@ gpuix/
     features/          slice per feature — view(s) + logic + tests live together
       auth/            login-view.tsx · auth.ts · *.test.ts(x)
       dashboard/       dashboard-view.tsx
-      pos/             pos-view.tsx (cart, category tabs, addons, hold/resume)
-      orders/          orders-list-view.tsx · orders.ts · orders.test.ts
+      pos/             pos-view.tsx · held.ts · held.test.ts (cart, tabs, addons, park/resume)
+      orders/          orders-list-view.tsx · orders.ts · orders.test.ts (lifecycle, bills, payments)
       kds/             kds-view.tsx
-      products/        products-list-view.tsx
+      products/        products.ts · products-list-view.tsx · addons-view.tsx
       tables/          tables-view.tsx
       customers/       customers-view.tsx
       staff/           staff-view.tsx

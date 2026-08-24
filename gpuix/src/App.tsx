@@ -5,6 +5,7 @@ import { Shell, allowedViews, type ViewId } from './shell'
 import { DashboardView } from './features/dashboard/dashboard-view'
 import { PosView } from './features/pos/pos-view'
 import { ProductsView } from './features/products/products-list-view'
+import { AddonsView } from './features/products/addons-view'
 import { OrdersView } from './features/orders/orders-list-view'
 import { KdsView } from './features/kds/kds-view'
 import { TablesView } from './features/tables/tables-view'
@@ -20,6 +21,8 @@ function Home({ session }: { session: Session }) {
       <PosView currencySymbol={currency} />
     ) : view === 'products' ? (
       <ProductsView currencySymbol={currency} />
+    ) : view === 'addons' ? (
+      <AddonsView />
     ) : view === 'orders' ? (
       <OrdersView currencySymbol={currency} />
     ) : view === 'kds' ? (

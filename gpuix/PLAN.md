@@ -60,10 +60,18 @@ Done:
 - Role-gated nav ✅ (owner/manager/cashier/server/chef per shared/role-permissions)
 - Light theme matching globals.css ✅ (#3248FF brand blue)
 
-Not migrated (deliberate):
+Also shipped in phase 3:
+- Categories (tabs in POS, column in products list), addon groups with
+  required/min/max validation (addons inherit parent tax, persisted as JSON
+  on order_items), held carts (park/resume per table label), bill payments
+  (payBill settles a completed order's bill), addons read-only view.
+- End-to-end journey test: src/e2e.test.ts walks login → menu → cart with
+  addons → hold/resume → checkout → kitchen advance → complete+bill → pay.
+
+Not migrated (deliberate — hardware/network baggage):
 - Printing/ESC-POS, Google Drive backup, WhatsApp, reports/charts, customer
-  display window, KDS as separate process/window, tax packs UI. Each is an
-  isolated slice on top of src/lib + src/views when needed.
+  display window, KDS as separate process/window, tax packs UI, setup wizard
+  (first-run owner creation lives in the legacy DB).
 
 Automation tiers (AGENTS.md § Testing): every write path has unit coverage in
 src/lib/*.test.ts; the live-app mount test runs on the stock binary; click/

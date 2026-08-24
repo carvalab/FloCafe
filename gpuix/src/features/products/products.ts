@@ -6,7 +6,7 @@ export interface Category {
 }
 
 export interface Product {
-  id: string
+  productId: string
   name: string
   sku: string | null
   price: number
@@ -41,7 +41,7 @@ export function loadCategories(): Category[] {
 export function loadProducts(): Product[] {
   return getDb()
     .prepare(
-      `SELECT p.id, p.name, p.sku, p.price, p.tax_rate AS taxRate,
+      `SELECT p.id AS productId, p.name, p.sku, p.price, p.tax_rate AS taxRate,
               p.track_inventory AS trackInventory, p.stock_quantity AS stockQuantity,
               p.category_id AS categoryId, c.name AS categoryName
        FROM products p LEFT JOIN categories c ON c.id = p.category_id

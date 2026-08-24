@@ -12,6 +12,7 @@ export const NAV_ITEMS: { id: string; label: string; roles: Role[] }[] = [
   { id: 'kds', label: 'Kitchen', roles: ['owner', 'manager', 'chef'] },
   { id: 'tables', label: 'Tables', roles: ['owner', 'manager', 'cashier', 'server'] },
   { id: 'products', label: 'Products', roles: ['owner', 'manager'] },
+  { id: 'addons', label: 'Addons', roles: ['owner', 'manager'] },
   { id: 'customers', label: 'Customers', roles: ['owner', 'manager', 'cashier', 'server'] },
   { id: 'staff', label: 'Staff', roles: ['owner', 'manager'] },
   { id: 'settings', label: 'Settings', roles: ['owner', 'manager'] },

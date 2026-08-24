@@ -5,7 +5,7 @@ import { holdCart, listHeld, resumeHeld, type HeldCart } from './held'
 import { C } from '../../shared/theme'
 
 const lineKey = (p: Product, addons: CartAddon[]) =>
-  p.id + '+' + addons.map((a) => a.id).sort().join(',')
+  p.productId + '+' + addons.map((a) => a.id).sort().join(',')
 
 function AddonPanel({
   product,
@@ -16,7 +16,7 @@ function AddonPanel({
   onConfirm: (addons: CartAddon[]) => void
   onCancel: () => void
 }) {
-  const [groups] = useState<AddonGroup[]>(() => loadAddonGroups(product.id))
+  const [groups] = useState<AddonGroup[]>(() => loadAddonGroups(product.productId))
   const [picked, setPicked] = useState<Map<string, CartAddon>>(new Map())
   const [error, setError] = useState<string | null>(null)
 
@@ -114,7 +114,7 @@ export function PosView({ currencySymbol }: { currencySymbol: string }) {
 
   const clickProduct = (p: Product) => {
     setMessage(null)
-    if (loadAddonGroups(p.id).length > 0) setPending(p)
+    if (loadAddonGroups(p.productId).length > 0) setPending(p)
     else add(p)
   }
 
@@ -165,7 +165,7 @@ export function PosView({ currencySymbol }: { currencySymbol: string }) {
           {visible.map((p) => (
             <div
               key={p.id}
-              testId={`product-${p.id}`}
+              testId={`product-${p.productId}`}
               onClick={() => clickProduct(p)}
               style={{
                 width: 150,
