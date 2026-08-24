@@ -1,4 +1,22 @@
-import { getDb } from './db'
+import { getDb, settings } from './db'
+
+const FLOW: Record<string, string[]> = {
+  pending: ['preparing', 'cancelled'],
+  preparing: ['ready', 'cancelled'],
+  ready: ['completed', 'cancelled'],
+}
+
+/** YYYYMMDD in the store's timezone (settings), UTC fallback. */
+function dateStamp(): string {
+  const tz = settings().timezone
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone: tz || undefined })
+      .format(new Date())
+      .replace(/-/g, '')
+  } catch {
+    return new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  }
+}
 
 export interface CartItem {
   productId: string
@@ -21,9 +39,8 @@ export function loadProducts(): CartItem[] {
 
 /**
  * Insert one order + its items in a transaction, decrementing tracked stock.
- * ponytail: order number uses UTC date and per-day max+1 — store-timezone
- * and prefix/reset settings arrive with the settings view (main/db.ts
- * generateOrderNumber is the reference).
+ * ponytail: order/bill numbers ignore order_number_reset_daily — always daily.
+ * main/db.ts generateOrderNumber is the reference if per-series buckets land.
  */
 export function createOrder(items: CartItem[], type = 'takeaway'): number {
   if (items.length === 0) throw new Error('Cart is empty')
@@ -33,11 +50,13 @@ export function createOrder(items: CartItem[], type = 'takeaway'): number {
   const taxAmount = items.reduce((sum, i) => sum + i.price * i.quantity * (i.taxRate / 100), 0)
   const total = Math.round((subtotal + taxAmount) * 100) / 100
 
-  const stamp = new Date().toISOString().slice(0, 10).replace(/-/g, '')
+  const s = settings()
+  const prefix = s.order_number_prefix || 'ORD'
+  const stamp = s.order_number_include_date === 'false' ? '' : dateStamp()
   const maxRow = db
     .prepare('SELECT MAX(CAST(SUBSTR(order_number, -4) AS INTEGER)) AS n FROM orders WHERE order_number LIKE ?')
-    .get(`ORD-${stamp}-%`) as any
-  const orderNumber = `ORD-${stamp}-${String((maxRow?.n ?? 0) + 1).padStart(4, '0')}`
+    .get(`${prefix}${stamp ? '-' : ''}${stamp}-%`) as any
+  const orderNumber = [prefix, stamp, String((maxRow?.n ?? 0) + 1).padStart(4, '0')].filter(Boolean).join('-')
 
   let orderId: number
   const tx = db.transaction(() => {
@@ -59,4 +78,31 @@ export function createOrder(items: CartItem[], type = 'takeaway'): number {
   })
   tx()
   return orderId!
+}
+
+
+/** Allowed next statuses. Completing also issues the bill. */
+export function updateOrderStatus(orderId: number, status: string): void {
+  const db = getDb()
+  const order: any = db.prepare('SELECT id, status FROM orders WHERE id = ?').get(orderId)
+  if (!order) throw new Error('Order not found')
+  if (!(FLOW[order.status] ?? []).includes(status)) {
+    throw new Error(`Cannot go from ${order.status} to ${status}`)
+  }
+
+  db.transaction(() => {
+    if (status === 'completed') {
+      const o: any = db.prepare('SELECT * FROM orders WHERE id = ?').get(orderId)
+      const seq =
+        (db
+          .prepare('SELECT MAX(CAST(SUBSTR(bill_number, -4) AS INTEGER)) AS n FROM bills WHERE bill_number LIKE ?')
+          .get(`INV-${dateStamp()}-%`) as any)?.n ?? 0
+      db.prepare(
+        "INSERT INTO bills (bill_number, order_id, subtotal, tax_amount, total, created_at, updated_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+      ).run(`INV-${dateStamp()}-${String(seq + 1).padStart(4, '0')}`, orderId, o.subtotal, o.tax_amount, o.total)
+      db.prepare("UPDATE orders SET status = 'completed', completed_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP WHERE id = ?").run(orderId)
+    } else {
+      db.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, orderId)
+    }
+  })()
 }

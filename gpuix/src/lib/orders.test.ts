@@ -10,8 +10,8 @@ process.env.FLOCAFE_DB = path.join(dir, 'test.db')
 beforeAll(() => {
   const db = new Database(process.env.FLOCAFE_DB!)
   db.exec(`CREATE TABLE products (id TEXT PRIMARY KEY, name TEXT, sku TEXT, price REAL, tax_rate REAL, track_inventory INTEGER, stock_quantity REAL, is_active INTEGER);
-           CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT UNIQUE NOT NULL, type TEXT DEFAULT 'takeaway', status TEXT DEFAULT 'pending', subtotal REAL DEFAULT 0, tax_amount REAL DEFAULT 0, total REAL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
-           CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id TEXT NOT NULL, product_name TEXT NOT NULL, product_sku TEXT, unit_price REAL NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, inventory_deducted_quantity REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL, tax_amount REAL DEFAULT 0, total REAL NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`)
+           CREATE TABLE orders (id INTEGER PRIMARY KEY AUTOINCREMENT, order_number TEXT UNIQUE NOT NULL, type TEXT DEFAULT 'takeaway', status TEXT DEFAULT 'pending', subtotal REAL DEFAULT 0, tax_amount REAL DEFAULT 0, total REAL DEFAULT 0, completed_at TEXT, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP);
+           CREATE TABLE settings (key TEXT PRIMARY KEY, value TEXT); CREATE TABLE bills (id INTEGER PRIMARY KEY AUTOINCREMENT, bill_number TEXT UNIQUE NOT NULL, order_id INTEGER NOT NULL, subtotal REAL DEFAULT 0, tax_amount REAL DEFAULT 0, total REAL DEFAULT 0, created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP); CREATE TABLE order_items (id INTEGER PRIMARY KEY AUTOINCREMENT, order_id INTEGER NOT NULL, product_id TEXT NOT NULL, product_name TEXT NOT NULL, product_sku TEXT, unit_price REAL NOT NULL, quantity INTEGER NOT NULL DEFAULT 1, inventory_deducted_quantity REAL NOT NULL DEFAULT 0, subtotal REAL NOT NULL, tax_amount REAL DEFAULT 0, total REAL NOT NULL, status TEXT DEFAULT 'pending', created_at TEXT DEFAULT CURRENT_TIMESTAMP, updated_at TEXT DEFAULT CURRENT_TIMESTAMP)`)
   db.prepare('INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, 1)').run('p1', 'Espresso', 'ESP', 10, 5, 1, 100)
   db.prepare('INSERT INTO products VALUES (?, ?, ?, ?, ?, ?, ?, 1)').run('p2', 'Cake', 'CAK', 20, 0, 0, 0)
   db.close()
@@ -48,4 +48,25 @@ test('createOrder inserts order + items and decrements tracked stock', async () 
 test('createOrder rejects an empty cart', async () => {
   const { createOrder } = await import('./orders')
   expect(() => createOrder([])).toThrow('Cart is empty')
+})
+
+test('order lifecycle: transitions and bill on completion', async () => {
+  const { createOrder, updateOrderStatus } = await import('./orders')
+  const db = new Database(process.env.FLOCAFE_DB!)
+  const byName = Object.fromEntries((await import('./orders')).loadProducts().map((p) => [p.name, p])) as any
+  const id = createOrder([{ ...byName['Espresso'], quantity: 1 }])
+
+  // invalid jump rejected
+  expect(() => updateOrderStatus(id, 'completed')).toThrow(/Cannot go from/)
+  updateOrderStatus(id, 'preparing')
+  updateOrderStatus(id, 'ready')
+  updateOrderStatus(id, 'completed')
+
+  const order = db.prepare('SELECT status, completed_at FROM orders WHERE id = ?').get(id) as any
+  expect(order.status).toBe('completed')
+  expect(order.completed_at).toBeTruthy()
+  const bill = db.prepare('SELECT * FROM bills WHERE order_id = ?').get(id) as any
+  expect(bill.bill_number).toMatch(/^INV-\d{8}-0001$/)
+  expect(bill.total).toBe(10.5)
+  db.close()
 })
