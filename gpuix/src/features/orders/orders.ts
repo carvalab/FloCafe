@@ -18,6 +18,12 @@ function dateStamp(): string {
   }
 }
 
+export interface CartAddon {
+  id: string
+  name: string
+  price: number
+}
+
 export interface CartItem {
   productId: string
   name: string
@@ -27,6 +33,12 @@ export interface CartItem {
   trackInventory: number
   stockQuantity: number
   quantity: number
+  addons?: CartAddon[]
+}
+
+/** Unit price including selected addons. */
+export function lineUnitPrice(item: CartItem): number {
+  return item.price + (item.addons ?? []).reduce((sum, a) => sum + a.price, 0)
 }
 
 export function loadProducts(): CartItem[] {
@@ -46,8 +58,9 @@ export function createOrder(items: CartItem[], type = 'takeaway'): number {
   if (items.length === 0) throw new Error('Cart is empty')
   const db = getDb()
 
-  const subtotal = items.reduce((sum, i) => sum + i.price * i.quantity, 0)
-  const taxAmount = items.reduce((sum, i) => sum + i.price * i.quantity * (i.taxRate / 100), 0)
+  // addons inherit the parent product's tax rate (matches inherit_parent_tax default)
+  const subtotal = items.reduce((sum, i) => sum + lineUnitPrice(i) * i.quantity, 0)
+  const taxAmount = items.reduce((sum, i) => sum + lineUnitPrice(i) * i.quantity * (i.taxRate / 100), 0)
   const total = Math.round((subtotal + taxAmount) * 100) / 100
 
   const s = settings()
@@ -68,11 +81,13 @@ export function createOrder(items: CartItem[], type = 'takeaway'): number {
         .run(orderNumber, type, subtotal, taxAmount, total).lastInsertRowid,
     )
     const insertItem = db.prepare(
-      "INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, subtotal, tax_amount, total, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
+      "INSERT INTO order_items (order_id, product_id, product_name, product_sku, unit_price, quantity, inventory_deducted_quantity, subtotal, tax_amount, total, addons, status, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?, 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)",
     )
     const deductStock = db.prepare('UPDATE products SET stock_quantity = stock_quantity - ? WHERE id = ? AND track_inventory = 1')
     for (const i of items) {
-      insertItem.run(orderId, i.productId, i.name, i.sku, i.price, i.quantity, i.price * i.quantity, (i.price * i.quantity * i.taxRate) / 100, i.price * i.quantity)
+      const unit = lineUnitPrice(i)
+      insertItem.run(orderId, i.productId, i.name, i.sku, unit, i.quantity, unit * i.quantity, (unit * i.quantity * i.taxRate) / 100, unit * i.quantity,
+        i.addons?.length ? JSON.stringify(i.addons) : null)
       if (i.trackInventory) deductStock.run(i.quantity, i.productId)
     }
   })
@@ -105,4 +120,13 @@ export function updateOrderStatus(orderId: number, status: string): void {
       db.prepare('UPDATE orders SET status = ?, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(status, orderId)
     }
   })()
+}
+
+
+/** Record full payment on an order's bill. Partial payments come with parity need. */
+export function payBill(orderId: number): void {
+  const db = getDb()
+  const bill: any = db.prepare('SELECT id, total FROM bills WHERE order_id = ?').get(orderId)
+  if (!bill) throw new Error('No bill for this order')
+  db.prepare('UPDATE bills SET paid_amount = total, balance = 0, updated_at = CURRENT_TIMESTAMP WHERE id = ?').run(bill.id)
 }
