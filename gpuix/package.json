@@ -1,0 +1,9 @@
+{
+  "name": "flocafe-gpuix",
+  "private": true,
+  "dependencies": {
+    "@gpuix/native": "^0.4.0",
+    "@gpuix/react": "^0.4.0",
+    "react": "^19.0.0"
+  }
+}
