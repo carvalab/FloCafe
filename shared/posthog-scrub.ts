@@ -20,6 +20,9 @@ export const POSTHOG_USAGE_EVENTS = [
   'setup_completed',
   'first_order_created',
   'first_bill_paid',
+  'first_product_created',
+  'first_receipt_printed',
+  'first_day_closed',
   'api_slow_request',
 ] as const;
 

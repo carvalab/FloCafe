@@ -278,10 +278,18 @@ onto another terminal brings its seed, so both terminals share a device id.
   (`update_reason`). Just after a launch the state is `not-checked-yet` until the startup check
   finishes, and `store-managed`, `linux-managed`, and `dev-mode` are permanent states, not
   failures. `setup_completed` records the setup
-  profile, service model, and business type. `first_order_created` and `first_bill_paid` are sent
-  once per installation with `hours_since_setup`, read hourly from the database. A milestone older
-  than the first check on this installation (`posthog_milestones_since`), such as an upgraded
-  store's first order, carries `backfilled: true`. `api_slow_request` is sent for a local API
+  profile, service model, and business type. Five milestones are sent once per installation with
+  `hours_since_setup`, read hourly from the database: `first_order_created`, `first_bill_paid`,
+  `first_product_created` (`products.created_at`), `first_receipt_printed`
+  (`print_logs.printed_at`), and `first_day_closed` (`cash_closures` with `scope = 'day'`). Every
+  milestone carries `setup_profile`, so seeded installs (`express`, `demo`), which create products
+  during setup, are told apart from live activation; the key is absent when no profile was stored,
+  as in a store upgraded from a release that never wrote one. A milestone older than the first check on
+  this installation (`posthog_milestones_since`), such as an upgraded store's first order, carries
+  `backfilled: true`. `print_logs` is written by the bill receipt path only, so a store that
+  prints kitchen tickets alone never reports `first_receipt_printed`. The setup wizard sends
+  nothing, because the level is `off` until setup finishes: there is no step funnel, and these
+  five milestones are the whole setup signal, so installs that never finish setup stay invisible. `api_slow_request` is sent for a local API
   request that takes 200 ms or more only when the time spent in SQL (`db_ms`) is 200 ms or more, so
   a request that is slow for another reason, such as a printer or the network, sends nothing. The
   same route (method and route pattern) sends one event per hour per process; the requests folded

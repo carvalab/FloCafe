@@ -515,9 +515,15 @@ const MILESTONES_SINCE_SETTING = 'posthog_milestones_since';
 const DAILY_PING_SETTING = 'posthog_last_daily_ping_at';
 const DAILY_PING_MIN_GAP_MS = 24 * 60 * 60_000;
 
-const MILESTONES: Array<{ event: 'first_order_created' | 'first_bill_paid'; sql: string }> = [
+const MILESTONES: Array<{ event: PostHogUsageEvent; sql: string }> = [
   { event: 'first_order_created', sql: 'SELECT MIN(created_at) AS at FROM orders' },
   { event: 'first_bill_paid', sql: 'SELECT MIN(paid_at) AS at FROM bills' },
+  { event: 'first_product_created', sql: 'SELECT MIN(created_at) AS at FROM products' },
+  { event: 'first_receipt_printed', sql: 'SELECT MIN(printed_at) AS at FROM print_logs' },
+  {
+    event: 'first_day_closed',
+    sql: "SELECT MIN(created_at) AS at FROM cash_closures WHERE scope = 'day'",
+  },
 ];
 
 function dbTimeMs(value: string | null | undefined): number {
@@ -532,8 +538,9 @@ function hoursBetween(from: string | undefined, to: string): number | undefined 
 }
 
 /**
- * First order and first payment, once per installation, read from the database. Milestones older
- * than this check (upgraded stores) are tagged `backfilled` to keep them out of live funnels.
+ * The first order, payment, product, receipt, and day close, once per installation, read from the
+ * database. Milestones older than this check (upgraded stores) are tagged `backfilled` to keep
+ * them out of live funnels.
  */
 export function checkPostHogMilestones(): void {
   try {
@@ -550,12 +557,15 @@ export function checkPostHogMilestones(): void {
         | { at?: string }
         | undefined
     )?.at;
+    const setupProfile = getSettingValue('setup_profile');
     for (const milestone of MILESTONES) {
       if (sent.has(milestone.event)) continue;
       const at = (db.prepare(milestone.sql).get() as { at?: string | null } | undefined)?.at;
       if (!at) continue;
       const hours = hoursBetween(setupAt, at);
       capturePostHogUsage(milestone.event, {
+        // Seeded installs create products during setup, so the profile separates them from live ones.
+        ...(setupProfile ? { setup_profile: setupProfile } : {}),
         ...(hours === undefined ? {} : { hours_since_setup: hours }),
         ...(dbTimeMs(at) < dbTimeMs(since) ? { backfilled: true } : {}),
       });

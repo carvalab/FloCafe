@@ -244,6 +244,102 @@ async function main() {
       'the update enums survive the scrubber unchanged',
     );
 
+    // Three database-derived milestones, sent once each, and their setup profile.
+    const { checkPostHogMilestones } = require('../main/services/posthog');
+    const db = getDatabase();
+    const ago = (hours: number) =>
+      new Date(Date.now() - hours * 60 * 60_000).toISOString().replace('T', ' ').slice(0, 19);
+
+    // An install that has been pinging for two days: milestones newer than that are live ones.
+    setSetting('setup_profile', 'express');
+    setSetting('posthog_milestones_since', ago(48));
+    db.prepare(
+      `INSERT INTO users (id, name, email, password, role, is_active, created_at, updated_at)
+       VALUES ('u-mile', 'Owner', 'owner@example.com', 'x', 'owner', 1, ?, ?)`,
+    ).run(ago(10), ago(10));
+    db.prepare(
+      `INSERT INTO products (id, name, price, created_at) VALUES ('p-mile', 'Coffee', 100, ?)`,
+    ).run(ago(5));
+
+    clearCapturedEvents();
+    checkPostHogMilestones();
+    const products = allCapturedEvents().filter((e) => e.event === 'first_product_created');
+    assert.equal(products.length, 1, 'the first product is one milestone');
+    assert.equal(products[0].properties?.hours_since_setup, 5, 'it reports when it happened');
+    assert.equal(products[0].properties?.setup_profile, 'express', 'the setup profile rides along');
+    assert.equal('backfilled' in (products[0].properties ?? {}), false, 'a live milestone is not');
+
+    clearCapturedEvents();
+    checkPostHogMilestones();
+    assert.equal(
+      allCapturedEvents().filter((e) => e.event === 'first_product_created').length,
+      0,
+      'a milestone is sent once per install',
+    );
+
+    // A receipt printed after the first check is a live milestone, not a backfilled one.
+    db.prepare(`INSERT INTO orders (order_number, created_at) VALUES ('o-mile', ?)`).run(ago(1));
+    const orderId = (db.prepare(`SELECT id FROM orders WHERE order_number = 'o-mile'`).get() as any)
+      .id;
+    db.prepare(`INSERT INTO bills (bill_number, order_id) VALUES ('b-mile', ?)`).run(orderId);
+    const billId = (db.prepare(`SELECT id FROM bills WHERE bill_number = 'b-mile'`).get() as any)
+      .id;
+    db.prepare(`INSERT INTO print_logs (bill_id, user_id, printed_at) VALUES (?, 'u-mile', ?)`).run(
+      billId,
+      ago(72),
+    );
+    clearCapturedEvents();
+    checkPostHogMilestones();
+    const receipts = allCapturedEvents().filter((e) => e.event === 'first_receipt_printed');
+    assert.equal(receipts.length, 1, 'the first receipt is one milestone');
+    assert.equal(
+      receipts[0].properties?.backfilled,
+      true,
+      'a receipt from before the first check on this install is backfilled',
+    );
+
+    // A per-staff session closure is not the day close.
+    const closure = db.prepare(
+      `INSERT INTO cash_closures (scope, business_date, period_start, period_end, expected_cash_cents,
+         counted_cash_cents, variance_cents, gross_collected_cents, refunded_cents, net_collected_cents,
+         bill_count, refund_count, z_number, closed_by, created_at)
+       VALUES (?, ?, ?, ?, 0, 0, 0, 0, 0, 0, 0, 0, ?, 'u-mile', ?)`,
+    );
+    closure.run('session', '2026-01-01', ago(20), ago(20), 9001, ago(20));
+    clearCapturedEvents();
+    checkPostHogMilestones();
+    assert.equal(
+      allCapturedEvents().filter((e) => e.event === 'first_day_closed').length,
+      0,
+      'a session closure is not a day close',
+    );
+    closure.run('day', '2026-01-02', ago(1), ago(1), 9002, ago(1));
+    clearCapturedEvents();
+    checkPostHogMilestones();
+    assert.equal(
+      allCapturedEvents().filter((e) => e.event === 'first_day_closed').length,
+      1,
+      'the first day close is a milestone',
+    );
+
+    // The allowlist keeps the three events and the setup profile, and drops anything else.
+    for (const event of ['first_product_created', 'first_receipt_printed', 'first_day_closed']) {
+      const kept = scrubPostHogEvent(
+        {
+          event,
+          properties: { setup_profile: 'demo', hours_since_setup: 5, customer_name: 'Ada' },
+        },
+        { telemetryEnabled: true, accountLinked: false, allowExceptions: false },
+      );
+      assert.equal(kept?.event, event, `${event} is an allowed usage event`);
+      assert.deepEqual(kept?.properties?.setup_profile, 'demo', `${event} keeps the setup profile`);
+      assert.equal(
+        'customer_name' in (kept?.properties ?? {}),
+        false,
+        `${event} keeps no unlisted property`,
+      );
+    }
+
     await telemetry.stop();
 
     // Verify PostHog and collector remain suppressed when any gate is closed.
