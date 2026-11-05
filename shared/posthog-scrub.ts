@@ -62,6 +62,10 @@ export const POSTHOG_USAGE_PROPERTY_KEYS = [
   'slowest_query_ms',
   'slowest_query',
   'occurrences',
+  'update_status',
+  'update_available',
+  'update_channel',
+  'update_reason',
 ] as const;
 
 /** Store configuration kept on the person. None of it identifies a customer or an order. */

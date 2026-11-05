@@ -258,7 +258,12 @@ onto another terminal brings its seed, so both terminals share a device id.
   collector's hourly check but does not depend on the collector: it is sent at most once every 24
   hours (`posthog_last_daily_ping_at`) with counts for the last 24 hours (orders by type, including
   `online`, cancelled orders, paid bills, staff who rang up an order) and totals (active staff,
-  products, tables, customers, printers, kitchen stations). `setup_completed` records the setup
+  products, tables, customers, printers, kitchen stations). It also reports the state the updater
+  last reached (`update_status`), whether an update is waiting (`update_available`), the channel
+  this install follows (`update_channel`), and, when a check or download failed, why
+  (`update_reason`). Just after a launch the state is `not-checked-yet` until the startup check
+  finishes, and `store-managed`, `linux-managed`, and `dev-mode` are permanent states, not
+  failures. `setup_completed` records the setup
   profile, service model, and business type. `first_order_created` and `first_bill_paid` are sent
   once per installation with `hours_since_setup`, read hourly from the database. A milestone older
   than the first check on this installation (`posthog_milestones_since`), such as an upgraded

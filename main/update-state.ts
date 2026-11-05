@@ -219,3 +219,14 @@ export function toIpcUpdateStatus(
     info: { version: currentVersion },
   };
 }
+
+/** The last state the updater reached, for the daily ping. Memory only: a restart resets it. */
+let measuredUpdateStatus: StoredUpdateStatus = initialUpdateState();
+
+export function recordUpdateStatusForMeasurement(status: StoredUpdateStatus): void {
+  measuredUpdateStatus = status;
+}
+
+export function readUpdateMeasurement(): StoredUpdateStatus {
+  return measuredUpdateStatus;
+}

@@ -177,6 +177,73 @@ async function main() {
       'FloAdmin collector must receive 0 requests from hourly interval execution',
     );
 
+    // The daily ping reports the update state the updater last reached.
+    const { maybeSendPostHogDailyPing } = require('../main/services/posthog');
+    const { recordUpdateStatusForMeasurement } = require('../main/update-state');
+    const { scrubPostHogEvent } = require('../shared/posthog-scrub');
+
+    function lastDailyPing(): Record<string, any> {
+      const pings = allCapturedEvents().filter((e) => e.event === 'daily_ping');
+      assert.equal(pings.length, 1, 'exactly one daily ping per window');
+      return (pings[0].properties ?? {}) as Record<string, any>;
+    }
+
+    clearCapturedEvents();
+    setSetting('posthog_last_daily_ping_at', '2020-01-01 00:00:00');
+    recordUpdateStatusForMeasurement({ status: 'check-failed', reason: 'download-failed' });
+    maybeSendPostHogDailyPing();
+    const failedUpdate = lastDailyPing();
+    assert.equal(failedUpdate.update_status, 'check-failed', 'the update state is reported');
+    assert.equal(failedUpdate.update_available, false, 'a failed check offers no update');
+    assert.equal(failedUpdate.update_channel, 'stable', 'the configured channel is reported');
+    assert.equal(
+      failedUpdate.update_reason,
+      'download-failed',
+      'the reason is reported when known',
+    );
+
+    clearCapturedEvents();
+    setSetting('posthog_last_daily_ping_at', '2020-01-01 00:00:00');
+    recordUpdateStatusForMeasurement({ status: 'available', version: '9.9.9' });
+    maybeSendPostHogDailyPing();
+    const availableUpdate = lastDailyPing();
+    assert.equal(availableUpdate.update_status, 'available');
+    assert.equal(availableUpdate.update_available, true, 'an available update is reported');
+    assert.equal(
+      'update_reason' in availableUpdate,
+      false,
+      'no reason key unless the check or download failed',
+    );
+
+    // The allowlist keeps the four update properties on their own, with their plain values.
+    const scrubbedUpdate = scrubPostHogEvent(
+      {
+        event: 'daily_ping',
+        properties: {
+          update_status: 'ready-to-install',
+          update_available: true,
+          update_channel: 'beta',
+          update_reason: 'manifest-missing',
+        },
+      },
+      { telemetryEnabled: true, accountLinked: false, allowExceptions: false },
+    );
+    assert.deepEqual(
+      {
+        update_status: scrubbedUpdate.properties.update_status,
+        update_available: scrubbedUpdate.properties.update_available,
+        update_channel: scrubbedUpdate.properties.update_channel,
+        update_reason: scrubbedUpdate.properties.update_reason,
+      },
+      {
+        update_status: 'ready-to-install',
+        update_available: true,
+        update_channel: 'beta',
+        update_reason: 'manifest-missing',
+      },
+      'the update enums survive the scrubber unchanged',
+    );
+
     await telemetry.stop();
 
     // Verify PostHog and collector remain suppressed when any gate is closed.

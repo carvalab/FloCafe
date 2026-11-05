@@ -83,6 +83,7 @@ import {
   missingUpdateConfigState,
   oneShotUpdateState,
   parseStoredAutoUpdateCheckEnabled,
+  recordUpdateStatusForMeasurement,
   type StoredUpdateStatus,
   type UpdateErrorPhase,
 } from './update-state';
@@ -257,6 +258,7 @@ function setUpdateStatus(next: StoredUpdateStatus): void {
     );
   }
   storedUpdateStatus = next;
+  recordUpdateStatusForMeasurement(next);
   mainWindow?.webContents.send('update-status', storedUpdateStatus);
 }
 

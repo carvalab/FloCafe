@@ -38,6 +38,8 @@ import {
   type PostHogIdentity,
   type ProductAnalyticsLevel,
 } from './posthog-identity';
+import { BETA_CHANNEL_SETTING_KEY, parseStoredBetaChannelEnabled } from '../update-channel';
+import { readUpdateMeasurement } from '../update-state';
 import { normalizeSupportedCurrencyCode } from '../../shared/currencies';
 import {
   isPostHogCapturePoint,
@@ -247,6 +249,24 @@ export function readPersonProperties(): Record<string, string | boolean> | undef
   };
 }
 
+/** The state the updater last reached, and the channel this install is configured to follow. */
+function readUpdateProperties(): Record<string, string | boolean> {
+  const measured = readUpdateMeasurement();
+  // Same default as the updater: a beta build follows beta until the user stores a choice.
+  const channel = parseStoredBetaChannelEnabled(
+    getSettingValue(BETA_CHANNEL_SETTING_KEY),
+    /-beta\b/.test(appVersion()),
+  )
+    ? 'beta'
+    : 'stable';
+  return {
+    update_status: measured.status,
+    update_available: ['available', 'downloading', 'ready-to-install'].includes(measured.status),
+    update_channel: channel,
+    ...(measured.reason ? { update_reason: measured.reason } : {}),
+  };
+}
+
 function count(sql: string): number | undefined {
   try {
     const row = getDatabase().prepare(sql).get() as { n?: number } | undefined;
@@ -291,7 +311,7 @@ export function readDailyUsageSummary(): Record<string, number | boolean | strin
   for (const [key, value] of Object.entries(counts)) {
     if (value !== undefined) summary[key] = value;
   }
-  return { ...summary, ...readStoreProperties() };
+  return { ...summary, ...readStoreProperties(), ...readUpdateProperties() };
 }
 
 function createClient(token: string, host: string, abortSignal: AbortSignal): PostHogClient {

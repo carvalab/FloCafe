@@ -27,6 +27,8 @@ import {
   missingUpdateConfigState,
   oneShotUpdateState,
   parseStoredAutoUpdateCheckEnabled,
+  readUpdateMeasurement,
+  recordUpdateStatusForMeasurement,
   toIpcUpdateStatus,
   type StoredUpdateStatus,
 } from '../main/update-state';
@@ -382,4 +384,14 @@ test('parseStoredAutoUpdateCheckEnabled defaults on and only an explicit false d
   assert.equal(parseStoredAutoUpdateCheckEnabled('true'), true);
   assert.equal(parseStoredAutoUpdateCheckEnabled('garbage'), true);
   assert.equal(parseStoredAutoUpdateCheckEnabled('false'), false);
+});
+
+test('readUpdateMeasurement reports the last recorded status and starts unchecked', () => {
+  assert.deepEqual(
+    readUpdateMeasurement(),
+    initialUpdateState(),
+    'no status recorded yet, so the measurement is not-checked-yet',
+  );
+  recordUpdateStatusForMeasurement({ status: 'available', version: '9.9.9' });
+  assert.deepEqual(readUpdateMeasurement(), { status: 'available', version: '9.9.9' });
 });
