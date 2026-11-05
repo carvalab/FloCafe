@@ -303,8 +303,12 @@ with a project-relative file (`_next/static/...` for the packaged renderer), lin
 name, and chunk id. The mechanism keeps `handled`, `synthetic`, `type`, the cause indexes
 `exception_id` and `parent_id`, and a short `source`. Message redaction replaces emails, URLs,
 quoted text, and digit runs. A chained `cause` is kept, scrubbed the same way, and a rejection
-reason that is a plain string becomes the message. Renderer exceptions also carry `$pathname` and
-`$current_url` as a route pattern: no host, no query, and an all-digit segment is `:id`. An error
+reason that is a plain string becomes the message. A renderer or API exception carries `screen`,
+the route pattern it happened on. Renderer exceptions also carry `$pathname` and `$current_url`,
+scrubbed the same way: no host, no query, and an all-digit segment is `:id`; PostHogBootstrap fills
+in the window's current path for an exception that arrives without one. A main-process crash has
+no path to read, so it carries no `screen`. A local API 5xx has no URL, so its
+`screen` is the route pattern it failed on (`/api/orders/:id`), and none when no route matched. An error
 captured through `capturePostHogBoundaryError` whose failure came from axios also carries
 `http_method`, `http_route`, and `http_status`, because its frames are all inside
 `node_modules/axios`; `http_route` keeps only the first path segment followed by `/*`, because a

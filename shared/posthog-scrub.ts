@@ -523,8 +523,16 @@ function scrubException(
   const first = list[0];
   if (typeof first?.type === 'string') properties.$exception_type = first.type;
   if (typeof first?.value === 'string') properties.$exception_message = first.value;
-  // The screen, as a route pattern: no query, no ids. Next.js reports the full URL.
-  setScreen(properties, scrubPathname(source.$pathname ?? source.$current_url));
+  // The screen, as a route pattern: no query, no ids. Next.js reports the full URL. Each source is
+  // tried in turn, so one malformed value does not hide a usable one.
+  const pathname =
+    scrubPathname(source.screen) ??
+    scrubPathname(source.$pathname) ??
+    scrubPathname(source.$current_url);
+  setScreen(properties, pathname);
+  // A local API 5xx has no renderer URL, so the route it failed on is the screen.
+  const screen = pathname ?? (capturePoint === 'api-5xx' ? scrubPathname(source.http_route) : null);
+  if (screen) properties.screen = screen;
   if (
     typeof source.$exception_level === 'string' &&
     /^[a-z]{1,10}$/.test(source.$exception_level)

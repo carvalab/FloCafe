@@ -74,6 +74,15 @@ function withProcessType(event: ScrubbableEvent): ScrubbableEvent {
   return { ...event, properties: { ...(event.properties ?? {}), process_type: 'renderer' } };
 }
 
+/** The scrubber reduces a path to a route pattern; an exception carrying none gets this screen. */
+function withScreenPath(event: ScrubbableEvent): ScrubbableEvent {
+  const properties = event.properties ?? {};
+  if (event.event !== '$exception' || properties.$pathname || properties.$current_url) {
+    return event;
+  }
+  return { ...event, properties: { ...properties, $pathname: window.location.pathname } };
+}
+
 async function bootPostHog() {
   const read = window.electronAPI?.getPostHogBootstrap;
   if (!read) return null;
@@ -114,7 +123,7 @@ async function bootPostHog() {
     capture_exceptions: { capture_unhandled_errors: true, capture_unhandled_rejections: true },
     before_send: (event: CaptureResult | null): CaptureResult | null =>
       event &&
-      (scrubPostHogEvent(withCurrentIdentity(event as unknown as ScrubbableEvent), {
+      (scrubPostHogEvent(withCurrentIdentity(withScreenPath(event as unknown as ScrubbableEvent)), {
         telemetryEnabled: consent.telemetry,
         accountLinked: consent.account,
         allowExceptions: consent.diagnostics,
