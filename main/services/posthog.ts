@@ -40,6 +40,8 @@ import {
 } from './posthog-identity';
 import { BETA_CHANNEL_SETTING_KEY, parseStoredBetaChannelEnabled } from '../update-channel';
 import { readUpdateMeasurement } from '../update-state';
+import { getLocalBackupDir, listLocalBackups, parseLocalBackupTime } from './local-backup';
+import { readUsageCounters } from './usage-counters';
 import { normalizeSupportedCurrencyCode } from '../../shared/currencies';
 import {
   isPostHogCapturePoint,
@@ -267,6 +269,25 @@ function readUpdateProperties(): Record<string, string | boolean> {
   };
 }
 
+const RESTORE_AT_SETTING = 'posthog_restore_at';
+const DAY_MS = 24 * 60 * 60_000;
+
+/** Backups that worked are files this service wrote in the last 24 hours, not rows. */
+function countRecentBackups(): number {
+  const nowMs = Date.now();
+  return listLocalBackups(getLocalBackupDir(), nowMs).filter((name) => {
+    const writtenAt = parseLocalBackupTime(name);
+    // A name dated ahead of the clock cannot be trusted either way.
+    return writtenAt !== null && nowMs - writtenAt >= 0 && nowMs - writtenAt <= DAY_MS;
+  }).length;
+}
+
+/** A restore replaces the database, so only a settings row written after the swap survives it. */
+function countRecentRestores(): number {
+  const restoredAt = dbTimeMs(getSettingValue(RESTORE_AT_SETTING));
+  return Number.isFinite(restoredAt) && Date.now() - restoredAt <= DAY_MS ? 1 : 0;
+}
+
 function count(sql: string): number | undefined {
   try {
     const row = getDatabase().prepare(sql).get() as { n?: number } | undefined;
@@ -306,12 +327,35 @@ export function readDailyUsageSummary(): Record<string, number | boolean | strin
     customers_count: count('SELECT COUNT(*) AS n FROM customers'),
     printers_count: count('SELECT COUNT(*) AS n FROM printers'),
     kitchen_stations_count: count('SELECT COUNT(*) AS n FROM kitchen_stations'),
+    receipts_printed_24h: count(`SELECT COUNT(*) AS n FROM print_logs WHERE printed_at >= ${day}`),
+    // shortcut: only orders created in the same window; an order held overnight is missed.
+    // Reading ready_at and served_at directly costs 29 ms at 150k orders.
+    kds_orders_moved_24h: count(
+      `SELECT COUNT(*) AS n FROM orders WHERE created_at >= ${day} AND (ready_at >= ${day} OR served_at >= ${day})`,
+    ),
+    // shortcut: queued_at is the indexed column, so delivery inside the window is not seen.
+    whatsapp_sent_24h: count(
+      `SELECT COUNT(*) AS n FROM whatsapp_messages WHERE direction = 'outbound' AND status IN ('sent', 'delivered', 'read') AND queued_at >= ${day}`,
+    ),
+    expenses_written_24h: count(`SELECT COUNT(*) AS n FROM expenses WHERE created_at >= ${day}`),
+    inventory_adjustments_24h: count(
+      `SELECT COUNT(*) AS n FROM inventory_movements WHERE created_at >= ${day} AND movement_type = 'adjustment'`,
+    ),
   };
+  const usageCounters = readUsageCounters();
   const summary: Record<string, number | boolean | string> = {};
   for (const [key, value] of Object.entries(counts)) {
     if (value !== undefined) summary[key] = value;
   }
-  return { ...summary, ...readStoreProperties(), ...readUpdateProperties() };
+  return {
+    ...summary,
+    server_app_orders_24h: usageCounters.server_app_orders,
+    exports_24h: usageCounters.exports,
+    backups_ok_24h: countRecentBackups(),
+    restores_24h: countRecentRestores(),
+    ...readStoreProperties(),
+    ...readUpdateProperties(),
+  };
 }
 
 function createClient(token: string, host: string, abortSignal: AbortSignal): PostHogClient {

@@ -66,6 +66,15 @@ export const POSTHOG_USAGE_PROPERTY_KEYS = [
   'update_available',
   'update_channel',
   'update_reason',
+  'receipts_printed_24h',
+  'kds_orders_moved_24h',
+  'server_app_orders_24h',
+  'exports_24h',
+  'whatsapp_sent_24h',
+  'backups_ok_24h',
+  'restores_24h',
+  'expenses_written_24h',
+  'inventory_adjustments_24h',
 ] as const;
 
 /** Store configuration kept on the person. None of it identifies a customer or an order. */

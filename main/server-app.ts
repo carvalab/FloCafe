@@ -38,6 +38,7 @@ import {
   revokeToken,
 } from './middleware/security';
 import { getServerPort } from './server';
+import { bumpUsageCounter } from './services/usage-counters';
 import {
   getDefaultServerAppPort,
   getServerAppPort as getActiveServerAppPort,
@@ -177,6 +178,9 @@ async function forwardToMainApiImpl(req: Request, res: Response, targetPath: str
       body: ['GET', 'HEAD'].includes(req.method) ? undefined : JSON.stringify(req.body || {}),
       signal: getHttpRequestSignal(req),
     });
+    if (upstream.ok && req.method === 'POST' && targetPath === '/orders') {
+      bumpUsageCounter('server_app_orders');
+    }
     const buffer = Buffer.from(await upstream.arrayBuffer());
     res.status(upstream.status);
     res.type(upstream.headers.get('content-type') || 'application/json');

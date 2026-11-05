@@ -258,7 +258,19 @@ onto another terminal brings its seed, so both terminals share a device id.
   collector's hourly check but does not depend on the collector: it is sent at most once every 24
   hours (`posthog_last_daily_ping_at`) with counts for the last 24 hours (orders by type, including
   `online`, cancelled orders, paid bills, staff who rang up an order) and totals (active staff,
-  products, tables, customers, printers, kitchen stations). It also reports the state the updater
+  products, tables, customers, printers, kitchen stations). The same ping counts feature use in
+  the last 24 hours: bill receipts printed (`receipts_printed_24h`), orders that moved in the
+  kitchen (`kds_orders_moved_24h`), orders taken through the Server App
+  (`server_app_orders_24h`), file downloads (`exports_24h`: every 2xx answer that offers a file
+  outside `/api/db`, so reports, menu CSV exports and templates, and print templates all count),
+  WhatsApp messages that reached the
+  customer (`whatsapp_sent_24h`), backups that worked (`backups_ok_24h`), restores
+  (`restores_24h`, 0 or 1), expenses (`expenses_written_24h`), and stock adjustments
+  (`inventory_adjustments_24h`). Three limits are deliberate: the kitchen count only sees orders
+  created in the same window, so an order held overnight is missed; the Server App and export
+  counts live in memory and are sent as the delta since the last ping, so a restart loses the
+  counts it held; and the WhatsApp count keys on `queued_at`, so a message queued before the
+  window and delivered inside it is not counted. It also reports the state the updater
   last reached (`update_status`), whether an update is waiting (`update_available`), the channel
   this install follows (`update_channel`), and, when a check or download failed, why
   (`update_reason`). Just after a launch the state is `not-checked-yet` until the startup check

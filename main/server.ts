@@ -31,6 +31,7 @@ import {
 import { initFromDb as initWhatsAppFromDb } from './services/whatsapp';
 import { startScheduledOrderSweep, stopScheduledOrderSweep } from './services/scheduled-orders';
 import { postHogApiFailureMiddleware, apiSlowRequestMiddleware } from './services/posthog';
+import { exportCounterMiddleware } from './services/usage-counters';
 import { API_JSON_BODY_LIMIT } from './http-limits';
 import { buildCspHeader } from './csp';
 import { resolveContainedPath } from './lib/path-containment';
@@ -198,6 +199,7 @@ export function startServer(): Promise<void> {
 
     app.use(cors(corsOptions));
     app.use(apiSlowRequestMiddleware);
+    app.use(exportCounterMiddleware);
     app.use(postHogApiFailureMiddleware);
     // Scope the anonymous pre-login route to a body limit far below the
     // general API import limit, so it can't force a large allocation.

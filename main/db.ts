@@ -6025,6 +6025,15 @@ export function mergeUserSecurityState(
   }
 }
 
+/** For the daily ping: a restore replaces the database, so the marker is written after the swap. */
+function markRestoreCompleted(): void {
+  try {
+    upsertSettings({ posthog_restore_at: now() });
+  } catch (error) {
+    console.warn('[DB] Could not record the restore time:', error);
+  }
+}
+
 export function restoreBackup(
   backupPath: string,
   forceDirect: boolean = false,
@@ -6341,6 +6350,7 @@ export function restoreBackup(
         // The replacement is durable; keep the snapshot of what it replaced so a
         // customer who restores the wrong file can undo it.
         retainRestoreSafetyCopy(recoveryPath, currentVersion);
+        markRestoreCompleted();
         return {
           success: true,
           mode: 'direct',
@@ -6356,6 +6366,7 @@ export function restoreBackup(
           // The replacement is authoritative once the committed journal is durable.
           // Do not roll it back after a post-commit error; Drive invalidation and
           // artifact cleanup must finish from the durable boundary.
+          markRestoreCompleted();
           return {
             success: true,
             mode: 'direct',
