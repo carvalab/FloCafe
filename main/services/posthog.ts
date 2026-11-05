@@ -349,6 +349,8 @@ export function readDailyUsageSummary(): Record<string, number | boolean | strin
   }
   return {
     ...summary,
+    // Which level this store shares at, so a missing store_ref in the same event is readable.
+    analytics_level: readProductAnalyticsLevel(),
     server_app_orders_24h: usageCounters.server_app_orders,
     exports_24h: usageCounters.exports,
     backups_ok_24h: countRecentBackups(),

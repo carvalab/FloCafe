@@ -1,6 +1,7 @@
 /**
  * PostHog identities per sharing level: `full` is the account (a hash of the store email),
- * `anonymous` is the device (a hash of a stored random seed), `off` is a random id per launch.
+ * `anonymous` is the device (a hash of a stored random seed), `off` is a diagnostics-only id that
+ * derives from the seed too, so it is stable per install and cannot be joined to usage events.
  */
 
 import { createHash, randomUUID } from 'crypto';
@@ -19,14 +20,32 @@ function ref(namespace: string, value: string): string {
   return createHash('sha256').update(`flocafe-${namespace}:${value}`).digest('hex').slice(0, 16);
 }
 
-/** The device: a hash of a random seed generated once and kept in this database. */
-export function readInstallRef(): string {
+/** The random seed, generated once and kept in this database. Both ids below derive from it. */
+function readInstallSeed(): string {
   let seed = getSettingValue(INSTALL_SEED_SETTING);
   if (!seed) {
     seed = randomUUID();
     upsertSettings({ [INSTALL_SEED_SETTING]: seed });
   }
-  return ref('install', seed);
+  return seed;
+}
+
+/** The device: a hash of the install seed. */
+export function readInstallRef(): string {
+  return ref('install', readInstallSeed());
+}
+
+/**
+ * A crash id of its own, distinct from the device id, so no one can join a diagnostics-only
+ * install's exceptions to the usage events of the same install.
+ */
+function diagnosticsId(): string {
+  try {
+    const digest = createHash('sha256').update(`${readInstallSeed()}:diagnostics`).digest('hex');
+    return `anon_${digest.slice(0, 16)}`;
+  } catch {
+    return `anon_${LAUNCH_ID}`;
+  }
 }
 
 function normalizedEmail(value: unknown): string | undefined {
@@ -92,7 +111,7 @@ export function productAnalyticsChoicePending(): boolean {
 }
 
 export function resolvePostHogIdentity(level: ProductAnalyticsLevel): PostHogIdentity {
-  if (level === 'off') return { distinctId: `anon_${LAUNCH_ID}`, identified: false };
+  if (level === 'off') return { distinctId: diagnosticsId(), identified: false };
   const installRef = readInstallRef();
   const accountRef = level === 'full' ? readAccountRef() : undefined;
   return accountRef

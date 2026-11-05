@@ -184,7 +184,7 @@ set uploaded for it.
 | ----------- | -------------------- | ----------------------------------------- | ------------------------------------------------------------------------------- |
 | `full`      | Account (`acct_`)    | Store email and store configuration       | `install_ref`, `store_ref`, `staff_ref`; the device is aliased into the account |
 | `anonymous` | Device (`inst_`)     | Store configuration only, never the email | `install_ref`, `staff_ref`                                                      |
-| `off`       | Per launch (`anon_`) | None                                      | None; only exceptions, when diagnostics transmission is on                      |
+| `off`       | Diagnostics only (`anon_`) | None                                 | None; only exceptions, when diagnostics transmission is on                      |
 
 `telemetry_enabled` set to anything but `true` means `off`. Otherwise a stored `full` is `full`,
 any other stored value is `anonymous`, and a store with no stored level is `anonymous` once
@@ -212,7 +212,7 @@ PostHog does not use it.
 | ---------------- | ------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------- |
 | Account (person) | `acct_` + 16 hex of SHA-256 over the lower-cased store email                                                 | Same for every terminal and every reinstall that uses that email       |
 | Device           | `inst_` + 16 hex of SHA-256 over `posthog_install_seed`, a random UUID generated once and stored in settings | Same for the life of the database; a new database gets a new device id |
-| Per launch       | `anon_` + a random UUID                                                                                      | One app launch                                                         |
+| Diagnostics only | `anon_` + 16 hex of SHA-256 over the install seed and the text `:diagnostics`                                | Same for the life of the database; a different id from the device, so a crash report cannot be joined to the usage events of the same install |
 
 At `full`, the account is the person once a store email exists. Main sends one `$create_alias`
 that folds the device into the account (`posthog_aliased` records the pair), so events the device
@@ -220,8 +220,8 @@ sent at `anonymous` join the account. The first account key a database derives i
 `posthog_account_ref`, so editing the store email does not split the person; a reinstall derives it
 again from the current email. At `anonymous`, main sets store configuration on the device person
 with a `$set` event and never derives the account key. Moving from `full` to `anonymous` stops new
-links; events already linked stay linked. At `off`, exceptions use the per-launch id with
-`$process_person_profile` set to `false`. Stopping cloud services or requesting cloud deletion
+links; events already linked stay linked. At `off`, exceptions use the diagnostics-only id with
+`$process_person_profile` set to `false`, so they group per install without a person. Stopping cloud services or requesting cloud deletion
 turns telemetry off and rotates `telemetry_anon_id`, but `posthog_install_seed` does not rotate, so
 a later opt-in on the same database links to the same device again.
 
@@ -233,8 +233,8 @@ consent and the id on every send (cached for up to 30 seconds and invalidated im
 the renderer re-reads both every 30 seconds and on focus and
 stamps the current id on each event, so a level change takes effect without a reload. When usage
 and diagnostics were both off at load, the same check starts PostHog once either is turned on, and
-the current screen is recorded then. At `off`, renderer events move to the per-launch id and the
-scrubber drops `install_ref`, `store_ref`, and `staff_ref`; below `full` it drops `store_ref`. Only the Electron main window loads PostHog; the Server App,
+the current screen is recorded then. At `off`, renderer events move to the diagnostics-only id and
+the scrubber drops `install_ref`, `store_ref`, and `staff_ref`; below `full` it drops `store_ref`. Only the Electron main window loads PostHog; the Server App,
 KDS, and customer display do not.
 
 **Staff are dimensions, not persons.** Many staff share one terminal, and group analytics is a paid
@@ -270,7 +270,9 @@ onto another terminal brings its seed, so both terminals share a device id.
   created in the same window, so an order held overnight is missed; the Server App and export
   counts live in memory and are sent as the delta since the last ping, so a restart loses the
   counts it held; and the WhatsApp count keys on `queued_at`, so a message queued before the
-  window and delivered inside it is not counted. It also reports the state the updater
+  window and delivered inside it is not counted. It carries `analytics_level`
+  (`full` or `anonymous`), so a `daily_ping` without `store_ref` explains itself: `store_ref` is
+  only set at `full`. It also reports the state the updater
   last reached (`update_status`), whether an update is waiting (`update_available`), the channel
   this install follows (`update_channel`), and, when a check or download failed, why
   (`update_reason`). Just after a launch the state is `not-checked-yet` until the startup check

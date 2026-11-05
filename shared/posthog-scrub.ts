@@ -75,6 +75,7 @@ export const POSTHOG_USAGE_PROPERTY_KEYS = [
   'restores_24h',
   'expenses_written_24h',
   'inventory_adjustments_24h',
+  'analytics_level',
 ] as const;
 
 /** Store configuration kept on the person. None of it identifies a customer or an order. */
@@ -165,8 +166,9 @@ const IDENTIFIER = /^[A-Za-z_$<][\w$.<>]{0,99}$/;
 const CHUNK_ID = /^[\w-]{1,100}$/;
 const OPAQUE_REF = /^[0-9a-f]{16}$/;
 const OPAQUE_REF_KEYS = new Set(['store_ref', 'staff_ref', 'install_ref']);
-/** The only distinct ids FloCafe creates: account, device, and per-launch. */
-const FLO_DISTINCT_ID = /^(?:acct_[0-9a-f]{16}|inst_[0-9a-f]{16}|anon_[0-9a-f-]{36})$/;
+/** The only distinct ids FloCafe creates: account, device, and the per-install diagnostics id. */
+const FLO_DISTINCT_ID =
+  /^(?:acct_[0-9a-f]{16}|inst_[0-9a-f]{16}|anon_[0-9a-f]{16}|anon_[0-9a-f-]{36})$/;
 const ACCOUNT_DISTINCT_ID = /^acct_/;
 const EMAIL = /[^\s@"'<>]+@[^\s@"'<>]+\.[^\s@"'<>]+/g;
 
