@@ -22,7 +22,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 
 const { assertEqualOrThrow, assertOrThrow } = require('./helpers/test-setup');
 const { initTestDb } = require('./helpers/test-setup');
-const { getDatabase, upsertSettings } = require('../main/db');
+const { getDatabase, upsertSettings, closeDatabase } = require('../main/db');
 
 function settingsRow(key: string): string {
   const row = getDatabase().prepare('SELECT value FROM settings WHERE key = ?').get(key) as
@@ -108,5 +108,6 @@ try {
   run();
 } finally {
   Module._load = originalLoad;
+  closeDatabase();
   fs.rmSync(testDir, { recursive: true, force: true });
 }

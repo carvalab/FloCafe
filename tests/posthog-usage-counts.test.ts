@@ -23,7 +23,7 @@ Module._load = function (request: string, parent: unknown, isMain: boolean) {
 const { EventEmitter } = require('events');
 const { assertEqualOrThrow, assertOrThrow } = require('./helpers/test-setup');
 const { initTestDb } = require('./helpers/test-setup');
-const { upsertSettings } = require('../main/db');
+const { upsertSettings, closeDatabase } = require('../main/db');
 const { readDailyUsageSummary } = require('../main/services/posthog');
 const {
   bumpUsageCounter,
@@ -228,5 +228,6 @@ try {
   run();
 } finally {
   Module._load = originalLoad;
+  closeDatabase();
   fs.rmSync(testDir, { recursive: true, force: true });
 }
